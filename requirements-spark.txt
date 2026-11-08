@@ -1,0 +1,2 @@
+# Separate runtime: legacy UI/sklearn pipeline does not need Spark.
+pyspark==4.2.0

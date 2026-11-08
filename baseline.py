@@ -15,6 +15,65 @@ from pathlib import Path
 from typing import Any
 
 
+def compare_window_aggregates(raw_rows, actual_rows, tolerance: float = 1e-9) -> dict[str, Any]:
+    """Independent raw fold; detects missing/extra keys and every monoid field.
+
+    Input raw rows must already follow the shared acceptance policy. Raw identity
+    is ping-level, not segment/window-level. Unlike the legacy CSV verifier this
+    comparator never clips velocity and never skips unmatched keys.
+    """
+    from datetime import timezone
+    import math
+
+    expected = {}
+    seen = {}
+    for row in raw_rows:
+        identity = str(row["_id"])
+        ts = datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00")).astimezone(timezone.utc)
+        velocity = float(row["velocity"])
+        if not math.isfinite(velocity) or not 0 <= velocity <= 200:
+            raise ValueError("Comparator input must contain accepted finite velocities")
+        payload = (int(row["segment_id"]), ts, velocity)
+        if identity in seen:
+            if seen[identity] != payload:
+                raise ValueError("Conflicting raw event identity")
+            continue
+        seen[identity] = payload
+        start = ts.replace(minute=(ts.minute // 30) * 30, second=0, microsecond=0)
+        key = (payload[0], start)
+        state = expected.setdefault(key, [0, 0., float("inf"), float("-inf"), 0])
+        state[0] += 1
+        state[1] += velocity
+        state[2] = min(state[2], velocity)
+        state[3] = max(state[3], velocity)
+        state[4] += int(velocity < 15)
+    fields = ["obs_count", "sum_velocity", "min_velocity", "max_velocity_obs", "severe_ping_count", "mean_velocity"]
+    actual = {}
+    duplicate_keys = 0
+    for row in actual_rows:
+        start = row["window_start"]
+        if isinstance(start, str):
+            start = datetime.fromisoformat(start.replace("Z", "+00:00"))
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        key = (int(row["segment_id"]), start.astimezone(timezone.utc))
+        duplicate_keys += int(key in actual)
+        actual[key] = row
+    mismatches = {field: 0 for field in fields}
+    for key in expected.keys() & actual.keys():
+        state = expected[key]
+        for field, value in zip(fields, state + [state[1] / state[0]]):
+            candidate = actual[key].get(field)
+            if candidate is None or not math.isclose(float(candidate), value, rel_tol=tolerance, abs_tol=tolerance):
+                mismatches[field] += 1
+    missing = len(expected.keys() - actual.keys())
+    extra = len(actual.keys() - expected.keys())
+    return {"expected_windows": len(expected), "actual_windows": len(actual),
+            "missing_keys": missing, "extra_keys": extra, "duplicate_keys": duplicate_keys,
+            "field_mismatches": mismatches,
+            "equivalent": not (missing or extra or duplicate_keys or any(mismatches.values()))}
+
+
 def _utc_window_key(updated_at_text: str) -> tuple[str, str]:
     clean = updated_at_text.strip().replace("Z", "+00:00")
     dt = datetime.fromisoformat(clean)
