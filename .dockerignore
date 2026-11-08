@@ -1,0 +1,10 @@
+raw_data/
+A/
+B/
+data/
+outputs/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.git/

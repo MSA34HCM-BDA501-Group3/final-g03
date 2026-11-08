@@ -1,0 +1,10 @@
+{
+  "sink": "Sink 1 (append -> bronze_raw_events/)",
+  "topic": "hcmc-traffic-events",
+  "committed_offsets": {
+    "0": 11064,
+    "1": 11207,
+    "2": 11504
+  },
+  "status": "COMMITTED"
+}

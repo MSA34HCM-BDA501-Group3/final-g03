@@ -1,0 +1,31 @@
+services:
+  app:
+    build:
+      context: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+    restart: unless-stopped
+
+  pipeline:
+    build:
+      context: .
+    profiles:
+      - pipeline
+    command:
+      - python
+      - pipeline.py
+      - --raw-dir
+      - /data/raw
+      - --dataset-path
+      - /app/data/dataset.csv
+      - --inventory-path
+      - /app/outputs/file_inventory.csv
+      - --output-dir
+      - /app/outputs
+    volumes:
+      - ./raw_data:/data/raw:ro
+      - ./data:/app/data
+      - ./outputs:/app/outputs

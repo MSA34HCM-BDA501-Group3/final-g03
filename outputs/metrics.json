@@ -1,0 +1,401 @@
+{
+  "generated_at_utc": "2026-11-08T12:08:21.742401+00:00",
+  "architecture_version": "V3 (Zones A-F, Components [C1]-[C17], Zero-Conflict 3-Phase MLOps)",
+  "dataset": {
+    "source_dataset": "Kaggle: thanhnguyen2612/traffic-flow-data-in-ho-chi-minh-city-viet-nam",
+    "nodes_count": 577967,
+    "active_intersection_nodes_count": 52425,
+    "pruned_orphan_nodes_count": 525542,
+    "streets_count": 5553,
+    "segments_count": 84633,
+    "line_graph_transition_edges": 151929,
+    "dangling_nodes_count": 48,
+    "segment_status_events": 90938,
+    "labeled_windows_count": 33441,
+    "distinct_active_segments": 10027,
+    "cold_start_segments_count": 74606,
+    "distinct_streets": 649,
+    "date_range": [
+      "2020-07-03",
+      "2021-04-22"
+    ],
+    "los_distribution": {
+      "A": 13278,
+      "B": 4700,
+      "C": 3839,
+      "D": 3707,
+      "E": 3828,
+      "F": 4089
+    }
+  },
+  "quality_funnel_c5": {
+    "quarantined_segment_records": 581,
+    "zero_length_segments": 154,
+    "non_road_osm_segments": 427,
+    "raw_distinct_street_names": 695,
+    "canonical_nfc_street_names": 649,
+    "street_entities_merged_by_nfc": 46,
+    "missing_max_velocity_segments_pct": 88.34,
+    "missing_max_velocity_train_pct": 85.21,
+    "rules_summary": [
+      {
+        "rule_order": 1,
+        "rule_id": "R1_NONPOSITIVE_SEGMENT_LENGTH",
+        "edge_case": "EC-2",
+        "source_table": "segments.csv / train.csv",
+        "flagged_records": 154,
+        "train_windows_affected": 57,
+        "action": "QUARANTINE_LOGGED_AND_MEDIAN_27M_IMPUTED"
+      },
+      {
+        "rule_order": 2,
+        "rule_id": "R2_NON_ROAD_OSM_TAG",
+        "edge_case": "EC-2",
+        "source_table": "segments.csv",
+        "flagged_records": 427,
+        "train_windows_affected": 47,
+        "action": "QUARANTINE_LOGGED_AND_STANDARDIZED"
+      },
+      {
+        "rule_order": 3,
+        "rule_id": "R3_ADMIN_POLYGON_STREET_NAME",
+        "edge_case": "EC-3",
+        "source_table": "train.csv / segments.csv",
+        "flagged_records": 631,
+        "train_windows_affected": 631,
+        "action": "EXCLUDED_FROM_FPGROWTH_AND_TOP_PAGERANK"
+      },
+      {
+        "rule_order": 4,
+        "rule_id": "R4_UNICODE_NFD_AND_PREFIX_DRIFT",
+        "edge_case": "EC-3",
+        "source_table": "train.csv",
+        "flagged_records": 2071,
+        "train_windows_affected": 46,
+        "action": "CANONICAL_NFC_AND_ETH_NORMALIZED"
+      },
+      {
+        "rule_order": 5,
+        "rule_id": "R5_MISSING_MAX_VELOCITY",
+        "edge_case": "EC-1",
+        "source_table": "segments.csv / train.csv",
+        "flagged_records": 74762,
+        "train_windows_affected": 28495,
+        "action": "3_TIER_HIERARCHICAL_VELOCITY_IMPUTED"
+      },
+      {
+        "rule_order": 6,
+        "rule_id": "R6_STATIONARY_OR_HIGH_VELOCITY_PING",
+        "edge_case": "EC-2",
+        "source_table": "segment_status.csv",
+        "flagged_records": 517,
+        "train_windows_affected": 448,
+        "action": "RETAINED_WITH_LOWER_CLIP_1KMH"
+      }
+    ],
+    "vmax_imputation_tiers_windows": {
+      "TIER_1_SEGMENT_OBSERVED": 4946,
+      "TIER_2_LEVEL_ROADTYPE_MEDIAN": 28446,
+      "TIER_3_HIERARCHICAL_LEVEL_PRIOR": 49
+    },
+    "vmax_imputation_tiers_segments": {
+      "TIER_1_SEGMENT_OBSERVED": 9871,
+      "TIER_2_LEVEL_ROADTYPE_MEDIAN": 74309,
+      "TIER_3_HIERARCHICAL_LEVEL_PRIOR": 453
+    }
+  },
+  "monoid_and_catalyst_c9": {
+    "pillar_i1_monoid_and_salting": {
+      "monoid_tuple": "(cnt, sum_v, min_v, max_v, severe_cnt)",
+      "identity_element": "(0, 0.0, +inf, 0.0, 0)",
+      "raw_input_pings": 90938,
+      "stage1_partial_salted_groups": 59895,
+      "stage2_reduced_windows": 33441,
+      "salt_buckets": 8,
+      "unsalted_peak_to_median_skew_ratio": 7.78,
+      "salted_partition_skew_ratio": 1.0117,
+      "salt_bucket_cv": 0.0057,
+      "stage2_vs_unsalted_max_abs_diff": 0.0,
+      "cnt_and_severe_discrepancies": 0,
+      "exact_monoid_equivalence": true
+    },
+    "pillar_i2_catalyst_join_optimization": {
+      "baseline_strategy": "SortMergeJoin (spark.sql.autoBroadcastJoinThreshold = -1)",
+      "baseline_exchange_stages": 7,
+      "optimized_strategy": "BroadcastHashJoin (F.broadcast(segments), F.broadcast(streets))",
+      "optimized_exchange_stages": 3,
+      "dataframe_vs_sql_exceptAll_diff": 0,
+      "partitioned_parquet_column": "year_month",
+      "partition_count": 10
+    },
+    "baseline_verification": {
+      "pillar": "BDA501 Pillar I1 — 5-Tuple Commutative Monoid Combiner vs. Independent Reference Baseline",
+      "monoid_tuple": "(cnt, sum_v, min_v, max_v, severe_cnt)",
+      "identity_element": "(0, 0.0, +inf, 0.0, 0)",
+      "raw_distinct_utc_windows": 33441,
+      "medallion_matched_windows": 33441,
+      "utc_window_join_match_pct": 100.0,
+      "total_severe_pings_accumulated": 42170,
+      "rejected_malformed_pings": 0,
+      "obs_count_discrepancies": 0,
+      "mean_velocity_discrepancies": 0,
+      "max_abs_velocity_diff": 0.0,
+      "monoid_associativity_verified": true
+    }
+  },
+  "model": {
+    "algorithm": "KMeans (Train-Only 7D Segment Profiling)",
+    "clusters_requested": 6,
+    "clusters_populated": 6,
+    "segments_clustered": 7549,
+    "feature_columns": [
+      "mean_los_ordinal",
+      "severe_rate",
+      "mean_velocity",
+      "velocity_ratio",
+      "length_m",
+      "max_velocity",
+      "pagerank_score"
+    ],
+    "inertia": 21280.510030993726,
+    "silhouette_score": 0.3157733434806881,
+    "davies_bouldin_index": 1.1461996688551992,
+    "calinski_harabasz_score": 2237.5014648565507,
+    "cluster_sizes": {
+      "0": 920,
+      "1": 1507,
+      "2": 1360,
+      "3": 392,
+      "4": 3127,
+      "5": 243
+    }
+  },
+  "static_feature_store_c13b": {
+    "total_segments_indexed": 84633,
+    "observed_active_segments": 10027,
+    "cold_start_blind_spot_segments": 74606,
+    "cold_start_ratio_pct": 88.15,
+    "vmax_imputation_tiers": {
+      "TIER_1_SEGMENT_OBSERVED": 9871,
+      "TIER_2_LEVEL_ROADTYPE_MEDIAN": 74309,
+      "TIER_3_HIERARCHICAL_LEVEL_PRIOR": 453
+    },
+    "static_feature_parquet": "data/lakehouse/segment_static_features.parquet"
+  },
+  "lakehouse_c14": {
+    "bronze_raw_parquet": "data/lakehouse/bronze_raw_events/events.parquet",
+    "silver_cleaned_parquet": "data/lakehouse/silver_cleaned_windows/windows.parquet",
+    "gold_partitioned_root": "data/lakehouse/curated_gold",
+    "year_month_partitions": {
+      "2020-07": 48,
+      "2020-08": 7294,
+      "2020-09": 204,
+      "2020-10": 13,
+      "2020-11": 5002,
+      "2020-12": 15105,
+      "2021-01": 2802,
+      "2021-02": 1,
+      "2021-03": 1743,
+      "2021-04": 1229
+    }
+  },
+  "streaming_mmds": {
+    "total_stream_events_processed": 33775,
+    "valid_unique_events": 33441,
+    "injected_duplicate_events": 334,
+    "duplicates_removed_exact": 334,
+    "injected_late_in_watermark": 1170,
+    "injected_late_dropped_by_watermark": 501,
+    "decay_alpha": 0.15,
+    "bloom_filter": {
+      "bits": 262144,
+      "memory_kb": 32.0,
+      "hash_functions": 4,
+      "empirical_fp_rate": 0.006908,
+      "theoretical_fp_rate": 0.025515
+    },
+    "hyperloglog": {
+      "registers": 1024,
+      "memory_kb": 1.0,
+      "exact_distinct_segments": 10027,
+      "hll_estimated_segments": 9627.9,
+      "relative_error_pct": 3.98
+    },
+    "reconciliation": {
+      "in_watermark_like_for_like_match_pct": 100.0,
+      "tier1_exceptAll_diff_count": 0,
+      "affected_late_windows_recomputed": 319,
+      "pre_reconciliation_completeness_pct": 98.5,
+      "post_reconciliation_completeness_pct": 100.0
+    }
+  },
+  "mongodb_serving_c16": {
+    "total_rows_upserted": 33441,
+    "bulk_write_batches": 69,
+    "ixscan_verified": true,
+    "verified_against_live_mongo_8": true,
+    "arterial_severe_alerts_count": 106
+  },
+  "graph_and_patterns": {
+    "pagerank_damping": 0.85,
+    "top_bottleneck_segment_id": 61781,
+    "top_bottleneck_street": "Phú Định",
+    "top_bottleneck_pagerank": 3.7515,
+    "co_congestion_rules_found": 30
+  },
+  "evaluation": {
+    "split_protocol": "Strict Chronological Split (70% Train / 15% Val / 15% Test)",
+    "train_samples": 16389,
+    "val_samples": 3512,
+    "test_samples": 3513,
+    "contiguous_30m_test_samples": 572,
+    "contiguous_30m_severe_f1": 0.8962,
+    "contiguous_30m_roc_auc": 0.9532,
+    "positive_severe_test_samples": 1177,
+    "relevance_definition": "Ground-truth next 30-minute Severe Congestion (LOS in {E, F}) on held-out chronological test windows.",
+    "roc_auc": 0.8458344002048394,
+    "average_precision": 0.7568306689681408,
+    "accuracy_6class": 0.5399943068602334,
+    "macro_f1_6class": 0.2664087281286142,
+    "weighted_f1_6class": 0.4624710803058352,
+    "severe_precision": 0.7134559535333979,
+    "severe_recall": 0.6261682242990654,
+    "severe_f1": 0.6669683257918552,
+    "confusion_matrix_6class": [
+      [
+        1262,
+        67,
+        9,
+        1,
+        0,
+        60
+      ],
+      [
+        160,
+        43,
+        6,
+        5,
+        1,
+        48
+      ],
+      [
+        193,
+        76,
+        11,
+        6,
+        3,
+        80
+      ],
+      [
+        134,
+        40,
+        23,
+        4,
+        3,
+        101
+      ],
+      [
+        99,
+        51,
+        19,
+        2,
+        6,
+        153
+      ],
+      [
+        178,
+        76,
+        9,
+        6,
+        7,
+        571
+      ]
+    ],
+    "ablation_table": [
+      {
+        "model": "Persistence Baseline (t -> t+30m)",
+        "feature_set": "Local (Lag-0)",
+        "accuracy_6class": 0.5255,
+        "macro_f1_6class": 0.3458,
+        "weighted_f1_6class": 0.5193,
+        "severe_ef_precision": 0.674,
+        "severe_ef_recall": 0.6483,
+        "severe_ef_f1": 0.6609,
+        "severe_roc_auc": 0.8181,
+        "severe_pr_auc": 0.6369
+      },
+      {
+        "model": "Decision Tree (Local Only)",
+        "feature_set": "Local Features (14D)",
+        "accuracy_6class": 0.5272,
+        "macro_f1_6class": 0.3161,
+        "weighted_f1_6class": 0.5009,
+        "severe_ef_precision": 0.7392,
+        "severe_ef_recall": 0.5081,
+        "severe_ef_f1": 0.6022,
+        "severe_roc_auc": 0.7807,
+        "severe_pr_auc": 0.6834
+      },
+      {
+        "model": "Decision Tree (+Graph PageRank, Causal Priors & K-Means)",
+        "feature_set": "Local + Graph + Cluster (23D)",
+        "accuracy_6class": 0.5127,
+        "macro_f1_6class": 0.2513,
+        "weighted_f1_6class": 0.4352,
+        "severe_ef_precision": 0.6182,
+        "severe_ef_recall": 0.5531,
+        "severe_ef_f1": 0.5839,
+        "severe_roc_auc": 0.809,
+        "severe_pr_auc": 0.6974
+      },
+      {
+        "model": "Random Forest (Local Only)",
+        "feature_set": "Local Features (14D)",
+        "accuracy_6class": 0.5406,
+        "macro_f1_6class": 0.2877,
+        "weighted_f1_6class": 0.4756,
+        "severe_ef_precision": 0.7061,
+        "severe_ef_recall": 0.6143,
+        "severe_ef_f1": 0.657,
+        "severe_roc_auc": 0.8509,
+        "severe_pr_auc": 0.7528
+      },
+      {
+        "model": "Random Forest (+Graph PageRank, Causal Priors & K-Means)",
+        "feature_set": "Local + Graph + Cluster (23D)",
+        "accuracy_6class": 0.54,
+        "macro_f1_6class": 0.2664,
+        "weighted_f1_6class": 0.4625,
+        "severe_ef_precision": 0.7135,
+        "severe_ef_recall": 0.6262,
+        "severe_ef_f1": 0.667,
+        "severe_roc_auc": 0.8458,
+        "severe_pr_auc": 0.7568
+      },
+      {
+        "model": "GBT Binary Alerting (Local Only)",
+        "feature_set": "Local Features (14D)",
+        "accuracy_6class": 0.5406,
+        "macro_f1_6class": 0.2877,
+        "weighted_f1_6class": 0.4756,
+        "severe_ef_precision": 0.7308,
+        "severe_ef_recall": 0.4843,
+        "severe_ef_f1": 0.5825,
+        "severe_roc_auc": 0.8332,
+        "severe_pr_auc": 0.714
+      },
+      {
+        "model": "GBT Binary Alerting (+Graph PageRank, Causal Priors & K-Means)",
+        "feature_set": "Local + Graph + Cluster (23D)",
+        "accuracy_6class": 0.54,
+        "macro_f1_6class": 0.2664,
+        "weighted_f1_6class": 0.4625,
+        "severe_ef_precision": 0.7421,
+        "severe_ef_recall": 0.4596,
+        "severe_ef_f1": 0.5677,
+        "severe_roc_auc": 0.8311,
+        "severe_pr_auc": 0.7143
+      }
+    ]
+  }
+}

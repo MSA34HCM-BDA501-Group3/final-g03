@@ -1,0 +1,17 @@
+{
+  "component": "[C1] GPS Probe Fleet & Replay Producer -> [C4] Kafka 4.1.0 KRaft",
+  "topic": "hcmc-traffic-events",
+  "num_partitions": 3,
+  "partition_key": "segment_id",
+  "partition_distribution": {
+    "0": 11064,
+    "1": 11207,
+    "2": 11504
+  },
+  "total_events_emitted": 33775,
+  "valid_unique_events": 33441,
+  "injected_duplicate_events": 334,
+  "injected_late_in_watermark_events": 1170,
+  "injected_late_out_of_watermark_events": 501,
+  "affected_late_windows": 319
+}

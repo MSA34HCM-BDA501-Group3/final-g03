@@ -1,0 +1,7 @@
+{
+  "sink": "Sink 2 (update -> foreachBatch Sketches & Online Scorer)",
+  "watermark": "30 minutes",
+  "bloom_bits": 262144,
+  "hll_registers": 1024,
+  "status": "COMMITTED"
+}

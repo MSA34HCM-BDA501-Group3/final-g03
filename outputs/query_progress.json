@@ -1,0 +1,7 @@
+{
+  "stream_query": "hcmc_traffic_dual_sink_v3",
+  "watermark_delay": "30 minutes",
+  "Phase_B_provisional_scored": 32940,
+  "Phase_C_reconciled_backfilled": 501,
+  "total_serving_documents": 33441
+}

@@ -1,0 +1,31 @@
+antecedent_street,consequent_street,co_congested_windows,support,confidence,lift
+Lý Chính Thắng,Nguyễn Thông,8,0.0233,1.0,28.5833
+Cao Thắng,Cống Quỳnh,10,0.0292,0.8333,15.8796
+Cộng Hòa,Xuân Diệu,11,0.0321,0.6111,13.1007
+Bạch Đằng,Xuân Diệu,9,0.0262,0.6,12.8625
+Cộng Hòa,Trường Chinh,16,0.0466,0.8889,12.1956
+Xa Lộ Hà Nội,Đường Song Hành Xa lộ Hà Nội,8,0.0233,0.2759,11.8276
+Nguyễn Thông,Điện Biên Phủ,9,0.0262,0.75,11.6932
+Nguyễn Thông,Nguyễn Thị Minh Khai,8,0.0233,0.6667,11.4333
+Bạch Đằng,Cộng Hòa,9,0.0262,0.6,11.4333
+Hoàng Văn Thụ,Trần Quốc Hoàn,8,0.0233,0.2667,11.4333
+Nguyễn Thái Sơn,Phan Văn Trị,9,0.0262,0.5625,11.3493
+3 Tháng 2,Hải Thượng Lãn Ông,11,0.0321,0.4583,11.2292
+Hai Bà Trưng,Trần Quốc Thảo,8,0.0233,0.381,10.8889
+Trường Chinh,Xuân Diệu,12,0.035,0.48,10.29
+Cộng Hòa,Hoàng Văn Thụ,15,0.0437,0.8333,9.5278
+Cống Quỳnh,Nguyễn Thị Minh Khai,10,0.0292,0.5556,9.5278
+Hoàng Văn Thụ,Xuân Diệu,13,0.0379,0.4333,9.2896
+Bạch Đằng,Hoàng Văn Thụ,11,0.0321,0.7333,8.3844
+Cống Quỳnh,Trần Hưng Đạo,11,0.0321,0.6111,8.3844
+Bạch Đằng,Trường Chinh,9,0.0262,0.6,8.232
+Phạm Văn Đồng,Vòng xoay Ngã Sáu Nguyễ Thái Sơn,11,0.0321,0.2619,8.1667
+Nguyễn Trãi,Trần Hưng Đạo,11,0.0321,0.5789,7.9432
+Hoàng Văn Thụ,Trường Chinh,17,0.0496,0.5667,7.7747
+Hoàng Hoa Thám,Phạm Văn Đồng,8,0.0233,0.8889,7.2593
+Hẻm 373 Lý Thường Kiệt,Lê Khôi,17,0.0496,0.5667,6.7023
+Hai Bà Trưng,Điện Biên Phủ,9,0.0262,0.4286,6.6818
+Nguyễn Bỉnh Khiêm,Trương Định,24,0.07,0.8,6.2364
+Nguyễn Thị Minh Khai,Trần Hưng Đạo,9,0.0262,0.45,6.174
+Bạch Đằng,Phạm Văn Đồng,9,0.0262,0.6,4.9
+Nguyễn Đình Chiểu,Trần Quốc Thảo,9,0.0262,0.1698,4.8538

@@ -1,0 +1,26 @@
+# Python & Tooling Caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+env/
+.DS_Store
+Thumbs.db
+
+# Sensitive Data & Credentials (Guardrail Compliance)
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.crt
+*secret*
+*credentials*
+
+# Large Raw Datasets & Regenerable Lakehouse Tables (generated via `python pipeline.py`)
+raw_data/
+data/

@@ -1,0 +1,25 @@
+{
+  "pillar_i1_monoid_and_salting": {
+    "monoid_tuple": "(cnt, sum_v, min_v, max_v, severe_cnt)",
+    "identity_element": "(0, 0.0, +inf, 0.0, 0)",
+    "raw_input_pings": 90938,
+    "stage1_partial_salted_groups": 59895,
+    "stage2_reduced_windows": 33441,
+    "salt_buckets": 8,
+    "unsalted_peak_to_median_skew_ratio": 7.78,
+    "salted_partition_skew_ratio": 1.0117,
+    "salt_bucket_cv": 0.0057,
+    "stage2_vs_unsalted_max_abs_diff": 0.0,
+    "cnt_and_severe_discrepancies": 0,
+    "exact_monoid_equivalence": true
+  },
+  "pillar_i2_catalyst_join_optimization": {
+    "baseline_strategy": "SortMergeJoin (spark.sql.autoBroadcastJoinThreshold = -1)",
+    "baseline_exchange_stages": 7,
+    "optimized_strategy": "BroadcastHashJoin (F.broadcast(segments), F.broadcast(streets))",
+    "optimized_exchange_stages": 3,
+    "dataframe_vs_sql_exceptAll_diff": 0,
+    "partitioned_parquet_column": "year_month",
+    "partition_count": 10
+  }
+}

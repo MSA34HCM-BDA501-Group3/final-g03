@@ -1,0 +1,9 @@
+{
+  "component": "[C13a] Frozen Model Registry",
+  "artifact_path": "model.joblib",
+  "sha256_digest": "930630a8acc42e6d920382f853e83c0cb7ee79791523d249b91ad65290a6f750",
+  "phase_a_fit_only": true,
+  "phase_b_c_read_only_verified": true,
+  "selected_model": "Random Forest (+Graph PageRank, Causal Priors & K-Means)",
+  "feature_count": 23
+}

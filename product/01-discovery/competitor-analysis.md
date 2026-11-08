@@ -1,0 +1,11 @@
+# Phân Tích Giải Pháp Hiện Có & Đối Thủ Cạnh Tranh (Competitor Analysis)
+
+## 1. Ma Trận So Sánh Các Phương Pháp & Hệ Thống Hiện Có
+
+| Tiêu chí Kỹ thuật & Nghiệp vụ | Hệ thống Giám sát Camera / Cảm biến Cố định (`Legacy Loop/CCTV`) | Pipeline Học máy Truyền thống (`Naive Static Batch ML`) | Kiến trúc Lambda Độc lập (`Uncoordinated Dual-Pipeline`) | **HCMC Smart Traffic Platform (V3 — Giải pháp Đề xuất)** |
+| :--- | :--- | :--- | :--- | :--- |
+| **Độ phủ Mạng lưới (`Network Coverage`)** | Thấp (`< 5%` các nút giao chính có camera/vòng từ). | Chỉ dự báo được trên `11.85%` (`10,027`) đoạn đường có lịch sử GPS. | Không xử lý được `88.15%` (`74,606`) đoạn đường `Cold-Start`. | **Độ phủ `100%` (`84,633` đoạn)** nhờ `Directed Line-Graph PageRank` & `Static Topological Fallback` (`[C13b]`). |
+| **Xử lý Độ thưa & Chống Rò rỉ (`Sparsity & Anti-Leakage`)** | Không áp dụng học máy dự báo. | Tính trung bình tĩnh trên tập `Train` gây `Intra-Train Target Leakage` (`Severe F1` sụt xuống `0.5758`). | Ma trận 48 khung giờ bị rỗng `95.07%` làm hỏng phân cụm `K-Means`. | **`Causal Expanding Priors` ($\tau \le t$)** + **`7D Behavioral K-Means`** nâng `Severe F1` lên **`0.6670`** (`PR-AUC = 0.7568`). |
+| **Quản trị Bộ nhớ Luồng (`Stream Memory Footprint`)** | Lưu toàn bộ bản ghi thô trong RAM gây `OOM` giờ cao điểm. | Chỉ chạy `Batch` định kỳ hàng ngày, không có cảnh báo tức thời. | Lưu tập `HashSet` không giới hạn cho khử trùng lặp và đếm thực thể. | **Bộ nhớ hằng số $O(1)$:** `32 KB Bloom Filter` + `1 KB HyperLogLog++` + `8 bytes/segment Decaying State`. |
+| **Đồng bộ Mô hình Batch–Stream (`MLOps Consistency`)** | Không có. | Không có luồng trực tuyến. | Huấn luyện riêng trên `Stream` và `Batch` gây xung đột trọng số (`Model Drift`). | **`Zero-Conflict 3-Phase Lifecycle`:** `Batch` độc quyền `.fit()`, `Stream` & `Recon` chỉ gọi `.transform()` chỉ đọc. |
+| **Xử lý Sự kiện Trễ Quá Hạn (`Post-Watermark Late Events`)** | Bỏ qua độ trễ mạng di động. | Đợi cuối ngày mới chạy (độ trễ hàng chục giờ). | Đóng cửa sổ tại `Watermark` và vĩnh viễn làm mất `1.5%` (`501`) bản tin trễ. | **`Two-Tier Reconciliation` (`[C12]`):** Khớp `100%` trong `Watermark`, tự động bù trừ `319` cửa sổ trễ để đạt độ đầy đủ `100.0%`. |

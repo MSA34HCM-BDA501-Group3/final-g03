@@ -1,0 +1,14 @@
+{
+  "pillar": "BDA501 Pillar I1 — 5-Tuple Commutative Monoid Combiner vs. Independent Reference Baseline",
+  "monoid_tuple": "(cnt, sum_v, min_v, max_v, severe_cnt)",
+  "identity_element": "(0, 0.0, +inf, 0.0, 0)",
+  "raw_distinct_utc_windows": 33441,
+  "medallion_matched_windows": 33441,
+  "utc_window_join_match_pct": 100.0,
+  "total_severe_pings_accumulated": 42170,
+  "rejected_malformed_pings": 0,
+  "obs_count_discrepancies": 0,
+  "mean_velocity_discrepancies": 0,
+  "max_abs_velocity_diff": 0.0,
+  "monoid_associativity_verified": true
+}
