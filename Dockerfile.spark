@@ -1,0 +1,11 @@
+FROM python:3.11-slim
+RUN apt-get update && apt-get install -y --no-install-recommends openjdk-21-jre-headless \
+    && rm -rf /var/lib/apt/lists/*
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 SPARK_LOCAL_IP=127.0.0.1
+WORKDIR /workspace
+COPY requirements-spark.txt .
+RUN pip install --no-cache-dir -r requirements-spark.txt
+COPY traffic_data ./traffic_data
+COPY spark_batch.py baseline.py ./
+COPY tests/test_quyen_spark.py ./tests/test_quyen_spark.py
+ENTRYPOINT ["python", "spark_batch.py"]

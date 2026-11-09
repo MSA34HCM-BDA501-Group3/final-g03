@@ -1,5 +1,12 @@
 # HCMC Smart Traffic Analytics & Congestion Prediction Platform (V3)
 
+> **Nhánh Data Engineering của Quyền:** Pipeline Spark từ dữ liệu thô nằm ở
+> [`spark_batch.py`](./spark_batch.py), dùng chung transformations tại
+> [`traffic_data/`](./traffic_data/). Xem [hướng dẫn chạy, data contract và checklist](./docs/QUYEN_DATA_ENGINEERING.md).
+> **[Hướng dẫn chi tiết bằng tiếng Việt, checklist có bằng chứng và xác nhận cho Đạt/Minh](./docs/HUONG_DAN_BRANCH_QUYEN_VI.md).**
+> Đây là luồng riêng đang được kiểm chứng; kết quả của pipeline offline bên dưới
+> không tự chứng minh Kafka/Spark/MongoDB đã tích hợp end-to-end.
+
 ## 1. Tổng quan Đề tài & Kiến trúc Giải pháp V3 (Zones A–F, Components `[C1]`–`[C17]`)
 
 Dự án xây dựng nền tảng phân tích dữ liệu lớn và dự báo ùn tắc giao thông đô thị TP. Hồ Chí Minh (**HCMC Smart Traffic Big Data Platform — V3**) trên bộ dữ liệu thực tế 5 bảng liên kết (**Kaggle HCMC Traffic Flow Dataset**), bám sát khung lý thuyết của hai giáo trình cốt lõi và hệ thống 4 bài Lab thực hành của học phần **BDA501**:
