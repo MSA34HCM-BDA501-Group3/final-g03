@@ -1,0 +1,21 @@
+antecedent_street_t,consequent_street_t30m,lagged_transition_windows,support,confidence,lift
+Nguyễn Ngọc Lộc,Hải Thượng Lãn Ông,5,0.0127,0.8333,32.9167
+Lê Quang Định,Trần Quốc Toản,5,0.0127,0.4167,32.9167
+Nguyễn Văn Đậu,Trần Hưng Đạo,5,0.0127,1.0,24.6875
+Phan Văn Trị,Nguyễn Văn Đậu,5,0.0127,0.3125,24.6875
+Lê Quang Định,Trần Quốc Thảo,5,0.0127,0.4167,23.5119
+Nguyễn Thái Sơn,Trần Quốc Toản,5,0.0127,0.2778,21.9444
+Lê Quang Định,Trần Quang Khải,5,0.0127,0.4167,20.5729
+Nguyễn Ngọc Lộc,3 Tháng 2,5,0.0127,0.8333,19.3627
+Hải Thượng Lãn Ông,3 Tháng 2,7,0.0177,0.7778,18.0719
+3 Tháng 2,Hải Thượng Lãn Ông,8,0.0203,0.4444,17.5556
+Lý Chính Thắng,Nguyễn Thái Sơn,5,0.0127,0.7143,15.6746
+Nguyễn Thái Sơn,Trần Quốc Thảo,5,0.0127,0.2778,15.6746
+Nguyễn Thị Minh Khai,Nguyễn Oanh,5,0.0127,0.2778,15.6746
+Lê Quang Định,Cao Thắng,5,0.0127,0.4167,14.9621
+Lý Chính Thắng,Nguyễn Kiệm,5,0.0127,0.7143,14.1071
+Nguyễn Thái Sơn,Trần Quang Khải,5,0.0127,0.2778,13.7153
+Quốc lộ 1,Trần Quốc Hoàn,6,0.0152,0.24,13.5429
+Quốc lộ 1,Thăng Long,5,0.0127,0.2,13.1667
+Quốc lộ 1,Hoàng Hoa Thám,6,0.0152,0.24,11.85
+Lê Quang Định,Cống Quỳnh,5,0.0127,0.4167,11.756

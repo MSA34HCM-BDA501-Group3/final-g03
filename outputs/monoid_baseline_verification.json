@@ -4,11 +4,33 @@
   "identity_element": "(0, 0.0, +inf, 0.0, 0)",
   "raw_distinct_utc_windows": 33441,
   "medallion_matched_windows": 33441,
+  "missing_keys_in_dataset": 0,
+  "extra_keys_in_dataset": 0,
+  "duplicate_window_keys": 0,
   "utc_window_join_match_pct": 100.0,
-  "total_severe_pings_accumulated": 42170,
-  "rejected_malformed_pings": 0,
   "obs_count_discrepancies": 0,
+  "sum_velocity_discrepancies": 0,
+  "min_velocity_discrepancies": 0,
+  "max_velocity_discrepancies": 0,
+  "severe_ping_discrepancies": 0,
   "mean_velocity_discrepancies": 0,
   "max_abs_velocity_diff": 0.0,
-  "monoid_associativity_verified": true
+  "monoid_associativity_verified": true,
+  "total_severe_pings_accumulated": 42170,
+  "rejected_malformed_pings": 0,
+  "dedup_dropped_raw_pings": 0,
+  "unequal_partition_associativity_check": {
+    "partition_sizes": [
+      1,
+      2,
+      3
+    ],
+    "true_count": 6,
+    "reduced_count": 6,
+    "monoid_tuple_exact_match": true,
+    "monoid_mean_abs_diff": 0.0,
+    "naive_average_of_averages_abs_error": 11.111111,
+    "average_of_averages_abs_error": 11.111111,
+    "average_of_averages_trap_demonstrated": true
+  }
 }

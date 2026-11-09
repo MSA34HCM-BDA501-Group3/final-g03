@@ -1,31 +1,132 @@
 services:
+  kafka:
+    image: apache/kafka:4.1.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,INTERNAL://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,INTERNAL://kafka:29092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_HEAP_OPTS: "-Xms512M -Xmx512M"
+    ports:
+      - "9092:9092"
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+          cpus: "1.0"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - bda501-net
+
+  mongo:
+    image: mongo:8.0
+    command: ["mongod", "--wiredTigerCacheSizeGB", "1.0", "--bind_ip_all"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+          cpus: "2.0"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bda501-net
+
+  spark:
+    image: song-recommender-spark:3.5.7
+    working_dir: /workspace
+    environment:
+      PYTHONPATH: /opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip
+      SPARK_DRIVER_MEMORY: 4g
+      MONGO_URI: mongodb://mongo:27017
+    volumes:
+      - ./:/workspace
+    deploy:
+      resources:
+        limits:
+          memory: 6144M
+          cpus: "4.0"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - bda501-net
+
   app:
-    build:
-      context: .
+    build: .
+    environment:
+      MONGO_URI: mongodb://mongo:27017
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     ports:
       - "8501:8501"
     volumes:
+      - ./raw_data:/app/raw_data
+      - ./product:/app/product
       - ./data:/app/data
       - ./outputs:/app/outputs
-    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: "1.0"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bda501-net
 
   pipeline:
-    build:
-      context: .
-    profiles:
-      - pipeline
-    command:
-      - python
-      - pipeline.py
-      - --raw-dir
-      - /data/raw
-      - --dataset-path
-      - /app/data/dataset.csv
-      - --inventory-path
-      - /app/outputs/file_inventory.csv
-      - --output-dir
-      - /app/outputs
+    build: .
+    profiles: ["batch"]
+    environment:
+      MONGO_URI: mongodb://mongo:27017
+    command: ["python", "pipeline.py"]
     volumes:
-      - ./raw_data:/data/raw:ro
+      - ./raw_data:/app/raw_data
+      - ./product:/app/product
       - ./data:/app/data
       - ./outputs:/app/outputs
+    networks:
+      - bda501-net
+
+  stream:
+    build: .
+    profiles: ["stream"]
+    environment:
+      MONGO_URI: mongodb://mongo:27017
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    command: ["python", "starter_stream.py", "--kill-after-batch", "1"]
+    volumes:
+      - ./raw_data:/app/raw_data
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+    networks:
+      - bda501-net
+
+networks:
+  bda501-net:
+    driver: bridge
+
+volumes:
+  mongo_data:

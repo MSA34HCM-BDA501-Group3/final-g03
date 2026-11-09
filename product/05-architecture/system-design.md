@@ -25,11 +25,11 @@ flowchart LR
         C9["[C9] Commutative Monoid Combiner,\n2-Stage Key Salting & BroadcastHashJoin"]
         C10["[C10] MMDS Multi-Pass Mining Suite\n(Ch.5 Line-Graph PR, Ch.6 FPGrowth, Ch.7 7D K-Means)"]
         C11["[C11] Leak-Free Causal ML Trainer (Phase A)\n(Causal Priors <= t, 70/15/15 Split, .fit())"]
-        C12["[C12] Two-Tier Reconciliation Engine (Phase C)\n(Tier 1 exceptAll==0 · Tier 2 Backfill 319 windows)"]
+        C12["[C12] Two-Tier Reconciliation Engine (Phase C)\n(Tier 1 exceptAll==0 · Tier 2 Backfill 501 seg-windows / 219 slots)"]
     end
 
     subgraph ZE["Zone E: Zero-Conflict Frozen Registry"]
-        C13A["[C13a] Frozen PipelineModel\n(outputs/model.joblib)"]
+        C13A["[C13a] Frozen PipelineModel\n(outputs/model.joblib + Spark PipelineModel)"]
         C13B["[C13b] Static Feature Store\n(84,633 segments + Cold-Start)"]
     end
 
@@ -53,8 +53,8 @@ flowchart LR
     C14 -->|"(6c) 100% Raw Events"| C12
     C11 -->|"(7) Freeze Artifacts"| C13A & C13B
     C13A & C13B -.->|"(8) Read-Only .transform()"| C8 & C12
-    C8 -->|"(9a) Upsert STREAM_PROVISIONAL"| C16
-    C12 -->|"(9b) Upsert BATCH_RECONCILED"| C16
+    C8 -->|"(9a) Upsert STREAM_PROVISIONAL (v1)"| C16
+    C12 -->|"(9b) Upsert BATCH_RECONCILED (v2)"| C16
     C14 & C15 & C16 -->|"(10) IXSCAN & Lakehouse"| C17 --> C3
 ```
 
@@ -70,4 +70,9 @@ flowchart LR
    Trên đồ thị chuyển tiếp đoạn đường $L(\mathcal{G}) = (\mathcal{E}, \mathcal{T})$ với $N = |\mathcal{E}| = 84{,}633$, $|\mathcal{T}| = 151{,}929$ và tập nút cụt $\mathcal{D} = \{s \in \mathcal{E} \mid d_{\text{out}}(s) = 0\}$ ($|\mathcal{D}| = 48$):
    $$r_s^{(k+1)} = \frac{1 - \beta}{N} + \beta \left( \sum_{u \in \text{In}(s)} \frac{r_u^{(k)}}{d_{\text{out}}(u)} + \frac{1}{N} \sum_{d \in \mathcal{D}} r_d^{(k)} \right), \quad \beta = 0.85$$
 3. **Đặc trưng Nhân quả Mở rộng `Causal Expanding Empirical-Bayes Priors` (`[C11]`, `Pillar I3`):**
-   $$\text{Prior}_s(t) = \frac{\sum_{\tau \le t} y_{s,\tau} + m_{\text{seg}} \cdot \bar{y}_{\text{train}}}{\text{count}_s(\tau \le t) + m_{\text{seg}}} \quad (m_{\text{seg}} = 5, \; m_{\text{street}} = 10)$$
+   $$\text{Prior}_s(t) = \frac{\sum_{\tau < t} y_{s,\tau} + m_{\text{seg}} \cdot \bar{y}_{\text{global}}(\tau \le t)}{\text{count}_s(\tau < t) + m_{\text{seg}}} \quad (m_{\text{seg}} = 5, \; m_{\text{street}} = 10)$$
+   Mọi quan sát có cùng `slot_ts` trên cùng tuyến đường được gom theo nhóm timestamp trước khi tính tổng tích lũy mở rộng (`expanding sum`), đảm bảo bất biến nhân quả tuyệt đối trước mọi nhiễu tương lai tại $\tau > t$.
+4. **Kiểm chứng Kế hoạch Thực thi Vật lý `Spark 3.5.7` & `MongoDB 8.0.34` (`[C9]`, `[C14]`, `[C16]`):**
+   - `Catalyst Join Plan`: Giảm từ `10 Exchanges` (`SortMergeJoin`) xuống `2 Exchanges` (`BroadcastHashJoin` trên bảng chiều `segments` và `streets`), với `exceptAll() == 0` hai chiều giữa `DataFrame DSL` và `Spark SQL`.
+   - `MongoDB 8.0 Compound IXSCAN`: Ghi `33,441` bản ghi qua `4` phân vùng (`69` lô `500` bản ghi `UpdateOne(upsert=True)`), truy vấn `UC-2` sử dụng chỉ mục phức hợp `level_prob_segment_idx` (`{street_level: 1, severe_prob: -1, segment_id: 1}`) với `in_memory_sort = false`, `nReturned = 25`, `totalDocsExamined = 25`, và độ trễ `warm_p95_ms = 0.767 ms < 10 ms`.
+

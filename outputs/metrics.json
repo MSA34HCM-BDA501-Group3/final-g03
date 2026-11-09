@@ -1,8 +1,9 @@
 {
-  "generated_at_utc": "2026-11-08T12:08:21.742401+00:00",
+  "generated_at_utc": "2026-11-08T17:21:32.708930+00:00",
   "architecture_version": "V3 (Zones A-F, Components [C1]-[C17], Zero-Conflict 3-Phase MLOps)",
   "dataset": {
     "source_dataset": "Kaggle: thanhnguyen2612/traffic-flow-data-in-ho-chi-minh-city-viet-nam",
+    "built_independently_from_gis_and_status": true,
     "nodes_count": 577967,
     "active_intersection_nodes_count": 52425,
     "pruned_orphan_nodes_count": 525542,
@@ -12,6 +13,8 @@
     "dangling_nodes_count": 48,
     "segment_status_events": 90938,
     "labeled_windows_count": 33441,
+    "exact_t30m_supervised_windows_count": 7898,
+    "derived_vs_reference_los_exact_match_pct": 52.37,
     "distinct_active_segments": 10027,
     "cold_start_segments_count": 74606,
     "distinct_streets": 649,
@@ -26,12 +29,25 @@
       "D": 3707,
       "E": 3828,
       "F": 4089
+    },
+    "derived_los_distribution": {
+      "A": 13405,
+      "B": 2571,
+      "C": 4858,
+      "D": 6098,
+      "E": 3463,
+      "F": 3046
     }
   },
   "quality_funnel_c5": {
-    "quarantined_segment_records": 581,
+    "quarantined_segment_records": 580,
     "zero_length_segments": 154,
     "non_road_osm_segments": 427,
+    "status_input_pings": 90938,
+    "status_dedup_dropped_pings": 0,
+    "status_accepted_pings": 90938,
+    "status_rejected_pings": 0,
+    "status_accounting_balanced": true,
     "raw_distinct_street_names": 695,
     "canonical_nfc_street_names": 649,
     "street_entities_merged_by_nfc": 46,
@@ -44,6 +60,7 @@
         "edge_case": "EC-2",
         "source_table": "segments.csv / train.csv",
         "flagged_records": 154,
+        "first_failing_quarantined": 154,
         "train_windows_affected": 57,
         "action": "QUARANTINE_LOGGED_AND_MEDIAN_27M_IMPUTED"
       },
@@ -53,6 +70,7 @@
         "edge_case": "EC-2",
         "source_table": "segments.csv",
         "flagged_records": 427,
+        "first_failing_quarantined": 426,
         "train_windows_affected": 47,
         "action": "QUARANTINE_LOGGED_AND_STANDARDIZED"
       },
@@ -62,6 +80,7 @@
         "edge_case": "EC-3",
         "source_table": "train.csv / segments.csv",
         "flagged_records": 631,
+        "first_failing_quarantined": 631,
         "train_windows_affected": 631,
         "action": "EXCLUDED_FROM_FPGROWTH_AND_TOP_PAGERANK"
       },
@@ -71,6 +90,7 @@
         "edge_case": "EC-3",
         "source_table": "train.csv",
         "flagged_records": 2071,
+        "first_failing_quarantined": 2071,
         "train_windows_affected": 46,
         "action": "CANONICAL_NFC_AND_ETH_NORMALIZED"
       },
@@ -80,8 +100,9 @@
         "edge_case": "EC-1",
         "source_table": "segments.csv / train.csv",
         "flagged_records": 74762,
+        "first_failing_quarantined": 74762,
         "train_windows_affected": 28495,
-        "action": "3_TIER_HIERARCHICAL_VELOCITY_IMPUTED"
+        "action": "3_TIER_TRAIN_ONLY_VELOCITY_IMPUTED"
       },
       {
         "rule_order": 6,
@@ -89,19 +110,22 @@
         "edge_case": "EC-2",
         "source_table": "segment_status.csv",
         "flagged_records": 517,
+        "first_failing_quarantined": 0,
         "train_windows_affected": 448,
         "action": "RETAINED_WITH_LOWER_CLIP_1KMH"
       }
     ],
     "vmax_imputation_tiers_windows": {
       "TIER_1_SEGMENT_OBSERVED": 4946,
-      "TIER_2_LEVEL_ROADTYPE_MEDIAN": 28446,
-      "TIER_3_HIERARCHICAL_LEVEL_PRIOR": 49
+      "TIER_1_SEGMENT_TRAIN_P85": 8164,
+      "TIER_2_LEVEL_ROADTYPE_MEDIAN": 20124,
+      "TIER_3_HIERARCHICAL_LEVEL_PRIOR": 207
     },
     "vmax_imputation_tiers_segments": {
       "TIER_1_SEGMENT_OBSERVED": 9871,
-      "TIER_2_LEVEL_ROADTYPE_MEDIAN": 74309,
-      "TIER_3_HIERARCHICAL_LEVEL_PRIOR": 453
+      "TIER_1_SEGMENT_TRAIN_P85": 519,
+      "TIER_2_LEVEL_ROADTYPE_MEDIAN": 72726,
+      "TIER_3_HIERARCHICAL_LEVEL_PRIOR": 1517
     }
   },
   "monoid_and_catalyst_c9": {
@@ -112,7 +136,8 @@
       "stage1_partial_salted_groups": 59895,
       "stage2_reduced_windows": 33441,
       "salt_buckets": 8,
-      "unsalted_peak_to_median_skew_ratio": 7.78,
+      "unsalted_peak_to_median_skew_ratio": 687.43,
+      "peak_slot_salted_bucket_skew_ratio": 1.023,
       "salted_partition_skew_ratio": 1.0117,
       "salt_bucket_cv": 0.0057,
       "stage2_vs_unsalted_max_abs_diff": 0.0,
@@ -120,13 +145,20 @@
       "exact_monoid_equivalence": true
     },
     "pillar_i2_catalyst_join_optimization": {
+      "status": "verified",
+      "verified_by_spark_runtime": true,
+      "spark_version": "3.5.7",
       "baseline_strategy": "SortMergeJoin (spark.sql.autoBroadcastJoinThreshold = -1)",
-      "baseline_exchange_stages": 7,
+      "baseline_exchange_stages": 10,
       "optimized_strategy": "BroadcastHashJoin (F.broadcast(segments), F.broadcast(streets))",
-      "optimized_exchange_stages": 3,
+      "optimized_exchange_stages": 2,
+      "broadcast_hash_join_present": true,
       "dataframe_vs_sql_exceptAll_diff": 0,
+      "baseline_plan_excerpt": "== Physical Plan ==\nAdaptiveSparkPlan isFinalPlan=false\n+- Project [street_id#461, segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_level#462, street_type#52, length#463, raw_street_name#471]\n   +- SortMergeJoin [street_id#461], [street_id#470], LeftOuter\n      :- Sort [street_id#461 ASC NULLS FIRST], false, 0\n      :  +- Exchange hashpartitioning(street_id#461, 8), ENSURE_REQUIREMENTS, [plan_id=1437]\n      :     +- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_id#461, street_level#462, street_type#52, length#463]\n      :        +- SortMergeJoin [segment_id#91], [segment_id#460], Inner\n      :           :- Sort [segment_id#91 ASC NULLS FIRST], false, 0\n      :           :  +- Exchange hashpartitioning(segment_id#91, 8), ENSURE_REQUIREMENTS, [plan_id=1429]\n      :           :     +- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, (sum_velocity#143 / cast(ob",
+      "optimized_plan_excerpt": "== Physical Plan ==\nAdaptiveSparkPlan isFinalPlan=false\n+- Project [street_id#461, segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_level#462, street_type#52, length#463, raw_street_name#471]\n   +- BroadcastHashJoin [street_id#461], [street_id#470], LeftOuter, BuildRight, false\n      :- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_id#461, street_level#462, street_type#52, length#463]\n      :  +- BroadcastHashJoin [segment_id#91], [segment_id#460], Inner, BuildRight, false\n      :     :- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, (sum_velocity#143 / cast(obs_count#141L as double)) AS mean_velocity#158]\n      :     :  +- HashAggregate(keys=[segment_id#91, date#108, period#115], functions=[count(velocity#97), sum(velocity#97), min(velocity#97), max(velocity#97), sum(is_low_speed#123)])\n      :     :     +- Exchange hashpartitioning(segment_id#91, date#1",
       "partitioned_parquet_column": "year_month",
-      "partition_count": 10
+      "partition_count": 10,
+      "parquet_pruning_verified": true
     },
     "baseline_verification": {
       "pillar": "BDA501 Pillar I1 — 5-Tuple Commutative Monoid Combiner vs. Independent Reference Baseline",
@@ -134,20 +166,42 @@
       "identity_element": "(0, 0.0, +inf, 0.0, 0)",
       "raw_distinct_utc_windows": 33441,
       "medallion_matched_windows": 33441,
+      "missing_keys_in_dataset": 0,
+      "extra_keys_in_dataset": 0,
+      "duplicate_window_keys": 0,
       "utc_window_join_match_pct": 100.0,
-      "total_severe_pings_accumulated": 42170,
-      "rejected_malformed_pings": 0,
       "obs_count_discrepancies": 0,
+      "sum_velocity_discrepancies": 0,
+      "min_velocity_discrepancies": 0,
+      "max_velocity_discrepancies": 0,
+      "severe_ping_discrepancies": 0,
       "mean_velocity_discrepancies": 0,
       "max_abs_velocity_diff": 0.0,
-      "monoid_associativity_verified": true
+      "monoid_associativity_verified": true,
+      "total_severe_pings_accumulated": 42170,
+      "rejected_malformed_pings": 0,
+      "dedup_dropped_raw_pings": 0,
+      "unequal_partition_associativity_check": {
+        "partition_sizes": [
+          1,
+          2,
+          3
+        ],
+        "true_count": 6,
+        "reduced_count": 6,
+        "monoid_tuple_exact_match": true,
+        "monoid_mean_abs_diff": 0.0,
+        "naive_average_of_averages_abs_error": 11.111111,
+        "average_of_averages_abs_error": 11.111111,
+        "average_of_averages_trap_demonstrated": true
+      }
     }
   },
   "model": {
-    "algorithm": "KMeans (Train-Only 7D Segment Profiling)",
+    "algorithm": "KMeans (Train-Only 7D Segment Profiling with Causal Expanding Row Assignment)",
     "clusters_requested": 6,
     "clusters_populated": 6,
-    "segments_clustered": 7549,
+    "segments_clustered": 6926,
     "feature_columns": [
       "mean_los_ordinal",
       "severe_rate",
@@ -157,17 +211,17 @@
       "max_velocity",
       "pagerank_score"
     ],
-    "inertia": 21280.510030993726,
-    "silhouette_score": 0.3157733434806881,
-    "davies_bouldin_index": 1.1461996688551992,
-    "calinski_harabasz_score": 2237.5014648565507,
+    "inertia": 19568.980150154683,
+    "silhouette_score": 0.28529766231182063,
+    "davies_bouldin_index": 1.1180949334687071,
+    "calinski_harabasz_score": 2044.849510048149,
     "cluster_sizes": {
-      "0": 920,
-      "1": 1507,
-      "2": 1360,
-      "3": 392,
-      "4": 3127,
-      "5": 243
+      "0": 1990,
+      "1": 1252,
+      "2": 203,
+      "3": 2093,
+      "4": 1070,
+      "5": 318
     }
   },
   "static_feature_store_c13b": {
@@ -177,8 +231,9 @@
     "cold_start_ratio_pct": 88.15,
     "vmax_imputation_tiers": {
       "TIER_1_SEGMENT_OBSERVED": 9871,
-      "TIER_2_LEVEL_ROADTYPE_MEDIAN": 74309,
-      "TIER_3_HIERARCHICAL_LEVEL_PRIOR": 453
+      "TIER_1_SEGMENT_TRAIN_P85": 519,
+      "TIER_2_LEVEL_ROADTYPE_MEDIAN": 72726,
+      "TIER_3_HIERARCHICAL_LEVEL_PRIOR": 1517
     },
     "static_feature_parquet": "data/lakehouse/segment_static_features.parquet"
   },
@@ -186,6 +241,7 @@
     "bronze_raw_parquet": "data/lakehouse/bronze_raw_events/events.parquet",
     "silver_cleaned_parquet": "data/lakehouse/silver_cleaned_windows/windows.parquet",
     "gold_partitioned_root": "data/lakehouse/curated_gold",
+    "window_metrics_root": "data/lakehouse/window_metrics",
     "year_month_partitions": {
       "2020-07": 48,
       "2020-08": 7294,
@@ -207,15 +263,18 @@
     "injected_late_in_watermark": 1170,
     "injected_late_dropped_by_watermark": 501,
     "decay_alpha": 0.15,
+    "decay_state_complexity": "O(1) per segment (8 bytes/segment), O(|V_active|) system-wide with epsilon eviction",
     "bloom_filter": {
       "bits": 262144,
+      "bit_packed_uint8_bytes": 32768,
       "memory_kb": 32.0,
       "hash_functions": 4,
-      "empirical_fp_rate": 0.006908,
+      "empirical_fp_rate": 0.00616,
       "theoretical_fp_rate": 0.025515
     },
     "hyperloglog": {
       "registers": 1024,
+      "register_bytes": 1024,
       "memory_kb": 1.0,
       "exact_distinct_segments": 10027,
       "hll_estimated_segments": 9627.9,
@@ -224,178 +283,396 @@
     "reconciliation": {
       "in_watermark_like_for_like_match_pct": 100.0,
       "tier1_exceptAll_diff_count": 0,
-      "affected_late_windows_recomputed": 319,
+      "tier1_verified": true,
+      "affected_late_windows_recomputed": 219,
+      "affected_late_segment_windows_recomputed": 501,
+      "healed_downstream_lag_windows": 3953,
       "pre_reconciliation_completeness_pct": 98.5,
       "post_reconciliation_completeness_pct": 100.0
     }
   },
+  "spark_runtime_verification": {
+    "status": "verified",
+    "verified_by_spark_runtime": true,
+    "spark_version": "3.5.7",
+    "monoid_salting_spark": {
+      "unsalted_windows": 33441,
+      "stage1_salted_groups": 59828,
+      "stage2_reduced_windows": 33441,
+      "unsalted_runtime_ms": 1206.33,
+      "salted_runtime_ms": 1172.83,
+      "two_way_exceptAll_diff": 0
+    },
+    "catalyst_join_spark": {
+      "baseline_exchange_stages_measured": 10,
+      "baseline_shuffle_joins_measured": 4,
+      "optimized_exchange_stages_measured": 2,
+      "optimized_broadcast_joins_measured": 4,
+      "broadcast_hash_join_present": true,
+      "two_way_exceptAll_diff": 0,
+      "baseline_plan_excerpt": "== Physical Plan ==\nAdaptiveSparkPlan isFinalPlan=false\n+- Project [street_id#461, segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_level#462, street_type#52, length#463, raw_street_name#471]\n   +- SortMergeJoin [street_id#461], [street_id#470], LeftOuter\n      :- Sort [street_id#461 ASC NULLS FIRST], false, 0\n      :  +- Exchange hashpartitioning(street_id#461, 8), ENSURE_REQUIREMENTS, [plan_id=1437]\n      :     +- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_id#461, street_level#462, street_type#52, length#463]\n      :        +- SortMergeJoin [segment_id#91], [segment_id#460], Inner\n      :           :- Sort [segment_id#91 ASC NULLS FIRST], false, 0\n      :           :  +- Exchange hashpartitioning(segment_id#91, 8), ENSURE_REQUIREMENTS, [plan_id=1429]\n      :           :     +- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, (sum_velocity#143 / cast(ob",
+      "optimized_plan_excerpt": "== Physical Plan ==\nAdaptiveSparkPlan isFinalPlan=false\n+- Project [street_id#461, segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_level#462, street_type#52, length#463, raw_street_name#471]\n   +- BroadcastHashJoin [street_id#461], [street_id#470], LeftOuter, BuildRight, false\n      :- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_id#461, street_level#462, street_type#52, length#463]\n      :  +- BroadcastHashJoin [segment_id#91], [segment_id#460], Inner, BuildRight, false\n      :     :- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, (sum_velocity#143 / cast(obs_count#141L as double)) AS mean_velocity#158]\n      :     :  +- HashAggregate(keys=[segment_id#91, date#108, period#115], functions=[count(velocity#97), sum(velocity#97), min(velocity#97), max(velocity#97), sum(is_low_speed#123)])\n      :     :     +- Exchange hashpartitioning(segment_id#91, date#1"
+    },
+    "parquet_pruning_spark": {
+      "partition_filters_and_read_schema_verified": true,
+      "pruning_plan_excerpt": "== Physical Plan ==\n*(1) Project [segment_id#715L, date#716, period#717, LOS#762]\n+- *(1) ColumnarToRow\n   +- FileScan parquet [segment_id#715L,date#716,period#717,LOS#762,year_month#750] Batched: true, DataFilters: [], Format: Parquet, Location: InMemoryFileIndex(1 paths)[file:/workspace/data/lakehouse/curated_gold], PartitionFilters: [isnotnull(year_month#750), (year_month#750 = 2020-08)], PushedFilters: [], ReadSchema: struct<segment_id:bigint,date:string,period:string,LOS:string>\n\n\n== Parsed Logical Plan ==\n'Project ['segment_id, 'date, 'period, 'LOS]\n+- Filter (year_month#750 = 2020-08)\n   +- Relation [segment_id#715L,date#716,period#717,mean_velocity#718,median_velocity#719,obs_count#720L,sum_velocity#721L,min_velocity#722L,max_velocity_obs#723L,severe_ping_count#724L,created_at#725,updated_at#726,s_node_id#727L,e_node_id#728L,length#729L,street_id#730L,max_velocity#731,street_leve"
+    },
+    "spark_fpgrowth_rules_count": 335,
+    "spark_kmeans_clusters_populated": 6,
+    "spark_pipeline_model_saved": true,
+    "spark_pipeline_reload_parity": true,
+    "spark_unseen_category_handled": true,
+    "spark_structured_streaming_wal_created": true,
+    "spark_sink1_last_progress": {
+      "id": "667c6ff9-bd0d-42cd-b13d-9b2788d8c61b",
+      "runId": "d1feecf6-d301-4b9b-b80c-2009e55b4361",
+      "name": null,
+      "timestamp": "2026-11-08T17:21:25.289Z",
+      "batchId": 0,
+      "numInputRows": 0,
+      "inputRowsPerSecond": 0.0,
+      "processedRowsPerSecond": 0.0,
+      "durationMs": {
+        "addBatch": 96,
+        "commitOffsets": 121,
+        "getBatch": 62,
+        "latestOffset": 190,
+        "queryPlanning": 25,
+        "triggerExecution": 648,
+        "walCommit": 132
+      },
+      "stateOperators": [],
+      "sources": [
+        {
+          "description": "FileStreamSource[file:/workspace/outputs/stream_landing_json/batch0]",
+          "startOffset": null,
+          "endOffset": {
+            "logOffset": 0
+          },
+          "latestOffset": null,
+          "numInputRows": 0,
+          "inputRowsPerSecond": 0.0,
+          "processedRowsPerSecond": 0.0
+        }
+      ],
+      "sink": {
+        "description": "FileSink[data/lakehouse/window_metrics/batch_id=0]",
+        "numOutputRows": -1
+      }
+    },
+    "spark_sink2_last_progress": {
+      "id": "57e29b6f-ea05-46a7-b6ce-873f7191707f",
+      "runId": "0070d866-ff4a-42ad-8615-c5af48b0ad9f",
+      "name": "hcmc_agg_sink2",
+      "timestamp": "2026-11-08T17:21:26.171Z",
+      "batchId": 0,
+      "numInputRows": 200,
+      "inputRowsPerSecond": 0.0,
+      "processedRowsPerSecond": 125.31328320802004,
+      "durationMs": {
+        "addBatch": 1063,
+        "commitOffsets": 140,
+        "getBatch": 47,
+        "latestOffset": 172,
+        "queryPlanning": 37,
+        "triggerExecution": 1596,
+        "walCommit": 125
+      },
+      "eventTime": {
+        "avg": "2020-07-29T10:45:36.000Z",
+        "max": "2020-08-02T08:00:00.000Z",
+        "min": "2020-07-03T08:00:00.000Z",
+        "watermark": "1970-01-01T00:00:00.000Z"
+      },
+      "stateOperators": [
+        {
+          "operatorName": "stateStoreSave",
+          "numRowsTotal": 14,
+          "numRowsUpdated": 14,
+          "allUpdatesTimeMs": 226,
+          "numRowsRemoved": 0,
+          "allRemovalsTimeMs": 4,
+          "commitTimeMs": 763,
+          "memoryUsedBytes": 10944,
+          "numRowsDroppedByWatermark": 0,
+          "numShufflePartitions": 8,
+          "numStateStoreInstances": 8,
+          "customMetrics": {
+            "loadedMapCacheHitCount": 0,
+            "loadedMapCacheMissCount": 0,
+            "stateOnCurrentVersionSizeBytes": 9792
+          }
+        }
+      ],
+      "sources": [
+        {
+          "description": "FileStreamSource[file:/workspace/outputs/stream_landing_json/batch0]",
+          "startOffset": null,
+          "endOffset": {
+            "logOffset": 0
+          },
+          "latestOffset": null,
+          "numInputRows": 200,
+          "inputRowsPerSecond": 0.0,
+          "processedRowsPerSecond": 125.31328320802004
+        }
+      ],
+      "sink": {
+        "description": "MemorySink",
+        "numOutputRows": 14
+      }
+    }
+  },
   "mongodb_serving_c16": {
+    "status": "verified",
     "total_rows_upserted": 33441,
     "bulk_write_batches": 69,
     "ixscan_verified": true,
     "verified_against_live_mongo_8": true,
-    "arterial_severe_alerts_count": 106
+    "arterial_severe_alerts_count": 410
   },
   "graph_and_patterns": {
     "pagerank_damping": 0.85,
     "top_bottleneck_segment_id": 61781,
     "top_bottleneck_street": "Phú Định",
     "top_bottleneck_pagerank": 3.7515,
-    "co_congestion_rules_found": 30
+    "co_congestion_rules_found": 30,
+    "lagged_transition_rules_found": 20
   },
   "evaluation": {
-    "split_protocol": "Strict Chronological Split (70% Train / 15% Val / 15% Test)",
-    "train_samples": 16389,
-    "val_samples": 3512,
-    "test_samples": 3513,
-    "contiguous_30m_test_samples": 572,
-    "contiguous_30m_severe_f1": 0.8962,
-    "contiguous_30m_roc_auc": 0.9532,
-    "positive_severe_test_samples": 1177,
-    "relevance_definition": "Ground-truth next 30-minute Severe Congestion (LOS in {E, F}) on held-out chronological test windows.",
-    "roc_auc": 0.8458344002048394,
-    "average_precision": 0.7568306689681408,
-    "accuracy_6class": 0.5399943068602334,
-    "macro_f1_6class": 0.2664087281286142,
-    "weighted_f1_6class": 0.4624710803058352,
-    "severe_precision": 0.7134559535333979,
-    "severe_recall": 0.6261682242990654,
-    "severe_f1": 0.6669683257918552,
+    "split_protocol": "Strict Timestamp-Aligned Split (70% Train / 15% Val / 15% Test) with Target Cutoff Purge on Exact t+30m Horizon",
+    "horizon_definition": "Exact t + 30 minutes via (segment_id, slot_ts + 30m) join",
+    "warmup_cutoff_utc": "2020-08-02T23:30:00+00:00",
+    "train_cutoff_utc": "2020-12-12T08:00:00+00:00",
+    "val_cutoff_utc": "2020-12-25T03:30:00+00:00",
+    "max_train_target_ts_utc": "2020-12-12T08:00:00+00:00",
+    "max_val_target_ts_utc": "2020-12-25T03:30:00+00:00",
+    "train_target_cutoff_purge_verified": true,
+    "val_target_cutoff_purge_verified": true,
+    "train_samples": 5494,
+    "train_purged_boundary_samples": 50,
+    "val_samples": 1167,
+    "val_purged_boundary_samples": 5,
+    "test_samples": 1182,
+    "positive_severe_test_samples": 185,
+    "validation_gate_selection": {
+      "selected_multiclass_model": "Random Forest (Local Only)",
+      "selected_val_threshold": 0.35,
+      "candidates": [
+        {
+          "candidate_model": "Decision Tree (Local Only)",
+          "task_type": "multiclass",
+          "val_roc_auc": 0.9404,
+          "val_pr_auc": 0.8241,
+          "val_optimal_threshold": 0.25,
+          "val_severe_f1_at_threshold": 0.8878,
+          "val_accuracy_6class": 0.9426
+        },
+        {
+          "candidate_model": "Decision Tree (+Graph PageRank, Causal Priors & K-Means)",
+          "task_type": "multiclass",
+          "val_roc_auc": 0.9639,
+          "val_pr_auc": 0.8291,
+          "val_optimal_threshold": 0.25,
+          "val_severe_f1_at_threshold": 0.8878,
+          "val_accuracy_6class": 0.9426
+        },
+        {
+          "candidate_model": "Random Forest (Local Only)",
+          "task_type": "multiclass",
+          "val_roc_auc": 0.9703,
+          "val_pr_auc": 0.9153,
+          "val_optimal_threshold": 0.35,
+          "val_severe_f1_at_threshold": 0.8889,
+          "val_accuracy_6class": 0.9426
+        },
+        {
+          "candidate_model": "Random Forest (+Graph PageRank, Causal Priors & K-Means)",
+          "task_type": "multiclass",
+          "val_roc_auc": 0.9539,
+          "val_pr_auc": 0.8878,
+          "val_optimal_threshold": 0.25,
+          "val_severe_f1_at_threshold": 0.8945,
+          "val_accuracy_6class": 0.9434
+        },
+        {
+          "candidate_model": "GBT Binary Alerting (Local Only)",
+          "task_type": "binary",
+          "val_roc_auc": 0.9519,
+          "val_pr_auc": 0.879,
+          "val_optimal_threshold": 0.525,
+          "val_severe_f1_at_threshold": 0.8783,
+          "val_accuracy_6class": null
+        },
+        {
+          "candidate_model": "GBT Binary Alerting (+Graph PageRank, Causal Priors & K-Means)",
+          "task_type": "binary",
+          "val_roc_auc": 0.9625,
+          "val_pr_auc": 0.8765,
+          "val_optimal_threshold": 0.675,
+          "val_severe_f1_at_threshold": 0.8571,
+          "val_accuracy_6class": null
+        }
+      ]
+    },
+    "relevance_definition": "Ground-truth exact t+30m Severe Congestion (LOS in {E, F}) on held-out chronological test windows.",
+    "roc_auc": 0.9901,
+    "average_precision": 0.9621,
+    "accuracy_6class": 0.9374,
+    "macro_f1_6class": 0.3435,
+    "weighted_f1_6class": 0.927,
+    "severe_precision": 0.9344,
+    "severe_recall": 0.9243,
+    "severe_f1": 0.9293,
     "confusion_matrix_6class": [
       [
-        1262,
-        67,
-        9,
+        948,
+        7,
+        0,
+        0,
+        0,
+        4
+      ],
+      [
+        4,
+        4,
+        0,
+        0,
+        0,
+        2
+      ],
+      [
+        6,
+        4,
+        0,
+        0,
+        0,
+        5
+      ],
+      [
+        2,
+        10,
+        0,
+        0,
+        0,
+        1
+      ],
+      [
+        2,
+        3,
+        0,
+        0,
+        0,
+        15
+      ],
+      [
+        1,
+        7,
+        0,
         1,
         0,
-        60
-      ],
-      [
-        160,
-        43,
-        6,
-        5,
-        1,
-        48
-      ],
-      [
-        193,
-        76,
-        11,
-        6,
-        3,
-        80
-      ],
-      [
-        134,
-        40,
-        23,
-        4,
-        3,
-        101
-      ],
-      [
-        99,
-        51,
-        19,
-        2,
-        6,
-        153
-      ],
-      [
-        178,
-        76,
-        9,
-        6,
-        7,
-        571
+        156
       ]
     ],
     "ablation_table": [
       {
         "model": "Persistence Baseline (t -> t+30m)",
+        "task_type": "MULTICLASS_6CLASS_LOS",
         "feature_set": "Local (Lag-0)",
-        "accuracy_6class": 0.5255,
-        "macro_f1_6class": 0.3458,
-        "weighted_f1_6class": 0.5193,
-        "severe_ef_precision": 0.674,
-        "severe_ef_recall": 0.6483,
-        "severe_ef_f1": 0.6609,
-        "severe_roc_auc": 0.8181,
-        "severe_pr_auc": 0.6369
+        "accuracy_6class": 0.9484,
+        "macro_f1_6class": 0.5654,
+        "weighted_f1_6class": 0.9461,
+        "severe_ef_precision": 0.9365,
+        "severe_ef_recall": 0.9568,
+        "severe_ef_f1": 0.9465,
+        "severe_roc_auc": 0.9867,
+        "severe_pr_auc": 0.9367
       },
       {
         "model": "Decision Tree (Local Only)",
+        "task_type": "MULTICLASS_6CLASS_LOS",
         "feature_set": "Local Features (14D)",
-        "accuracy_6class": 0.5272,
-        "macro_f1_6class": 0.3161,
-        "weighted_f1_6class": 0.5009,
-        "severe_ef_precision": 0.7392,
-        "severe_ef_recall": 0.5081,
-        "severe_ef_f1": 0.6022,
-        "severe_roc_auc": 0.7807,
-        "severe_pr_auc": 0.6834
+        "accuracy_6class": 0.9289,
+        "macro_f1_6class": 0.3439,
+        "weighted_f1_6class": 0.9228,
+        "severe_ef_precision": 0.9351,
+        "severe_ef_recall": 0.9351,
+        "severe_ef_f1": 0.9351,
+        "severe_roc_auc": 0.9846,
+        "severe_pr_auc": 0.9363
       },
       {
         "model": "Decision Tree (+Graph PageRank, Causal Priors & K-Means)",
+        "task_type": "MULTICLASS_6CLASS_LOS",
         "feature_set": "Local + Graph + Cluster (23D)",
-        "accuracy_6class": 0.5127,
-        "macro_f1_6class": 0.2513,
-        "weighted_f1_6class": 0.4352,
-        "severe_ef_precision": 0.6182,
-        "severe_ef_recall": 0.5531,
-        "severe_ef_f1": 0.5839,
-        "severe_roc_auc": 0.809,
-        "severe_pr_auc": 0.6974
+        "accuracy_6class": 0.9289,
+        "macro_f1_6class": 0.3439,
+        "weighted_f1_6class": 0.9228,
+        "severe_ef_precision": 0.9351,
+        "severe_ef_recall": 0.9351,
+        "severe_ef_f1": 0.9351,
+        "severe_roc_auc": 0.9831,
+        "severe_pr_auc": 0.9269
       },
       {
         "model": "Random Forest (Local Only)",
+        "task_type": "MULTICLASS_6CLASS_LOS",
         "feature_set": "Local Features (14D)",
-        "accuracy_6class": 0.5406,
-        "macro_f1_6class": 0.2877,
-        "weighted_f1_6class": 0.4756,
-        "severe_ef_precision": 0.7061,
-        "severe_ef_recall": 0.6143,
-        "severe_ef_f1": 0.657,
-        "severe_roc_auc": 0.8509,
-        "severe_pr_auc": 0.7528
+        "accuracy_6class": 0.9408,
+        "macro_f1_6class": 0.3496,
+        "weighted_f1_6class": 0.9282,
+        "severe_ef_precision": 0.9362,
+        "severe_ef_recall": 0.9514,
+        "severe_ef_f1": 0.9437,
+        "severe_roc_auc": 0.9884,
+        "severe_pr_auc": 0.9634
       },
       {
         "model": "Random Forest (+Graph PageRank, Causal Priors & K-Means)",
+        "task_type": "MULTICLASS_6CLASS_LOS",
         "feature_set": "Local + Graph + Cluster (23D)",
-        "accuracy_6class": 0.54,
-        "macro_f1_6class": 0.2664,
-        "weighted_f1_6class": 0.4625,
-        "severe_ef_precision": 0.7135,
-        "severe_ef_recall": 0.6262,
-        "severe_ef_f1": 0.667,
-        "severe_roc_auc": 0.8458,
-        "severe_pr_auc": 0.7568
+        "accuracy_6class": 0.9374,
+        "macro_f1_6class": 0.3435,
+        "weighted_f1_6class": 0.927,
+        "severe_ef_precision": 0.9344,
+        "severe_ef_recall": 0.9243,
+        "severe_ef_f1": 0.9293,
+        "severe_roc_auc": 0.9901,
+        "severe_pr_auc": 0.9621
       },
       {
         "model": "GBT Binary Alerting (Local Only)",
+        "task_type": "BINARY_SEVERE_EF_ONLY",
         "feature_set": "Local Features (14D)",
-        "accuracy_6class": 0.5406,
-        "macro_f1_6class": 0.2877,
-        "weighted_f1_6class": 0.4756,
-        "severe_ef_precision": 0.7308,
-        "severe_ef_recall": 0.4843,
-        "severe_ef_f1": 0.5825,
-        "severe_roc_auc": 0.8332,
-        "severe_pr_auc": 0.714
+        "accuracy_6class": null,
+        "macro_f1_6class": null,
+        "weighted_f1_6class": null,
+        "severe_ef_precision": 0.9448,
+        "severe_ef_recall": 0.9243,
+        "severe_ef_f1": 0.9344,
+        "severe_roc_auc": 0.9822,
+        "severe_pr_auc": 0.9431
       },
       {
         "model": "GBT Binary Alerting (+Graph PageRank, Causal Priors & K-Means)",
+        "task_type": "BINARY_SEVERE_EF_ONLY",
         "feature_set": "Local + Graph + Cluster (23D)",
-        "accuracy_6class": 0.54,
-        "macro_f1_6class": 0.2664,
-        "weighted_f1_6class": 0.4625,
-        "severe_ef_precision": 0.7421,
-        "severe_ef_recall": 0.4596,
-        "severe_ef_f1": 0.5677,
-        "severe_roc_auc": 0.8311,
-        "severe_pr_auc": 0.7143
+        "accuracy_6class": null,
+        "macro_f1_6class": null,
+        "weighted_f1_6class": null,
+        "severe_ef_precision": 0.7409,
+        "severe_ef_recall": 0.8811,
+        "severe_ef_f1": 0.8049,
+        "severe_roc_auc": 0.9787,
+        "severe_pr_auc": 0.9281
       }
-    ]
+    ],
+    "legacy_next_observed_comparison": {
+      "protocol_note": "Secondary legacy comparison using next-observed shift(-1) across arbitrary gaps (23,414 pairs, 3,513 test rows). Primary evaluation uses strict +30m timestamp join (7,898 pairs).",
+      "legacy_test_samples": 3513,
+      "legacy_severe_f1": 0.6447,
+      "legacy_pr_auc": 0.7628,
+      "legacy_roc_auc": 0.8484
+    }
   }
 }

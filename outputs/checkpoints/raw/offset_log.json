@@ -1,10 +1,17 @@
 {
   "sink": "Sink 1 (append -> bronze_raw_events/)",
   "topic": "hcmc-traffic-events",
+  "committed_batch_ids": [
+    0,
+    1,
+    2,
+    3
+  ],
   "committed_offsets": {
     "0": 11064,
     "1": 11207,
     "2": 11504
   },
+  "sink1_bronze_events_count": 16887,
   "status": "COMMITTED"
 }

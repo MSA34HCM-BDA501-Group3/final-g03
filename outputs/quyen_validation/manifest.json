@@ -1,5 +1,5 @@
 {
-  "spark_version": "4.2.0",
+  "spark_version": "3.5.7",
   "train_end_exclusive_utc": "2020-08-01T00:00:00Z",
   "input_events": 90938,
   "accepted_unique_events": 90787,
@@ -36,12 +36,12 @@
     "right_only": 0
   },
   "join_seconds": {
-    "sort_merge": 1.392926354999986,
-    "broadcast": 1.265594458999999
+    "sort_merge": 0.932414193986915,
+    "broadcast": 0.6662137690000236
   },
   "aggregate_seconds": {
-    "monoid_unsalted": 0.9368538810000473,
-    "monoid_salted": 0.8831780499999695
+    "monoid_unsalted": 0.4093039949948434,
+    "monoid_salted": 0.5088233879941981
   },
   "physical_node_names": {
     "sort_merge": [
@@ -101,7 +101,7 @@
       "Scan csv "
     ],
     "broadcast": [
-      "WholeStageCodegen (7)",
+      "WholeStageCodegen (4)",
       "Project",
       "Project",
       "Project",
@@ -113,30 +113,21 @@
       "InMemoryTableScan",
       "InputAdapter",
       "BroadcastExchange",
-      "WholeStageCodegen (5)",
-      "Project",
-      "SortMergeJoin",
-      "InputAdapter",
       "WholeStageCodegen (2)",
-      "Sort",
+      "Project",
+      "BroadcastHashJoin",
+      "Filter",
       "InputAdapter",
-      "Exchange",
+      "InMemoryTableScan",
+      "InputAdapter",
+      "BroadcastExchange",
       "WholeStageCodegen (1)",
       "Filter",
       "InputAdapter",
       "InMemoryTableScan",
       "InputAdapter",
-      "WholeStageCodegen (4)",
-      "Sort",
-      "InputAdapter",
-      "Exchange",
-      "WholeStageCodegen (3)",
-      "Filter",
-      "InputAdapter",
-      "InMemoryTableScan",
-      "InputAdapter",
       "BroadcastExchange",
-      "WholeStageCodegen (6)",
+      "WholeStageCodegen (3)",
       "Project",
       "Filter",
       "InputAdapter",
@@ -145,7 +136,7 @@
   },
   "exchange_counts": {
     "sort_merge": 5,
-    "broadcast": 4
+    "broadcast": 3
   },
   "benchmark_limitations": "single ordered local run, not a claim of speedup; task metrics in task_metrics.json",
   "inputs_sha256": {

@@ -1,7 +1,9 @@
 {
   "component": "[C16] MongoDB 8.0 Operational Serving Store (bda501.traffic_scores)",
+  "status": "verified",
   "database": "bda501",
   "collection": "traffic_scores",
+  "mongo_server_version": "8.0.34",
   "write_protocol": "repartition(4, 'segment_id') -> foreachPartition 500-doc Bulk UpdateOne(upsert=True)",
   "write_partitions": 4,
   "partition_row_counts": [
@@ -10,10 +12,42 @@
     8222,
     8603
   ],
+  "partition_write_summaries": [
+    {
+      "partition_id": 0,
+      "batches": 17,
+      "upserted": 8131,
+      "matched": 0,
+      "rows": 8131
+    },
+    {
+      "partition_id": 1,
+      "batches": 17,
+      "upserted": 8485,
+      "matched": 0,
+      "rows": 8485
+    },
+    {
+      "partition_id": 2,
+      "batches": 17,
+      "upserted": 8222,
+      "matched": 0,
+      "rows": 8222
+    },
+    {
+      "partition_id": 3,
+      "batches": 18,
+      "upserted": 8603,
+      "matched": 0,
+      "rows": 8603
+    }
+  ],
   "total_rows_upserted": 33441,
+  "count_after_idempotent_replay": 33441,
+  "idempotent_replay_verified": true,
   "bulk_write_batches": 69,
   "batch_size": 500,
-  "frozen_model_sha256": "930630a8acc42e6d920382f853e83c0cb7ee79791523d249b91ad65290a6f750",
+  "frozen_model_sha256": "eb9362501d324963b4e544464c95cb5256d20a7d5f291451233cbcebd42f4bd7",
   "indexes_created": {
     "event_id_unique": {
       "key": [
@@ -65,24 +99,86 @@
       ]
     ],
     "limit": 25,
-    "total_matching_windows": 106,
+    "total_matching_windows": 410,
     "top_5_arterial_alerts": [
       {
-        "event_id": "81f5f9f8f51b3e8a43a0b754",
+        "event_id": "a1626418f5ead2407e69013e",
+        "segment_id": 63476,
+        "street_name": "Lý Thường Kiệt",
+        "street_level": 2,
+        "date": "2020-11-20",
+        "period": "period_6_30",
+        "vn_hour": 13.5,
+        "current_los": "F",
+        "pagerank_score": 1.0125283040210562,
+        "cluster_id": 1,
+        "predicted_next_los": "F",
+        "severe_prob": 0.9936,
+        "write_partition": 0,
+        "scored_in_online_phase_b": false,
+        "phase_b_status": "STREAM_PROVISIONAL",
+        "lifecycle_status": "BATCH_VERIFIED",
+        "status_version": 2,
+        "model_version": "rf_full_23d_v3"
+      },
+      {
+        "event_id": "747c0b39e37d2f08e580085d",
         "segment_id": 73587,
         "street_name": "Phạm Văn Đồng",
         "street_level": 2,
         "date": "2020-11-20",
-        "period": "period_13_00",
-        "vn_hour": 20.0,
+        "period": "period_12_30",
+        "vn_hour": 19.5,
         "current_los": "F",
         "pagerank_score": 0.6476298467203067,
-        "cluster_id": 1,
+        "cluster_id": 0,
         "predicted_next_los": "F",
-        "severe_prob": 0.9059,
+        "severe_prob": 0.9912,
         "write_partition": 3,
+        "scored_in_online_phase_b": false,
         "phase_b_status": "STREAM_PROVISIONAL",
         "lifecycle_status": "BATCH_VERIFIED",
+        "status_version": 2,
+        "model_version": "rf_full_23d_v3"
+      },
+      {
+        "event_id": "ef6c1b9e52356d7dd859aea6",
+        "segment_id": 83817,
+        "street_name": "Võ Văn Kiệt",
+        "street_level": 1,
+        "date": "2020-11-27",
+        "period": "period_13_30",
+        "vn_hour": 20.5,
+        "current_los": "F",
+        "pagerank_score": 1.0620438608081595,
+        "cluster_id": 1,
+        "predicted_next_los": "F",
+        "severe_prob": 0.9909,
+        "write_partition": 1,
+        "scored_in_online_phase_b": false,
+        "phase_b_status": "STREAM_PROVISIONAL",
+        "lifecycle_status": "BATCH_VERIFIED",
+        "status_version": 2,
+        "model_version": "rf_full_23d_v3"
+      },
+      {
+        "event_id": "a30d71c634dfff5e190d8a23",
+        "segment_id": 29135,
+        "street_name": "Võ Văn Kiệt",
+        "street_level": 2,
+        "date": "2020-11-27",
+        "period": "period_12_30",
+        "vn_hour": 19.5,
+        "current_los": "F",
+        "pagerank_score": 1.0343446683310562,
+        "cluster_id": 1,
+        "predicted_next_los": "F",
+        "severe_prob": 0.9894,
+        "write_partition": 3,
+        "scored_in_online_phase_b": false,
+        "phase_b_status": "STREAM_PROVISIONAL",
+        "lifecycle_status": "BATCH_VERIFIED",
+        "status_version": 2,
         "model_version": "rf_full_23d_v3"
       },
       {
@@ -97,80 +193,125 @@
         "pagerank_score": 1.0343446683310562,
         "cluster_id": 1,
         "predicted_next_los": "F",
-        "severe_prob": 0.9052,
+        "severe_prob": 0.9892,
         "write_partition": 3,
+        "scored_in_online_phase_b": false,
         "phase_b_status": "STREAM_PROVISIONAL",
         "lifecycle_status": "BATCH_VERIFIED",
-        "model_version": "rf_full_23d_v3"
-      },
-      {
-        "event_id": "94c76b98a00950186bb5d8d5",
-        "segment_id": 63476,
-        "street_name": "Lý Thường Kiệt",
-        "street_level": 2,
-        "date": "2020-11-21",
-        "period": "period_8_30",
-        "vn_hour": 15.5,
-        "current_los": "F",
-        "pagerank_score": 1.0125283040210562,
-        "cluster_id": 1,
-        "predicted_next_los": "F",
-        "severe_prob": 0.9014,
-        "write_partition": 0,
-        "phase_b_status": "STREAM_PROVISIONAL",
-        "lifecycle_status": "BATCH_VERIFIED",
-        "model_version": "rf_full_23d_v3"
-      },
-      {
-        "event_id": "7fdc5cdae8f75b2dde31b63f",
-        "segment_id": 73587,
-        "street_name": "Phạm Văn Đồng",
-        "street_level": 2,
-        "date": "2020-11-20",
-        "period": "period_13_30",
-        "vn_hour": 20.5,
-        "current_los": "F",
-        "pagerank_score": 0.6476298467203067,
-        "cluster_id": 1,
-        "predicted_next_los": "F",
-        "severe_prob": 0.9009,
-        "write_partition": 3,
-        "phase_b_status": "STREAM_PROVISIONAL",
-        "lifecycle_status": "BATCH_VERIFIED",
-        "model_version": "rf_full_23d_v3"
-      },
-      {
-        "event_id": "747c0b39e37d2f08e580085d",
-        "segment_id": 73587,
-        "street_name": "Phạm Văn Đồng",
-        "street_level": 2,
-        "date": "2020-11-20",
-        "period": "period_12_30",
-        "vn_hour": 19.5,
-        "current_los": "F",
-        "pagerank_score": 0.6476298467203067,
-        "cluster_id": 1,
-        "predicted_next_los": "F",
-        "severe_prob": 0.9004,
-        "write_partition": 3,
-        "phase_b_status": "STREAM_PROVISIONAL",
-        "lifecycle_status": "BATCH_VERIFIED",
+        "status_version": 2,
         "model_version": "rf_full_23d_v3"
       }
-    ]
+    ],
+    "latency_benchmark_ms": {
+      "cold_query_ms": 1.012,
+      "warm_min_ms": 0.393,
+      "warm_median_ms": 0.54,
+      "warm_p95_ms": 0.695,
+      "warm_max_ms": 1.032,
+      "sla_under_10ms_verified": true
+    }
   },
   "ixscan_explain_verification": {
+    "status": "verified",
     "verified_against_mongo_8_0": true,
     "index_used": "level_prob_segment_idx",
     "winning_stages": [
       "LIMIT",
+      "PROJECTION_SIMPLE",
       "FETCH",
+      "SORT_MERGE",
+      "IXSCAN",
       "IXSCAN"
     ],
     "in_memory_sort": false,
+    "raw_winning_plan": {
+      "isCached": false,
+      "stage": "LIMIT",
+      "limitAmount": 25,
+      "inputStage": {
+        "stage": "PROJECTION_SIMPLE",
+        "transformBy": {
+          "_id": 0
+        },
+        "inputStage": {
+          "stage": "FETCH",
+          "inputStage": {
+            "stage": "SORT_MERGE",
+            "sortPattern": {
+              "severe_prob": -1,
+              "segment_id": 1
+            },
+            "inputStages": [
+              {
+                "stage": "IXSCAN",
+                "keyPattern": {
+                  "street_level": 1,
+                  "severe_prob": -1,
+                  "segment_id": 1
+                },
+                "indexName": "level_prob_segment_idx",
+                "isMultiKey": false,
+                "multiKeyPaths": {
+                  "street_level": [],
+                  "severe_prob": [],
+                  "segment_id": []
+                },
+                "isUnique": false,
+                "isSparse": false,
+                "isPartial": false,
+                "indexVersion": 2,
+                "direction": "forward",
+                "indexBounds": {
+                  "street_level": [
+                    "[1, 1]"
+                  ],
+                  "severe_prob": [
+                    "[inf.0, 0.7]"
+                  ],
+                  "segment_id": [
+                    "[MinKey, MaxKey]"
+                  ]
+                }
+              },
+              {
+                "stage": "IXSCAN",
+                "keyPattern": {
+                  "street_level": 1,
+                  "severe_prob": -1,
+                  "segment_id": 1
+                },
+                "indexName": "level_prob_segment_idx",
+                "isMultiKey": false,
+                "multiKeyPaths": {
+                  "street_level": [],
+                  "severe_prob": [],
+                  "segment_id": []
+                },
+                "isUnique": false,
+                "isSparse": false,
+                "isPartial": false,
+                "indexVersion": 2,
+                "direction": "forward",
+                "indexBounds": {
+                  "street_level": [
+                    "[2, 2]"
+                  ],
+                  "severe_prob": [
+                    "[inf.0, 0.7]"
+                  ],
+                  "segment_id": [
+                    "[MinKey, MaxKey]"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
     "execution_stats": {
       "nReturned": 25,
-      "totalKeysExamined": 25,
+      "totalKeysExamined": 26,
       "totalDocsExamined": 25,
       "executionTimeMillis": 0
     }

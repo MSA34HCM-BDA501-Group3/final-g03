@@ -1,15 +1,18 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    MPLBACKEND=Agg
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+COPY requirements.txt ./
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-COPY app.py pipeline.py producer.py baseline.py ./
+COPY app.py baseline.py pipeline.py producer.py starter_stream.py spark_engine.py ./
+COPY product ./product
+RUN mkdir -p /app/raw_data /app/data /app/outputs
 
 EXPOSE 8501
 

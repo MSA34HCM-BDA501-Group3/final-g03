@@ -1,8 +1,8 @@
-model,feature_set,accuracy_6class,macro_f1_6class,weighted_f1_6class,severe_ef_precision,severe_ef_recall,severe_ef_f1,severe_roc_auc,severe_pr_auc
-Persistence Baseline (t -> t+30m),Local (Lag-0),0.5255,0.3458,0.5193,0.674,0.6483,0.6609,0.8181,0.6369
-Decision Tree (Local Only),Local Features (14D),0.5272,0.3161,0.5009,0.7392,0.5081,0.6022,0.7807,0.6834
-"Decision Tree (+Graph PageRank, Causal Priors & K-Means)",Local + Graph + Cluster (23D),0.5127,0.2513,0.4352,0.6182,0.5531,0.5839,0.809,0.6974
-Random Forest (Local Only),Local Features (14D),0.5406,0.2877,0.4756,0.7061,0.6143,0.657,0.8509,0.7528
-"Random Forest (+Graph PageRank, Causal Priors & K-Means)",Local + Graph + Cluster (23D),0.54,0.2664,0.4625,0.7135,0.6262,0.667,0.8458,0.7568
-GBT Binary Alerting (Local Only),Local Features (14D),0.5406,0.2877,0.4756,0.7308,0.4843,0.5825,0.8332,0.714
-"GBT Binary Alerting (+Graph PageRank, Causal Priors & K-Means)",Local + Graph + Cluster (23D),0.54,0.2664,0.4625,0.7421,0.4596,0.5677,0.8311,0.7143
+model,task_type,feature_set,accuracy_6class,macro_f1_6class,weighted_f1_6class,severe_ef_precision,severe_ef_recall,severe_ef_f1,severe_roc_auc,severe_pr_auc
+Persistence Baseline (t -> t+30m),MULTICLASS_6CLASS_LOS,Local (Lag-0),0.9484,0.5654,0.9461,0.9365,0.9568,0.9465,0.9867,0.9367
+Decision Tree (Local Only),MULTICLASS_6CLASS_LOS,Local Features (14D),0.9289,0.3439,0.9228,0.9351,0.9351,0.9351,0.9846,0.9363
+"Decision Tree (+Graph PageRank, Causal Priors & K-Means)",MULTICLASS_6CLASS_LOS,Local + Graph + Cluster (23D),0.9289,0.3439,0.9228,0.9351,0.9351,0.9351,0.9831,0.9269
+Random Forest (Local Only),MULTICLASS_6CLASS_LOS,Local Features (14D),0.9408,0.3496,0.9282,0.9362,0.9514,0.9437,0.9884,0.9634
+"Random Forest (+Graph PageRank, Causal Priors & K-Means)",MULTICLASS_6CLASS_LOS,Local + Graph + Cluster (23D),0.9374,0.3435,0.927,0.9344,0.9243,0.9293,0.9901,0.9621
+GBT Binary Alerting (Local Only),BINARY_SEVERE_EF_ONLY,Local Features (14D),,,,0.9448,0.9243,0.9344,0.9822,0.9431
+"GBT Binary Alerting (+Graph PageRank, Causal Priors & K-Means)",BINARY_SEVERE_EF_ONLY,Local + Graph + Cluster (23D),,,,0.7409,0.8811,0.8049,0.9787,0.9281

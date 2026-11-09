@@ -1,15 +1,21 @@
-"""Quyen's batch/shared transformations. Spark 4.2, UTC internal timestamps.
+"""Quyen's batch/shared transformations. Compatible with Spark 3.5.7 (Java 17) & Spark 4.2.0 (Java 21).
 
-No train.csv dependency; no model training or serving side effects.
+UTC internal timestamps; no train.csv dependency; no model training or serving side effects.
 """
 from __future__ import annotations
 
 import math
 import unicodedata
 
-from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import Column, DataFrame, SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import StringType
+
+if not hasattr(Column, "try_cast"):
+    def _try_cast(self: Column, dtype: str) -> Column:
+        return F.expr(f"try_cast({self._jc.expr().sql()} as {dtype})")
+
+    Column.try_cast = _try_cast  # type: ignore[attr-defined]
 
 KEYS = ["segment_id", "window_start"]
 MONOID = ["obs_count", "sum_velocity", "min_velocity", "max_velocity_obs", "severe_ping_count"]
@@ -42,6 +48,12 @@ def normalize_name(value: str | None) -> str:
 
 
 def clean_segments(raw: DataFrame) -> tuple[DataFrame, DataFrame]:
+    """Validate GIS segments with ordered rules S1 -> S2 -> S3 -> S4.
+
+    Quarantine is an audit ledger recording the first failing rule (including S2
+    non-positive length), whereas S1/S3/S4 are terminal exclusions and S2-only
+    valid road segments receive median length imputation with length_imputed=True.
+    """
     frame = _payload(raw, "segments.csv")
     for source, target, dtype in [
         ("_id", "segment_id", "bigint"), ("s_node_id", "s_node_id", "bigint"),
@@ -117,7 +129,14 @@ def aggregate_monoid(events: DataFrame, salted: bool = True, buckets: int = 8) -
         raise ValueError("buckets must be positive")
     rows = events.withColumn("window_start", F.window("event_ts", "30 minutes").getField("start")) \
         .withColumn("severe_ping", (F.col("velocity") < 15).cast("long"))
-    rows = rows.withColumn("salt", F.pmod(F.xxhash64("raw_event_id"), F.lit(buckets)) if salted else F.lit(0))
+    if not salted:
+        direct = rows.groupBy(*KEYS).agg(
+            F.count("velocity").alias("obs_count"), F.sum("velocity").alias("sum_velocity"),
+            F.min("velocity").alias("min_velocity"), F.max("velocity").alias("max_velocity_obs"),
+            F.sum("severe_ping").alias("severe_ping_count"),
+        )
+        return direct.withColumn("mean_velocity", F.col("sum_velocity") / F.col("obs_count"))
+    rows = rows.withColumn("salt", F.pmod(F.xxhash64("raw_event_id"), F.lit(buckets)))
     partial = rows.groupBy(*KEYS, "salt").agg(
         F.count("velocity").alias("obs_count"), F.sum("velocity").alias("sum_velocity"),
         F.min("velocity").alias("min_velocity"), F.max("velocity").alias("max_velocity_obs"),
@@ -131,11 +150,15 @@ def aggregate_monoid(events: DataFrame, salted: bool = True, buckets: int = 8) -
     return merged.withColumn("mean_velocity", F.col("sum_velocity") / F.col("obs_count"))
 
 
-def fit_velocity_lookup(events: DataFrame, segments: DataFrame, train_end: str) -> DataFrame:
+def fit_velocity_lookup(
+    events: DataFrame, segments: DataFrame, train_end: str, use_observed_gis_vmax: bool = False,
+) -> DataFrame:
     """Exclusive cutoff. Segment P85 and road-level medians use TRAIN GPS only.
 
     Lookup must be fitted on a warmup prefix before supervised rows to avoid
-    intra-TRAIN leakage. Observed GIS vmax is metadata, not an extra fill tier.
+    intra-TRAIN leakage. By default (use_observed_gis_vmax=False), observed GIS
+    vmax is retained as segment metadata and imputation uses SEGMENT_P85 ->
+    LEVEL_TYPE_MEDIAN -> LEVEL_PRIOR {1: 80, 2: 60, 3: 50, 4: 40}.
     """
     train = events.filter(F.col("event_ts") < F.to_timestamp(F.lit(train_end)))
     p85 = train.groupBy("segment_id").agg(F.percentile_approx("velocity", 0.85, 10000).alias("segment_p85"))
@@ -145,10 +168,35 @@ def fit_velocity_lookup(events: DataFrame, segments: DataFrame, train_end: str) 
         F.percentile_approx("segment_p85", 0.5, 10000).alias("road_median"))
     lookup = profiles.join(medians, ["street_level", "street_type"], "left")
     prior = F.create_map(*[F.lit(x) for pair in [(1, 80.), (2, 60.), (3, 50.), (4, 40.)] for x in pair])
-    return lookup.withColumn("max_velocity", F.coalesce("segment_p85", "road_median", prior[F.col("street_level")])) \
-        .withColumn("vmax_impute_tier", F.when(F.col("segment_p85").isNotNull(), "SEGMENT_P85")
-                    .when(F.col("road_median").isNotNull(), "LEVEL_TYPE_MEDIAN").otherwise("LEVEL_PRIOR")) \
-        .withColumn("fit_before_utc", F.lit(train_end)) \
+    if use_observed_gis_vmax:
+        obs_col = F.when(
+            F.col("observed_max_velocity").isNotNull()
+            & ~F.isnan("observed_max_velocity")
+            & (F.col("observed_max_velocity") > 0)
+            & (F.col("observed_max_velocity") <= 200),
+            F.col("observed_max_velocity"),
+        )
+        lookup = lookup.withColumn(
+            "max_velocity",
+            F.coalesce(obs_col, "segment_p85", "road_median", prior[F.col("street_level")]),
+        ).withColumn(
+            "vmax_impute_tier",
+            F.when(obs_col.isNotNull(), "SEGMENT_OBSERVED_VMAX")
+            .when(F.col("segment_p85").isNotNull(), "SEGMENT_P85")
+            .when(F.col("road_median").isNotNull(), "LEVEL_TYPE_MEDIAN")
+            .otherwise("LEVEL_PRIOR"),
+        )
+    else:
+        lookup = lookup.withColumn(
+            "max_velocity",
+            F.coalesce("segment_p85", "road_median", prior[F.col("street_level")]),
+        ).withColumn(
+            "vmax_impute_tier",
+            F.when(F.col("segment_p85").isNotNull(), "SEGMENT_P85")
+            .when(F.col("road_median").isNotNull(), "LEVEL_TYPE_MEDIAN")
+            .otherwise("LEVEL_PRIOR"),
+        )
+    return lookup.withColumn("fit_before_utc", F.lit(train_end)) \
         .select("segment_id", "max_velocity", "vmax_impute_tier", "fit_before_utc")
 
 
@@ -163,12 +211,13 @@ def enrich_windows(
     windows: DataFrame, segments: DataFrame, lookup: DataFrame,
     broadcast: bool = True, streets: DataFrame | None = None,
 ) -> DataFrame:
-    dim = segments.join(lookup, "segment_id")
+    dim = segments.join(F.broadcast(lookup) if broadcast else lookup, "segment_id")
     result = windows.join(F.broadcast(dim) if broadcast else dim, "segment_id")
     if streets is not None:
         result = result.join(F.broadcast(streets) if broadcast else streets, "street_id")
     result = result.withColumn("velocity_ratio", F.col("mean_velocity") / F.col("max_velocity")) \
         .withColumn("LOS", derive_los(F.col("velocity_ratio"))) \
+        .withColumn("date_utc", F.date_format("window_start", "yyyy-MM-dd")) \
         .withColumn("local_ts", F.from_utc_timestamp("window_start", "Asia/Ho_Chi_Minh"))
     slot = F.hour("local_ts") * 2 + (F.minute("local_ts") / 30).cast("int")
     return result.withColumn("date", F.date_format("local_ts", "yyyy-MM-dd")) \
@@ -189,8 +238,12 @@ def differences(left: DataFrame, right: DataFrame) -> dict[str, int]:
     columns = sorted(left.columns)
     if set(columns) != set(right.columns):
         raise ValueError("Comparison schemas have different columns")
-    return {"left_only": left.select(columns).exceptAll(right.select(columns)).count(),
-            "right_only": right.select(columns).exceptAll(left.select(columns)).count()}
+    left_proj = left.select([F.col(c).alias(c) for c in columns])
+    right_proj = right.select([F.col(c).alias(c) for c in columns])
+    return {
+        "left_only": left_proj.exceptAll(right_proj).count(),
+        "right_only": right_proj.exceptAll(left_proj).count(),
+    }
 
 
 def physical_nodes(frame: DataFrame) -> list[str]:
@@ -205,3 +258,4 @@ def physical_nodes(frame: DataFrame) -> list[str]:
 
     visit(frame._jdf.queryExecution().executedPlan())
     return names
+
