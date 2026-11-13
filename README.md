@@ -1,53 +1,62 @@
-# HCMC Smart Traffic Analytics & Congestion Prediction Platform (V3)
+# Hệ Thống Giám Sát Hiện Trạng & Dự Báo Ùn Tắc Giao Thông Đô Thị TP.HCM
 
-> **Nhánh Data Engineering của Quyền (PR #1 — Integrated):** Pipeline Spark độc lập từ dữ liệu thô nằm ở
-> [`spark_batch.py`](./spark_batch.py), dùng chung transformations tại
-> [`traffic_data/spark_etl.py`](./traffic_data/spark_etl.py) (tương thích cả **Spark 3.5.7 / Java 17** và **Spark 4.2.0 / Java 21**).
-> Xem [hướng dẫn chạy, data contract và checklist](./docs/QUYEN_DATA_ENGINEERING.md),
-> **[Hướng dẫn chi tiết bằng tiếng Việt, checklist có bằng chứng và xác nhận đã chốt của Đạt/Minh](./docs/HUONG_DAN_BRANCH_QUYEN_VI.md)**,
-> và [bảng đối chiếu 28 nhóm yêu cầu Proposal V3](./PROPOSAL_V3_AUDIT_CHECKLIST.md).
+> **Bộ tài liệu chính thức của đồ án (`BDA501 — Big Data Analytics`):**
+> - **Báo cáo Tổng kết Đồ án & Đặc tả Kỹ thuật Chi tiết:** [`HCMC_Smart_Traffic_Final_Report.pdf`](./HCMC_Smart_Traffic_Final_Report.pdf) / [`HCMC_Smart_Traffic_Final_Project_Proposal.pdf`](./HCMC_Smart_Traffic_Final_Project_Proposal.pdf) & [`product/00-proposal/project-proposal.md`](./product/00-proposal/project-proposal.md)
+> - **Bộ Slide Thuyết trình Trực quan (`16 Slides`):** [`HCMC_Smart_Traffic_Final_Presentation.pptx`](./HCMC_Smart_Traffic_Final_Presentation.pptx) / [`HCMC_Smart_Traffic_Proposal_Presentation.pptx`](./HCMC_Smart_Traffic_Proposal_Presentation.pptx) & [`HCMC_Smart_Traffic_Final_Slides.pdf`](./HCMC_Smart_Traffic_Final_Slides.pdf)
+> - **Kịch bản Thuyết trình, Live Demo & Cẩm nang Phản biện Q&A:** [`PRESENTATION_SCRIPT.md`](./PRESENTATION_SCRIPT.md)
+> - **Đặc tả Toán học & Kết quả Kiểm chứng Chuyên sâu:** [`TECHNICAL_NOTE.md`](./TECHNICAL_NOTE.md)
 
-## 1. Tổng quan Đề tài & Kiến trúc Giải pháp V3 (Zones A–F, Components `[C1]`–`[C17]`)
+## 1. Bức Tranh Tổng Thể Trong 4 Bước Nối Tiếp Nhau
 
-Dự án xây dựng nền tảng phân tích dữ liệu lớn và dự báo ùn tắc giao thông đô thị TP. Hồ Chí Minh (**HCMC Smart Traffic Big Data Platform — V3**) trên bộ dữ liệu thực tế 5 bảng liên kết (**Kaggle HCMC Traffic Flow Dataset**), bám sát khung lý thuyết của hai giáo trình cốt lõi và hệ thống 4 bài Lab thực hành của học phần **BDA501**:
-- **Big Data Systems:** *Big Data Analytics: A Hands-On Approach* (Arshdeep Bahga & Vijay Madisetti, 2019 — 4-Tier Analytics Value Chain, Gamma/Delta Pattern, Medallion Lakehouse, Load Leveling, NoSQL CAP).
-- **Massive Dataset Mining:** *Mining of Massive Datasets, 3rd Ed.* (Jure Leskovec, Anand Rajaraman & Jeffrey D. Ullman, 2020 — Stream Sketching Ch. 4, Link Analysis PageRank Ch. 5, Frequent Itemsets SON/FP-Growth Ch. 6, Clustering Ch. 7, Decision Trees & Ensembles Ch. 12).
-- **4 Trụ cột Lab BDA501:**
-  - **Pillar I1 (`Hadoop MapReduce & Commutative Monoid`):** Khởi tạo cửa sổ 30 phút trực tiếp từ 3 bảng GIS (`nodes.csv`, `streets.csv`, `segments.csv`) và `segment_status.csv` (`90,938` bản tin GPS thô, khử trùng theo `raw_event_id`) bằng **5-Tuple Commutative Monoid Combiner** $(\text{cnt}, \sum v, \min v, \max v, \text{severe\_cnt})$ tại `[C9]`, đối chứng độc lập `0` sai lệch trên cả 5 thành phần tuple với [`baseline.py`](./baseline.py) (`compare_window_aggregates` & `verify_against_medallion`, kèm kiểm chứng luật kết hợp trên các phân vùng lệch kích thước).
-  - **Pillar I2 (`Spark SQL, Catalyst & Skew`):** Phễu kiểm định chất lượng có thứ tự (**All-String Ordered `try_cast` Quality Funnel**) tại `[C5]` ([`traffic_data/spark_etl.py`](./traffic_data/spark_etl.py) & [`pipeline.py`](./pipeline.py)) gán đúng một `first_failing_rule` duy nhất cho mỗi bản ghi lỗi vào `[C15]` `quarantine_events.parquet` (`input = dedup_dropped + accepted + rejected`); thực thi và đo lường trực tiếp trên **Apache Spark 3.5.7** ([`spark_engine.py`](./spark_engine.py) & [`spark_batch.py`](./spark_batch.py)) giảm `Exchange` từ `SortMergeJoin` xuống `BroadcastHashJoin`, kiểm chứng hai chiều `exceptAll() == 0`, pruning phân vùng Parquet `year_month`, và **2-Stage Key Salting (`8 buckets`)** chống lệch phân vùng (`Data Skew`).
-  - **Pillar I3 (`Spark MLlib & Zero-Conflict MLOps`):** Quy trình **Zero-Conflict 3-Phase MLOps Lifecycle** phân tách tuyệt đối quyền huấn luyện (`.fit()` duy nhất tại **Phase A** bởi `[C11]` trên tập `TRAIN` đã cắt theo mốc thời gian và lọc bỏ `target_ts > cutoff_ts` $\to$ đóng băng 3 artifact kèm kiểm chứng bất biến `SHA-256`: `model.joblib`, `segment_static_features.parquet`, `vmax_lookup.json`) với quyền suy luận chỉ đọc (`score_feature_snapshot` tại **Phase B Stream `[C8]`** và **Phase C Reconciliation `[C12]`**).
-  - **Pillar S7 (`Kafka + Spark Structured Streaming + MongoDB 8.0`):** Bộ phát sự kiện [`producer.py`](./producer.py) (`[C1]`) hỗ trợ cả 2 chế độ phát lại (`raw_ping` 90,938 bản tin & `window` 33,441 cửa sổ) với `event_ts` / `ingest_ts`; bộ xử lý luồng [`starter_stream.py`](./starter_stream.py) & [`spark_engine.py`](./spark_engine.py) (`[C6]`–`[C8]`) vận hành **Bit-Packed Bloom Filter (`32.0 KiB = uint8[32768]`)**, **HyperLogLog++ (`1.0 KiB = uint8[1024]`)**, **Bounded Exponentially Decaying State ($\alpha=0.15$)**, hồi phục sự cố từ **WAL Checkpoints (`offset_log.json`, `state_wal.json`)**, và ghi idempotent **Bulk `UpdateOne(upsert=True)`** (`33,441` bản ghi chia 4 phân vùng, `69` lô $\times$ `500` docs, có bảo vệ phiên bản `status_version` chống ghi đè lùi `BATCH_RECONCILED -> STREAM_PROVISIONAL`) vào `[C16]` **MongoDB 8.0** kèm kiểm chứng thực thi **`IXSCAN`** (`0` in-memory `SORT`, độ trễ `p95 < 1 ms`).
+Mục tiêu của hệ thống là **giám sát hiện trạng và dự báo trước `30 phút` nguy cơ kẹt xe trên toàn mạng lưới `84,633` đoạn đường một chiều tại TP.HCM** từ dữ liệu hành trình GPS của xe cộ (ví dụ: lúc `07:08` sáng trên đoạn đường Lý Thường Kiệt số `47407` tại Quận 10, một chiếc xe gửi về tín hiệu báo vận tốc đang nhích ở mức `4 km/h`). Hệ thống chuẩn hóa trạng thái đường phố theo **6 mức phục vụ giao thông (`LOS A–F`)**: `LOS A–B` (`≥ 65%` tốc độ tối đa: thông thoáng), `LOS C–D` (`35%–65%`: đông đúc) và `LOS E–F` (`< 35%`: kẹt cứng).
 
-Đặc tả toán học `P1–P4`, `UC-1–UC-6`, `EC-1–EC-10`, các quyết định thiết kế `G01–G05`, kiến trúc 6 phân vùng (`Zones A–F`, `[C1]`–`[C17]`) và kết quả thực nghiệm chi tiết xem tại **[TECHNICAL_NOTE.md](./TECHNICAL_NOTE.md)** và cây tài liệu quản trị sản phẩm **[product/](./product/)**.
+Để vượt qua 3 rào cản lớn của dữ liệu thực tế (**`88.15%` đoạn đường nhánh không có GPS & thiếu tốc độ tối đa**, **tín hiệu gửi đứt quãng**, và **bản tin trùng/trễ mạng**), toàn bộ hệ thống vận hành qua **4 bước nhân quả khép kín**:
+1. **Bước 1 — Chuẩn hóa bức tranh hiện trạng (`Spark Batch ETL`):** Làm sạch `90,938` bản tin GPS thô, tự động ước lượng tốc độ tối đa cho từng loại đường (chỉ học trên tập `TRAIN`), và gom song song thành `33,441` cửa sổ 30 phút bằng bộ gộp 5 đại lượng kết hợp chia `8` giỏ khóa chống lệch tải (`687.43x → 1.023x`) trên **`Apache Spark 3.5.7 (Java 17)`** (khớp `100%` [`baseline.py`](./baseline.py)).
+2. **Bước 2 — Lấp đầy "vùng mù" bằng cấu trúc bản đồ (`PageRank` & `K-Means`):** Lọc bỏ `90.93%` điểm uốn cong trung gian trên bản đồ, xếp hạng nút cổ chai giao lộ bằng **`PageRank`** (`84,633` đoạn đường), tìm các cặp đường hay kẹt cùng lúc (`Spark FPGrowth` & `2-Pass SON`), và gom nhóm các đoạn đường có đặc điểm giống nhau bằng **`K-Means` ($k=6$)** phủ kín **`74,606` đoạn đường thiếu GPS (`88.15%`)** — vừa phục vụ Sở GTVT, vừa truyền làm biến đầu vào cho Bước 3.
+3. **Bước 3 — Dự báo trước `30 phút` (`Random Forest` 23 biến):** Ghép cặp quan sát cách nhau đúng `30 phút` (`7,898` cặp) kèm cắt sạch mẫu biên thời gian, kết hợp tốc độ hiện tại, khung giờ Việt Nam và đặc trưng bản đồ ở Bước 2 để huấn luyện mô hình duy nhất **`Random Forest (23 biến)`** đạt **`ROC-AUC = 0.9882`**, **`PR-AUC = 0.9471`**, phát hiện sớm tín hiệu đổi trạng thái (`ROC-AUC = 0.7664`) và chấm điểm đủ `100%` mạng lưới thành phố.
+4. **Bước 4 — Cảnh báo trực tuyến & Tự động bù dữ liệu trễ (`Kafka Streaming`, `MongoDB` & `Dashboard`):** Tiếp nhận luồng qua **`Apache Kafka 4.1.0 KRaft`**, lọc trùng và theo dõi điểm nóng kẹt dai dẳng hiện tại (`EWMA`) chỉ trong **`33.0 KiB` bộ nhớ cố định** (`32.0 KiB Bloom` + `1.0 KiB HyperLogLog++`), phản hồi cảnh báo dưới `1 ms` (**`0.636 ms`**) trên **`MongoDB 8.0.34`** & **`Streamlit 5-Tab UI`** (`:8501`), đồng thời cuối ngày tự động bù đủ `501` cửa sổ đến trễ để cập nhật lịch sử chính xác **`100%`**.
 
 ---
 
-## 2. Cấu trúc 5 Bảng Dữ liệu Đầu vào (`raw_data/`)
+## 2. Nhóm Thực hiện, Giảng viên Hướng dẫn & Phân công Chuyên trách
 
-| Tệp nguồn | Số bản ghi | Số cột | Dung lượng | Vai trò trong Kiến trúc V3 (`System Boundary`) |
+- **Đơn vị & Học phần:** `FSB · FPT University | MSE AI | BDA501 – Big Data Analytics` (`Fall 2026`)
+- **Giảng viên hướng dẫn (Instructor):** **Đặng Trần Khánh**
+
+| Thành viên | MSSV | Mảng Chuyên trách trong Dây chuyền 4 Bước | Mã nguồn Cốt lõi |
+|---|---|---|---|
+| **Nguyễn Tạ Minh Quyền** | `25MS23280` | Bước 1: Làm sạch dữ liệu, ước lượng tốc độ tối đa & xử lý phân tán Spark | `spark_batch.py`, `traffic_data/spark_etl.py`, `baseline.py`, `compose.quyen.yml` |
+| **Nguyễn Thành Đạt** | `25MS23306` | Bước 2 & Bước 3: Đồ thị `PageRank`, luật `SON`, phân nhóm `K-Means` & dự báo `+30 phút` | `pipeline.py`, `spark_engine.py`, `tests/` |
+| **Phạm Công Minh** | `25MS23310` | Bước 4: Luồng `Kafka`, bộ đếm `33 KiB`, đối soát tin trễ, `MongoDB 8.0` & giao diện `Streamlit` | `producer.py`, `starter_stream.py`, `app.py`, `docker-compose.yml`, `scripts/` |
+
+---
+
+## 3. Năm Bảng Dữ liệu Nguồn (`raw_data/`) & Vai trò Mẫu Chuẩn `Proof-of-Scale`
+
+> **Vai trò mẫu chuẩn kiểm chứng quy mô (`Proof-of-Scale`):** Bộ dữ liệu công khai 5 bảng (`~38.50 MB`) đóng vai trò mẫu chuẩn để đối chứng sai số toán học bằng `0.0` trước khi mở rộng ngang ra luồng GPS toàn TP.HCM (`> 1` triệu xe phát tín hiệu mỗi `5–10` giây $\approx$ `8–17` tỷ bản tin/ngày, `1.5–3.0 TB/ngày`).
+
+| Tệp nguồn | Số bản ghi | Số cột | Dung lượng | Vai trò trong Hệ thống |
 |---|---:|---:|---:|---|
-| `nodes.csv` | 577,967 | 3 | 19.44 MB | `[C2]` Tọa độ `(long, lat)`; cắt tỉa `525,542` đỉnh hình học OSM mồ côi (`EC-7`), giữ `52,425` giao lộ thực (`52,181` khi lọc `S3_NON_ROAD_TYPE`) |
-| `streets.csv` | 5,553 | 5 | 0.20 MB | `[C2]` Danh mục đường phố (`name`, `level` 1–4, `type`, `max_velocity`) dùng cho `BroadcastHashJoin` |
-| `segments.csv` | 84,633 | 11 | 10.29 MB | `[C2]` Đồ thị cạnh có hướng (`s_node_id -> e_node_id`, `151,929` cạnh chuyển tiếp Line-Graph, `48` nút cụt) |
-| `segment_status.csv` | 90,938 | 4 | 3.58 MB | `[C1]` Bản tin vận tốc GPS thực tế (`velocity`, `updated_at`) dùng để dựng độc lập `33,441` cửa sổ 30 phút (`33,394` sau lọc `S3_NON_ROAD_TYPE`) & Replay |
-| `train.csv` | 33,441 | 18 | 4.99 MB | `Reference View` tùy chọn (khớp `100.0%` tập khóa `(segment_id, date, period)` với kết quả gộp từ `segment_status.csv`) |
+| `nodes.csv` | 577,967 | 3 | 19.44 MB | Tọa độ `(long, lat)`; lọc bỏ `525,542` điểm uốn cong trung gian (`90.93%`), giữ `52,425` giao lộ thực tế |
+| `streets.csv` | 5,553 | 5 | 0.20 MB | Danh mục tuyến đường (`name`, `level` 1–4, `type`, `max_velocity`) dùng cho `BroadcastHashJoin` |
+| `segments.csv` | 84,633 | 11 | 10.29 MB | Mạng lưới `84,633` đoạn đường một chiều (`151,929` hướng rẽ hợp lệ, `48` đoạn đường cụt) |
+| `segment_status.csv` | 90,938 | 4 | 3.58 MB | Bản tin vận tốc GPS thực tế dùng để gom `33,441` cửa sổ 30 phút (`33,394` đường cơ giới) & phát luồng |
+| `train.csv` | 33,441 | 18 | 4.99 MB | Bảng đối chứng độc lập dùng để kiểm tra độ khớp `100.0%` khóa cửa sổ `(segment_id, date, period)` |
 
 ---
 
-## 3. Năm Quyết định Chuẩn hóa Kỹ thuật (`Group Decisions G01–G05`)
+## 4. Hướng dẫn Khởi chạy & Kiểm thử Tự động
 
-1. **`G01` — Canonical Event Schema & Key Hierarchy:** Phân tách rõ khóa bản tin GPS thô `raw_event_id = sha256(_id | segment_id | event_ts | velocity)` (`90,938` bản tin) với khóa cửa sổ 30 phút `event_id = sha256(segment_id | date | period)` (`33,441` cửa sổ), đồng thời gắn cả `event_ts` và `ingest_ts = event_ts + arrival_delay_sec`.
-2. **`G02` — Dual Replay Modes (`Raw Ping` & `Window`) Không Gán Tay:** [`producer.py`](./producer.py) hỗ trợ `--mode raw` (`90,938` pings + `1%` duplicate + `5%` late) và `--mode window` (`33,441` windows + `1%` duplicate = `334` + `5%` late = `1,170` in-watermark + `501` out-of-watermark trên `219` khung `(date, period)` hoàn toàn bằng RNG có seed `42`, bỏ hẳn việc chọn tay chỉ số dòng).
-3. **`G03` — Suy dẫn `LOS` (`derive_los`) & Nội suy `max_velocity` 3 Tầng Chỉ Học Trên `TRAIN`:** Cung cấp hàm tường minh `derive_los(velocity_ratio)` theo ngưỡng `0.80 / 0.65 / 0.50 / 0.35 / 0.20` đối chứng song song với nhãn tham chiếu (`52.37%` khớp tuyệt đối); `fit_train_vmax_lookup` & `fit_velocity_lookup` chỉ học trên `TRAIN` (`Tier 1 Segment Observed = 4,946 / TRAIN P85 = 8,164` $\to$ `Tier 2 TRAIN Median(level, type) = 20,124` $\to$ `Tier 3 Hierarchical Prior {1: 80, 2: 60, 3: 50, 4: 40} km/h = 207`).
-4. **`G04` — Dự báo Đúng Chân trời `t + 30m` & Cắt Tập Theo Timestamp Có Purge:** Nhãn mục tiêu chính thức `target_t30m_los_ordinal` được ghép bằng self-join trên `(segment_id, slot_ts + 30m)` (`7,898` cặp liên tiếp đúng `+30m`; các khoảng trống `60m` hoặc `9h` không bao giờ bị gán nhầm làm nhãn `+30m`). Chia tách `70/15/15` theo mốc thời gian toàn cục và loại bỏ (`purge`) mọi mẫu ở biên có `target_ts > cutoff_ts` (`5,494` TRAIN, `1,167` VAL, `1,182` TEST), đồng thời giữ bảng đối chiếu phụ cho bài toán `next_observed` (`23,414` cặp).
-5. **`G05` — Runtime Lock & Kiểm chứng Thật (`Kafka 4.1.0 KRaft` + `Spark 3.5.7 / 4.2.0` + `MongoDB 8.0.34`):** Thực thi trực tiếp `apache/kafka:4.1.0`, PySpark `3.5.7` (Java 17) / `4.2.0` (Java 21) và MongoDB `8.0.34` qua container; khi dịch vụ ngoài tắt, hệ thống trả về `status = "not_verified"` trung thực, tuyệt đối không giả lập kết quả `IXSCAN` hay `Exchange`.
+### 4.1. Khởi chạy Cụm Dịch vụ Docker (`10.5 / 16.0 GB RAM`)
+```powershell
+docker compose up -d kafka mongo spark app
 
----
+# Chạy tác vụ Spark Batch độc lập từ dữ liệu thô trên Apache Spark 3.5.7 (Java 17):
+$env:TRAFFIC_FIT_CUTOFF = '2020-08-01T00:00:00Z'
+docker compose -f compose.quyen.yml run --build --rm batch
+```
 
-## 4. Hướng dẫn Chạy Dự án & Kiểm thử Tự động
-
-### 4.1. Chạy trực tiếp trên Host Python & Container Runtime (Windows PowerShell)
-
+### 4.2. Chạy Trọn vẹn Dây chuyền 4 Bước, Kiểm chứng Hồi phục `WAL` & Kiểm thử Tự động
 ```powershell
 python -m pip install -r requirements.txt
 python pipeline.py
@@ -59,46 +68,20 @@ ruff check . --select E,F,W,C901 --config "lint.mccabe.max-complexity=14" --conf
 streamlit run app.py
 ```
 
-Sau khi khởi chạy, mở trình duyệt tại <http://localhost:8501>.
-
-### 4.2. Chạy bằng Docker Compose (4 Core Services: `kafka`, `mongo`, `spark`, `app` & `compose.quyen.yml`)
-
-```powershell
-docker compose up -d kafka mongo spark app
-docker compose --profile batch run --rm pipeline
-docker compose --profile stream run --rm stream
-
-# Hoặc chạy snapshot Spark batch độc lập của Quyền:
-$env:TRAFFIC_FIT_CUTOFF = '2020-08-01T00:00:00Z'
-docker compose -f compose.quyen.yml run --build --rm batch
-docker compose -f compose.quyen.yml run --rm --entrypoint python batch -m unittest discover -s tests -p test_quyen_spark.py -v
-```
+Sau khi khởi chạy, mở trình duyệt tại <http://localhost:8501> để sử dụng giao diện điều hành 5 tab.
 
 ---
 
-## 5. Danh mục Tệp Đầu ra Chính (`data/` & `outputs/`)
+## 5. Danh mục Tệp Kết quả Chính (`data/` & `outputs/`)
 
-| Tệp kết quả | Thành phần Kiến trúc | Nội dung |
+| Tệp kết quả | Mô-đun | Nội dung |
 |---|---|---|
-| `data/dataset.csv` | `[C14]` Medallion Gold | Bảng dữ liệu hợp nhất (`33,441` dòng $\times$ `54` cột) dựng từ GIS + `segment_status.csv`, gắn PageRank, 7D K-Means và biến nhân quả |
-| `data/lakehouse/bronze_raw_events/events.parquet` | `[C14]` Bronze Layer | Luồng sự kiện GPS Replay (`33,775` bản tin gồm `1%` trùng lặp & `5%` sự kiện trễ) |
-| `data/lakehouse/silver_cleaned_windows/windows.parquet` | `[C14]` Silver Layer | Cửa sổ 30 phút đã chuẩn hóa Unicode `NFC`, đồng bộ `ICT (UTC+7)` và nội suy vận tốc 3 tầng từ `TRAIN` |
-| `data/lakehouse/curated_gold/year_month=*` | `[C14]` Gold Partitioned | `10` phân vùng Parquet theo tháng (`2020-07` đến `2021-04`, định dạng `TIMESTAMP(MICROS)` tương thích Spark 3.5) |
-| `data/lakehouse/segment_static_features.parquet` | `[C13b]` Static Feature Store | Hồ sơ tĩnh cho toàn bộ `84,633` đoạn đường (`10,027` có GPS + `74,606` vùng mù `Cold-Start`) |
-| `data/lakehouse/quarantine_events.parquet` | `[C15]` Quarantine Store | Bản ghi vi phạm quy tắc chất lượng kèm đúng một `first_failing_rule` và `raw_payload` |
-| `data/lakehouse/serving_traffic_scores.parquet` | `[C16]` Serving Mirror | Toàn bộ `33,441` bản ghi dự báo kèm trạng thái `STREAM_PROVISIONAL (v1)` / `BATCH_VERIFIED (v2)` / `BATCH_RECONCILED (v2)` |
-| `outputs/quyen_validation/*` | `[C5]` & `[C9]` Spark Batch | Bằng chứng thực thi [`spark_batch.py`](./spark_batch.py) (`manifest.json`, `broadcast_plan.txt` 3 `BroadcastHashJoin` / `0` `SortMergeJoin`, `sort_merge_plan.txt`, `pruning_plan.txt`, `task_metrics.json` 1-stage vs 2-stage salted monoid) |
-| `outputs/vmax_lookup.json` & `golden_predictions.parquet` | `[C13a]` & `[C13b]` | Bảng tra cứu `max_velocity` đóng băng từ `TRAIN` và tập dự báo chuẩn kiểm chứng đồng nhất Batch/Stream/Recon |
-| `outputs/spark_runtime_evidence.json` & `join_plan_evidence.json` | `[C9]` Pillar I1 & I2 | Bằng chứng thực thi PySpark 3.5.7 (`BroadcastHashJoin` giảm `10 -> 2` Exchanges, `exceptAll == 0`, Parquet pruning, `FPGrowth`, `PipelineModel`, Streaming WAL) |
-| `outputs/monoid_baseline_verification.json` | `[C9]` Pillar I1 | Kiểm chứng đối chiếu Monoid 5-tuple khớp tuyệt đối (`0` sai lệch trên cả 5 thành phần) so với [`baseline.py`](./baseline.py) |
-| `outputs/model.joblib` & `model_registry_manifest.json` | `[C13a]` Frozen Registry | Mô hình đóng băng từ Phase A (`[C11]`) kèm mã băm bất biến `SHA-256` của cả 3 artifact Phase A |
-| `outputs/mongo_verify.json` | `[C16]` MongoDB 8.0 | Kết quả ghi Bulk `UpdateOne` đủ `33,441` bản ghi qua 4 phân vùng vào `mongo:8.0.34`, kiểm chứng idempotent replay, độ trễ `p95 < 1 ms` và `IXSCAN` (`0` SORT) |
-| `outputs/road_pagerank_top.csv` | `[C10]` MMDS Ch. 5 | Top 50 nút cổ chai cấu trúc theo Directed Line-Graph PageRank ($\beta = 0.85$) |
-| `outputs/co_congestion_rules.csv` & `lagged_congestion_rules.csv` | `[C10]` MMDS Ch. 6 | Top 30 luật đồng kẹt xe có hướng 2 chiều (`2-Pass SON`) và Top 20 luật lan truyền trễ 30 phút (`Street_A(t) => Street_B(t+30m)`) |
-| `outputs/hotspot_alerts.csv` | `[C7]` MMDS Ch. 4.7 | Top 25 điểm nóng ùn tắc kéo dài tính bằng cửa sổ suy giảm mũ ($\alpha = 0.15$) có cắt tỉa ngưỡng $\epsilon$ |
-| `outputs/reconciliation_audit.csv` | `[C12]` Two-Tier Recon | Bảng kiểm toán đối soát Batch–Streaming (`100%` in-watermark match, bù `501` bản tin trễ trên `219` khung giờ & hàn gắn + chấm điểm lại `3,953` cửa sổ trễ bậc xuôi dòng) |
-| `outputs/ablation_results.csv` | `[C11]` MMDS Ch. 12 | Bảng đối chứng 7 cấu hình ML trên chân trời đúng `t + 30m` (tách bạch trung thực 6-class multiclass và binary GBT) |
-| `outputs/checkpoints/` & `query_progress.json` | `[C6]` & `[C15]` | WAL offsets (`raw/offset_log.json`), state store log (`agg/state_wal.json`) và bằng chứng kill/restart recovery `0` duplicate side effects |
-| `outputs/metrics.json` | `[C17]` UI Telemetry | Tổng hợp toàn bộ chỉ số vận hành của 17 thành phần `[C1]`–`[C17]` |
-
-
+| `data/dataset.csv` | `[C14]` Hồ dữ liệu | Bảng dữ liệu chuẩn hóa (`33,441` dòng × `59` cột) kèm `PageRank`, `K-Means`, biến quá khứ và nhãn `target_t30m_*` |
+| `data/lakehouse/curated_gold/year_month=*` | `[C14]` Phân vùng tháng | `10` phân vùng `Parquet` theo tháng (`2020-07` đến `2021-04`, tháng `2020-08` có `7,294` dòng) |
+| `data/lakehouse/segment_static_features.parquet` | `[C13b]` Đặc trưng bản đồ | Kho đặc trưng bản đồ tĩnh phủ kín `84,633` đoạn đường (`10,027` có GPS + `74,606` đoạn thiếu GPS) |
+| `data/lakehouse/quarantine_events.parquet` | `[C15]` Cách ly lỗi | Bản ghi vi phạm quy tắc chất lượng kèm mã lỗi đầu tiên `first_failing_rule` |
+| `outputs/model.joblib` & `model_registry_manifest.json` | `[C13a]` Kho mô hình | Mô hình `Random Forest (23 biến)` khóa cố định từ `Pha A` kèm chữ ký `SHA-256` |
+| `outputs/ablation_results.csv` & `transition_evaluation.csv` | `[C11]` Học máy `+30p` | Bảng thử nghiệm 7 cấu hình và đối chứng trực diện khi giao thông đổi trạng thái |
+| `outputs/spark_runtime_evidence.json` & `quyen_validation/*` | `[C9]` Spark 3.5.7 | Bằng chứng `BroadcastHashJoin`, `exceptAll == 0`, cắt tỉa `Parquet`, `FPGrowth` & `KMeans` |
+| `outputs/mongo_verify.json` | `[C16]` MongoDB 8.0 | Bằng chứng ghi cập nhật 69 lô và truy vấn chỉ mục `IXSCAN` (`warm_p95 = 0.636 ms`) |
+| `outputs/slide_charts/*` | Biểu đồ & Bản đồ | Bản đồ TP.HCM có sông Sài Gòn & tên quận, biểu đồ đối chứng trực diện & ảnh cận cảnh giao diện |

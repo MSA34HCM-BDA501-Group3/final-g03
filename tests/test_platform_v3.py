@@ -25,7 +25,13 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app import _find_similar_segments, _predict_single_window, _select_forecast_candidates  # noqa: E402
+from app import (  # noqa: E402
+    SPARK_VERIFY_PATH,
+    _fetch_live_mongo_status,
+    _find_similar_segments,
+    _predict_single_window,
+    _select_forecast_candidates,
+)
 from baseline import (  # noqa: E402
     audit_records_against_monoid,
     monoid_combine,
@@ -41,6 +47,7 @@ from pipeline import (  # noqa: E402
     _is_valid_street_entity,
     _normalize_street_name,
     _parse_period_index,
+    _safe_binary_ranking_metrics,
     _verify_mongodb_ixscan,
     add_temporal_and_neighbor_lags,
     aggregate_status_events,
@@ -50,6 +57,7 @@ from pipeline import (  # noqa: E402
     compute_chronological_split_boundaries,
     compute_road_pagerank,
     derive_los,
+    evaluate_transition_regimes,
     find_peer_segments,
     fit_train_only_clusters_and_priors,
     fit_train_vmax_lookup,
@@ -66,6 +74,7 @@ from starter_stream import (  # noqa: E402
     run_stream_with_restart_recovery,
     update_bounded_decay_state,
     upsert_serving_records_with_version_guard,
+    verify_frozen_registry_integrity,
 )
 
 DATA_DIR = ROOT / "data"
@@ -86,7 +95,7 @@ def test_p1_ec1_ec2_ec4_quality_funnel_and_imputation() -> None:
     qf = metrics["quality_funnel_c5"]
     assert qf["zero_length_segments"] == 154
     assert qf["non_road_osm_segments"] == 427
-    assert qf["street_entities_merged_by_nfc"] > 0
+    assert qf["street_entities_merged_by_nfc"] == 46
     assert qf["status_accounting_balanced"] is True
     assert (
         qf["status_input_pings"]
@@ -95,10 +104,20 @@ def test_p1_ec1_ec2_ec4_quality_funnel_and_imputation() -> None:
 
     q_df = pd.read_csv(OUTPUTS_DIR / "quarantine_summary.csv")
     assert len(q_df) == 6
+    r4_row = q_df[q_df["rule_id"] == "R4_UNICODE_NFD_AND_PREFIX_DRIFT"].iloc[0]
+    assert int(r4_row["train_windows_affected"]) == 2071
     assert (LAKEHOUSE_DIR / "quarantine_events.parquet").is_file()
 
     df = pd.read_csv(DATA_DIR / "dataset.csv")
     assert len(df) == 33441
+    assert len(df.columns) == 59
+    assert {
+        "slot_ts",
+        "target_ts",
+        "split_set",
+        "target_t30m_los_ordinal",
+        "target_t30m_severe",
+    }.issubset(df.columns)
     assert int(df["max_velocity"].isna().sum()) == 0
     assert bool((df["length_m"] > 0).all())
     assert bool(((df["vn_hour"] >= 0.0) & (df["vn_hour"] < 24.0)).all())
@@ -162,6 +181,7 @@ def test_q01_q02_q03_q04_q05_unit_and_dirty_fixtures() -> None:
     assert ict_df.loc[0, "ict_date"] == "2020-08-03"
     assert ict_df.loc[0, "vn_hour"] == 0.0
     assert ict_df.loc[0, "ict_period"] == "period_0_00"
+    assert int(ict_df.loc[0, "is_weekend"]) == 0
     assert int(ict_df.loc[1, "is_unknown_period"]) == 1
     assert float(ict_df.loc[1, "period_sin"]) == 0.0 and float(ict_df.loc[1, "period_cos"]) == 0.0
 
@@ -187,9 +207,7 @@ def test_q01_q02_q03_q04_q05_unit_and_dirty_fixtures() -> None:
 
 def test_p1_ec8_monoid_salting_and_medallion_lakehouse() -> None:
     """[Q06, Q07, Q08, Q09, Q10] Verify Monoid baseline, unequal partition associativity, salting & Parquet."""
-    monoid_verify = json.loads(
-        (OUTPUTS_DIR / "monoid_baseline_verification.json").read_text(encoding="utf-8")
-    )
+    monoid_verify = json.loads((OUTPUTS_DIR / "monoid_baseline_verification.json").read_text(encoding="utf-8"))
     assert monoid_verify["raw_distinct_utc_windows"] == 33441
     assert monoid_verify["medallion_matched_windows"] == 33441
     assert monoid_verify["missing_keys_in_dataset"] == 0
@@ -237,6 +255,15 @@ def test_p1_ec8_monoid_salting_and_medallion_lakehouse() -> None:
     assert salting["salt_bucket_cv"] < 0.02
     assert 1.0 <= salting["salted_partition_skew_ratio"] <= 1.05
     assert join_plan["pillar_i2_catalyst_join_optimization"]["partition_count"] == 10
+    spark_rt_file = json.loads((OUTPUTS_DIR / "spark_runtime_evidence.json").read_text(encoding="utf-8"))
+    spark_rt = join_plan.get("spark_runtime_verification", spark_rt_file)
+    assert spark_rt_file["status"] == "verified"
+    assert spark_rt["status"] == "verified"
+    assert spark_rt["spark_kmeans_train_only_verified"] is True
+    assert spark_rt["spark_kmeans_standard_scaler_verified"] is True
+    assert spark_rt["spark_rf_train_rows"] == 5494
+    assert spark_rt["spark_rf_numeric_features_count"] == 23
+    assert spark_rt["spark_sink1_output_path"] == "outputs/spark_bronze_stream_sink"
 
     assert (LAKEHOUSE_DIR / "bronze_raw_events" / "events.parquet").is_file()
     assert (LAKEHOUSE_DIR / "silver_cleaned_windows" / "windows.parquet").is_file()
@@ -291,6 +318,7 @@ def test_p2_uc4_ec3_nfc_street_hygiene_and_fpgrowth_rules() -> None:
     assert nfc_str == "Phạm Văn Đồng"
     assert _normalize_street_name("Đường số 20") == "Đường số 20"
     assert _normalize_street_name("Xa lộ Hà Nội") == "Xa Lộ Hà Nội"
+    assert _normalize_street_name("Đường Nguyễn Văn Linh, Phường Tân Phong, Quận 7") == "Nguyễn Văn Linh"
     assert _normalize_street_name(None) == ""
     assert not _is_valid_street_entity("Phường Hiệp Bình Chánh")
     assert not _is_valid_street_entity("Quận Gò Vấp")
@@ -298,9 +326,7 @@ def test_p2_uc4_ec3_nfc_street_hygiene_and_fpgrowth_rules() -> None:
 
     rules_df = pd.read_csv(OUTPUTS_DIR / "co_congestion_rules.csv")
     assert len(rules_df) == 30
-    assert bool(
-        (rules_df["antecedent_street"].str.lower() != rules_df["consequent_street"].str.lower()).all()
-    )
+    assert bool((rules_df["antecedent_street"].str.lower() != rules_df["consequent_street"].str.lower()).all())
     # D06: Verify both directions (A => B and B => A) are generated
     pairs_seen = set(zip(rules_df["antecedent_street"], rules_df["consequent_street"]))
     assert ("Lý Chính Thắng", "Nguyễn Thông") in pairs_seen
@@ -453,8 +479,16 @@ def test_p3_ml_ablation_and_zero_conflict_registry() -> None:
     assert ev["test_samples"] == 1182
     assert ev["roc_auc"] > 0.90
     assert ev["average_precision"] > 0.85
+    assert ev["macro_f1_6class"] > 0.50
+    cm = ev["confusion_matrix_6class"]
+    assert len(cm) == 6
+    assert all(cm[i][i] > 0 for i in range(6))
     assert "validation_gate_selection" in ev
     assert len(ev["validation_gate_selection"]["candidates"]) == 6
+    assert (
+        ev["validation_gate_selection"]["selected_multiclass_model"]
+        == "Random Forest (+Graph PageRank, Causal Priors & K-Means)"
+    )
 
     # D10: GBT binary rows must have task_type == BINARY_SEVERE_EF_ONLY and null 6-class metrics
     ablation_df = pd.read_csv(OUTPUTS_DIR / "ablation_results.csv")
@@ -474,6 +508,8 @@ def test_p3_ml_ablation_and_zero_conflict_registry() -> None:
     assert manifest["sha256_digest"] == model_sha
     assert manifest["static_feature_store_sha256"] == static_sha
     assert manifest["vmax_lookup_sha256"] == vmax_sha
+    reg_audit = verify_frozen_registry_integrity(OUTPUTS_DIR / "model_registry_manifest.json")
+    assert reg_audit["verified"] is True
 
     # D12: Shared scorer parity against golden_predictions.parquet
     golden = pd.read_parquet(OUTPUTS_DIR / "golden_predictions.parquet")
@@ -550,13 +586,21 @@ def test_p4_uc1_uc6_ec8_ec9_stream_sketches_and_reconciliation() -> None:
     assert store["ev1"]["lifecycle_status"] == "BATCH_RECONCILED"
     assert store["ev1"]["los"] == "E"
 
-    # M12: WAL Checkpoint kill & restart recovery verification + Tier 2 lag healing rescore
+    # M12 & M14: WAL Checkpoint kill & restart recovery + Tier 2 lag healing rescore + in-flight STREAM_PROVISIONAL
     progress = json.loads((OUTPUTS_DIR / "query_progress.json").read_text(encoding="utf-8"))
     assert progress["restart_recovery_verified"] is True
     assert progress["duplicate_side_effects_on_restart"] == 0
     assert progress["version_guard_audit"]["stale_provisional_retries_rejected"] == 25
     assert progress["healed_downstream_rescored_windows"] == 377
-    assert progress["rescore_prob_changed_windows_count"] == 318
+    assert progress["rescore_prob_changed_windows_count"] == 100
+    assert progress["Phase_B_in_flight_provisional_retained"] == 488
+    assert progress["frozen_registry_integrity"]["verified"] is True
+
+    serving_df = pd.read_parquet(LAKEHOUSE_DIR / "serving_traffic_scores.parquet")
+    status_counts = serving_df["lifecycle_status"].value_counts().to_dict()
+    assert status_counts.get("STREAM_PROVISIONAL") == 488
+    assert status_counts.get("BATCH_RECONCILED") == 501
+    assert status_counts.get("BATCH_VERIFIED") == 32452
 
 
 def test_p4_uc2_ec10_mongodb_ixscan_and_honest_fallback(tmp_path: Path) -> None:
@@ -574,9 +618,7 @@ def test_p4_uc2_ec10_mongodb_ixscan_and_honest_fallback(tmp_path: Path) -> None:
     # M08 / T04 Failure Injection: When Mongo container is disabled/unreachable, status MUST be 'not_verified'
     serving_sample = pd.read_parquet(LAKEHOUSE_DIR / "serving_traffic_scores.parquet").head(20)
     unverified_path = tmp_path / "mongo_unverified.json"
-    unverified = _verify_mongodb_ixscan(
-        serving_sample, unverified_path, "dummy_sha", mongo_container=""
-    )
+    unverified = _verify_mongodb_ixscan(serving_sample, unverified_path, "dummy_sha", mongo_container="")
     assert unverified["status"] == "not_verified"
     assert unverified["ixscan_explain_verification"]["status"] == "not_verified"
     assert unverified["ixscan_explain_verification"]["verified_against_mongo_8_0"] is False
@@ -672,17 +714,23 @@ def test_cold_start_scoring_and_cli_contracts(tmp_path: Path) -> None:
     stream_rep = json.loads(prog_out.read_text(encoding="utf-8"))
     assert stream_rep["restart_recovery_verified"] is True
     assert stream_rep["duplicate_side_effects_on_restart"] == 0
+    assert stream_rep["frozen_registry_integrity"]["verified"] is True
 
 
 def test_t01_end_to_end_mini_fixture_without_train_csv(tmp_path: Path) -> None:
     """[Q01, T01] Run end-to-end window building, PageRank, lags & stream recovery without train.csv."""
     raw_dir = tmp_path / "raw_mini"
     raw_dir.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame({"_id": [1, 2, 3], "long": [106.6, 106.7, 106.8], "lat": [10.7, 10.8, 10.9]}).to_csv(
+        raw_dir / "nodes.csv", index=False
+    )
     pd.DataFrame(
-        {"_id": [1, 2, 3], "long": [106.6, 106.7, 106.8], "lat": [10.7, 10.8, 10.9]}
-    ).to_csv(raw_dir / "nodes.csv", index=False)
-    pd.DataFrame(
-        {"_id": [10, 20], "name": ["Đường Lê Lợi", "Nguyễn Huệ"], "level": [1, 2], "type": ["primary", "secondary"]}
+        {
+            "_id": [10, 20],
+            "name": ["Đường Lê Lợi", "Nguyễn Huệ"],
+            "level": [1, 2],
+            "type": ["primary", "secondary"],
+        }
     ).to_csv(raw_dir / "streets.csv", index=False)
     pd.DataFrame(
         {
@@ -732,17 +780,21 @@ def test_t01_end_to_end_mini_fixture_without_train_csv(tmp_path: Path) -> None:
     raw_replay, raw_sum = generate_raw_ping_replay(tables["segment_status"])
     assert raw_sum["unique_valid_events"] == 4
     win_replay, _ = generate_replay_Batch(medallion)
-    wal_res = run_stream_with_restart_recovery(
-        win_replay, tmp_path / "ckpt", num_microbatches=2, kill_after_batch=0
-    )
+    wal_res = run_stream_with_restart_recovery(win_replay, tmp_path / "ckpt", num_microbatches=2, kill_after_batch=0)
     assert wal_res["restart_recovery_verified"] is True
 
 
 def test_product_lifecycle_governance_tree() -> None:
+    assert SPARK_VERIFY_PATH.name == "spark_runtime_evidence.json"
+    assert SPARK_VERIFY_PATH.is_file()
+    assert callable(_fetch_live_mongo_status)
     expected_files = [
+        PRODUCT_DIR / "README.md",
         PRODUCT_DIR / "00-proposal" / "project-proposal.md",
         PRODUCT_DIR / "00-proposal" / "product-vision.md",
+        PRODUCT_DIR / "01-discovery" / "competitor-analysis.md",
         PRODUCT_DIR / "01-discovery" / "validation-report.md",
+        PRODUCT_DIR / "02-strategy" / "business-model.md",
         PRODUCT_DIR / "02-strategy" / "product-strategy.md",
         PRODUCT_DIR / "03-requirements" / "prd.md",
         PRODUCT_DIR / "04-design" / "wireframes" / "dashboard-5tabs-wireframe.md",
@@ -750,12 +802,713 @@ def test_product_lifecycle_governance_tree() -> None:
         PRODUCT_DIR / "05-architecture" / "architecture-decisions" / "adr-001-zero-conflict-mlops.md",
         PRODUCT_DIR / "05-architecture" / "architecture-decisions" / "adr-002-two-tier-reconciliation.md",
         PRODUCT_DIR / "05-architecture" / "architecture-decisions" / "adr-003-causal-priors-7d-kmeans.md",
+        PRODUCT_DIR / "06-engineering" / "development-guidelines.md",
+        PRODUCT_DIR / "06-engineering" / "release-plan.md",
         PRODUCT_DIR / "06-engineering" / "sprint-plans" / "sprint-plan-v3.md",
         PRODUCT_DIR / "07-quality" / "release-checklist.md",
+        PRODUCT_DIR / "07-quality" / "test-strategy.md",
         PRODUCT_DIR / "07-quality" / "test-cases" / "test-matrix-p1-p4-uc1-uc6-ec1-ec10.md",
         PRODUCT_DIR / "08-launch" / "operations-runbook.md",
+        PRODUCT_DIR / "08-launch" / "pilot-report.md",
+        PRODUCT_DIR / "09-growth" / "experiment-log.md",
         PRODUCT_DIR / "09-growth" / "growth-roadmap.md",
+        PRODUCT_DIR / "09-growth" / "product-analytics.md",
     ]
     for path in expected_files:
         assert path.is_file(), f"Missing product governance document: {path}"
+        doc_txt = path.read_text(encoding="utf-8")
+        for bad_term in ("mồ côi", "Mồ côi", "Orphan", "Transition Regime"):
+            assert bad_term not in doc_txt, f"Found misleading jargon {bad_term!r} in {path.name}"
 
+
+def _extract_pptx_slides_text(pptx_path: Path) -> tuple[int, int, str]:
+    import xml.etree.ElementTree as ET
+    import zipfile
+
+    with zipfile.ZipFile(pptx_path) as zf:
+        slide_names = sorted(
+            [n for n in zf.namelist() if n.startswith("ppt/slides/slide") and n.endswith(".xml")],
+            key=lambda s: int(s.removeprefix("ppt/slides/slide").removesuffix(".xml")),
+        )
+        texts = [
+            el.text.strip()
+            for name in slide_names
+            for el in ET.fromstring(zf.read(name)).iter()
+            if el.tag.endswith("}t") and el.text and el.text.strip()
+        ]
+    return len(slide_names), len(texts), "\n".join(texts)
+
+
+def _extract_pdf_pages_and_text(pdf_path: Path) -> tuple[int, str | None]:
+    import importlib.util
+    import re
+
+    raw = pdf_path.read_bytes()
+    assert raw.startswith(b"%PDF-"), f"Invalid PDF header: {pdf_path}"
+    if importlib.util.find_spec("pypdf") is not None:
+        from pypdf import PdfReader
+
+        reader = PdfReader(str(pdf_path))
+        full_txt = "\n".join(page.extract_text() or "" for page in reader.pages)
+        return len(reader.pages), full_txt
+    pages = len(re.findall(rb"/Type\s*/Page\b", raw))
+    return pages, None
+
+
+def _assert_deliverable_tokens(name: str, text: str, required: tuple[str, ...], forbidden: tuple[str, ...]) -> None:
+    import re
+
+    for req in required:
+        assert req in text, f"Missing required token {req!r} in {name}"
+    for bad in forbidden:
+        if re.fullmatch(r"[GDQMT]\d{2}", bad):
+            assert not re.search(rf"\b{bad}\b", text), f"Found forbidden audit code {bad!r} in {name}"
+        else:
+            assert bad not in text, f"Found forbidden or stale token {bad!r} in {name}"
+
+
+FORBIDDEN_STALE_AND_INTERNAL_TOKENS: tuple[str, ...] = (
+    "stage_b1_ingestion",
+    "2021-03-21",
+    "0.6670",
+    "0.7568",
+    "0.8458",
+    "7,549",
+    "0.3158",
+    "0.465",
+    "0.584",
+    "0.638",
+    "0.767 ms",
+    "60/50/40/30",
+    "0.9247",
+    "0.9634",
+    "e4474d61",
+    "2ccdf94d",
+    "59f813bf",
+    "3,864",
+    "los_Index",
+    "Hồng Bàng (t)",
+    "Đinh Bộ Lĩnh =>",
+    "34399",
+    "Proposal V3",
+    "Architecture V3",
+    "Platform V3",
+    "(V3)",
+    "— V3",
+    "V3.1",
+    "Sơ đồ Kiến trúc V4",
+    "system_architecture_v4",
+    "/workflow",
+    "Stage-Gate",
+    "Gate 1",
+    "Gate 5",
+    "8 Workstreams",
+    "Audit Sign-Off",
+    "28/28",
+    "50/50",
+    "Pillar I1",
+    "Pillar I2",
+    "Pillar I3",
+    "Pillar S7",
+    "Pillars I1",
+    "(I2)",
+    "Khắc phục 6 rủi ro",
+    "Orphan Nodes",
+    "Orphan Node",
+    "Orphan",
+    "đỉnh mồ côi",
+    "Đỉnh mồ côi",
+    "mồ côi",
+    "Mồ côi",
+    "Specialized ML",
+    "Steady-State Inertia Illusion",
+    "Transition Regime",
+    "Discontinuous Sensor Gap",
+    "Next-Observed Horizon",
+    "VAL-Calibrated Acc",
+    "directed segments",
+    "muối hóa",
+    "Muối hóa",
+    "Muối Hóa",
+    "quảng bá bảng chiều",
+    "Quảng bá bảng chiều",
+    "Quảng Bá Bảng Chiều",
+    "ghi lũy đẳng",
+    "Ghi lũy đẳng",
+    "hiện vật",
+    "Hiện vật",
+    "Hiện Vật",
+    "ma trận nhầm lẫn",
+    "Ma trận nhầm lẫn",
+    "Ma trận Nhầm lẫn",
+    "tiên nghiệm nhân quả",
+    "Tiên Nghiệm Nhân Quả",
+    *(f"G0{i}" for i in range(1, 6)),
+    *(f"Q{i:02d}" for i in range(1, 12)),
+    *(f"D{i:02d}" for i in range(1, 13)),
+    *(f"M{i:02d}" for i in range(1, 15)),
+    *(f"T0{i}" for i in range(1, 9)),
+)
+
+
+def _assert_human_storytelling_and_honesty(name: str, text: str) -> None:
+    """Verify Chapter 1 opens with concrete real-world GPS storytelling (no [C1]/SHA-256) and Ch.5 is 1-on-1 honest."""
+    assert "Chương 2." in text, f"Missing Chương 2 boundary in {name}"
+    ch1_text = text.split("Chương 2.", 1)[0]
+    for required_story_token in ("Lý Thường Kiệt", "47407", "4 km/h", "Bước 1", "Bước 2", "Bước 3", "Bước 4"):
+        assert (
+            required_story_token in ch1_text
+        ), f"Missing concrete Chapter 1 story token {required_story_token!r} in {name}"
+    for premature_jargon in ("[C1]", "[C17]", "SHA-256", "Monoid"):
+        assert (
+            premature_jargon not in ch1_text
+        ), f"Found premature technical jargon {premature_jargon!r} in Chapter 1 of {name}"
+    for honest_ch5_token in ("0 / 8", "9 / 61", "2 / 61", "9.35x"):
+        assert (
+            honest_ch5_token in text
+        ), f"Missing honest Chapter 5 evaluation disclosure {honest_ch5_token!r} in {name}"
+
+
+def _assert_synced_deliverable_copies(proposal_pdf: Path, slides_pptx: Path, slides_pdf: Path) -> None:
+    expected_pairs: list[tuple[Path, Path]] = []
+    ws = ROOT.parent
+    if (ws / "HCMC_Smart_Traffic_Final_Report.pdf").is_file():
+        expected_pairs.extend(
+            [
+                (ws / "HCMC_Smart_Traffic_Final_Report.pdf", proposal_pdf),
+                (ws / "HCMC_Smart_Traffic_Final_Presentation.pptx", slides_pptx),
+                (ws / "HCMC_Smart_Traffic_Final_Slides.pdf", slides_pdf),
+            ]
+        )
+    for copy_path, primary_path in expected_pairs:
+        assert copy_path.is_file() and copy_path.read_bytes() == primary_path.read_bytes(), f"Out-of-sync: {copy_path}"
+
+
+def _assert_pptx_single_line_titles_fit(pptx_path: Path) -> None:
+    from PIL import ImageFont
+    from pptx import Presentation
+
+    segoe_bold = Path(r"C:\Windows\Fonts\segoeuib.ttf")
+    if not segoe_bold.is_file():
+        return
+    prs = Presentation(str(pptx_path))
+    assert prs.core_properties.title and "BDA501" in prs.core_properties.title
+    assert "25MS23280" in prs.core_properties.author
+    for s_idx, slide in enumerate(prs.slides, 1):
+        for shp in slide.shapes:
+            if not (shp.has_text_frame and len(shp.text_frame.paragraphs) == 1):
+                continue
+            h_in = shp.height / 914400.0
+            p = shp.text_frame.paragraphs[0]
+            r0 = p.runs[0] if p.runs else None
+            if not (0.26 <= h_in <= 0.36 and r0 and r0.font.bold and p.text.strip()):
+                continue
+            sz = r0.font.size.pt if r0.font.size else 10.2
+            fnt = ImageFont.truetype(str(segoe_bold), max(8, int(round(sz * 96.0 / 72.0))))
+            bb = fnt.getbbox(p.text)
+            tw_in = (bb[2] - bb[0]) / 96.0
+            tf = shp.text_frame
+            box_w_in = (shp.width - (tf.margin_left or 0) - (tf.margin_right or 0)) / 914400.0
+            assert tw_in <= box_w_in * 1.01, f"Slide {s_idx} title {p.text!r} ({tw_in:.2f}in) > box ({box_w_in:.2f}in)"
+
+
+def _assert_pptx_card_shapes_and_nav_dots(pptx_path: Path) -> None:
+    from pptx import Presentation
+    from pptx.enum.shapes import MSO_SHAPE, MSO_SHAPE_TYPE
+
+    prs = Presentation(str(pptx_path))
+    oval_dots = 0
+    for s_idx, slide in enumerate(prs.slides, 1):
+        for shp in slide.shapes:
+            if shp.shape_type != MSO_SHAPE_TYPE.AUTO_SHAPE:
+                continue
+            if shp.auto_shape_type == MSO_SHAPE.OVAL:
+                oval_dots += 1
+            elif shp.auto_shape_type == MSO_SHAPE.SNIP_1_RECTANGLE:
+                min_dim_in = min(shp.width, shp.height) / 914400.0
+                snip_in = shp.adjustments[0] * min_dim_in
+                assert snip_in <= 0.25, f"Slide {s_idx} card corner snip too wide ({snip_in:.2f}in > 0.25in)"
+    assert oval_dots == 15, f"Expected 15 active navbar indicator dots across Slides 02..16, got {oval_dots}"
+
+
+def _assert_pptx_concise_slide_word_budget(pptx_path: Path) -> None:
+    from pptx import Presentation
+
+    prs = Presentation(str(pptx_path))
+    per_slide = [
+        sum(len(sh.text_frame.text.split()) for sh in sl.shapes if sh.has_text_frame)
+        + sum(len(c.text.split()) for sh in sl.shapes if sh.has_table for r in sh.table.rows for c in r.cells)
+        for sl in prs.slides
+    ]
+    avg_words = sum(per_slide) / max(len(per_slide), 1)
+    assert avg_words <= 350.0, f"Slide deck average word count too dense ({avg_words:.1f} > 350)"
+    assert max(per_slide) <= 480, f"Single slide word count too dense ({max(per_slide)} > 480)"
+    for idx in range(1, 15):
+        sl = prs.slides[idx]
+        sl_txt = " ".join(
+            [sh.text_frame.text for sh in sl.shapes if sh.has_text_frame]
+            + [c.text for sh in sl.shapes if sh.has_table for r in sh.table.rows for c in r.cells]
+        )
+        for member_tok in ("Minh Quyền", "Thành Đạt", "Công Minh", "25MS23"):
+            assert member_tok not in sl_txt, f"Slide {idx + 1:02d} must not show member name/ID '{member_tok}'"
+
+
+def test_proposal_pdf_and_pptx_deliverables_synchronized() -> None:
+    """Verify Final Report PDF, concise 16-slide visual PDF/PPTX, HCMC maps, UI screenshots & Markdown reports."""
+    proposal_pdf = ROOT / "HCMC_Smart_Traffic_Final_Report.pdf"
+    slides_pdf = ROOT / "HCMC_Smart_Traffic_Final_Slides.pdf"
+    slides_pptx = ROOT / "HCMC_Smart_Traffic_Final_Presentation.pptx"
+    arch_png = OUTPUTS_DIR / "system_architecture.png"
+    grid_png = OUTPUTS_DIR / "slides_overview_grid.png"
+    chart_dir = OUTPUTS_DIR / "slide_charts"
+    assert proposal_pdf.is_file() and proposal_pdf.stat().st_size > 500_000
+    assert slides_pdf.is_file() and slides_pdf.stat().st_size > 500_000
+    assert slides_pptx.is_file() and slides_pptx.stat().st_size > 400_000
+    assert arch_png.is_file() and arch_png.stat().st_size > 200_000
+    assert grid_png.is_file() and grid_png.stat().st_size > 500_000
+    for visual_asset in (
+        "arch_detailed_reference.png",
+        "map_hcmc_problem_context.png",
+        "map_hcmc_hotspots_coldstart.png",
+        "map_hcmc_clusters_7d.png",
+        "visual_methods_imputation_monoid.png",
+        "visual_methods_graph_coldstart_sketches.png",
+        "flow_batch_components.png",
+        "flow_stream_components.png",
+        "chart_transition_analysis.png",
+        "chart_ablation_t30m.png",
+        "chart_eda_anomalies.png",
+        "chart_spark_skew_catalyst.png",
+        "chart_streaming_serving.png",
+        "ui_tab1_overview_hotspots.png",
+        "ui_tab2_live_forecast_mongo.png",
+        "ui_tab4_kmeans_coldstart.png",
+        "eq_vmax_los.png",
+        "eq_monoid.png",
+        "eq_pagerank.png",
+        "eq_prior.png",
+        "eq_sketches.png",
+    ):
+        assert (chart_dir / visual_asset).is_file(), f"Missing visual asset: {visual_asset}"
+    _assert_synced_deliverable_copies(proposal_pdf, slides_pptx, slides_pdf)
+    _assert_pptx_single_line_titles_fit(slides_pptx)
+    _assert_pptx_card_shapes_and_nav_dots(slides_pptx)
+    _assert_pptx_concise_slide_word_budget(slides_pptx)
+
+    prop_pages, prop_text = _extract_pdf_pages_and_text(proposal_pdf)
+    slides_pages, slides_text = _extract_pdf_pages_and_text(slides_pdf)
+    pptx_slides, pptx_text_nodes, pptx_text = _extract_pptx_slides_text(slides_pptx)
+    assert prop_pages >= 15
+    assert slides_pages == 16
+    assert pptx_slides == 16
+    assert pptx_text_nodes >= 280
+
+    manifest = json.loads((ROOT / "outputs" / "model_registry_manifest.json").read_text(encoding="utf-8"))
+    sha_prefixes = (
+        manifest["sha256_digest"][:12],
+        manifest["static_feature_store_sha256"][:12],
+        manifest["vmax_lookup_sha256"][:12],
+    )
+    report_metrics = (
+        "33,441",
+        "7,898",
+        "5,494",
+        "1,167",
+        "1,182",
+        "2020-12-12T08:00:00Z",
+        "2020-12-25T03:30:00Z",
+        "0.9450",
+        "0.5543",
+        "0.9409",
+        "0.9882",
+        "0.9471",
+        "0.9362",
+        "0.9514",
+        "7,294",
+        "32.0 KiB",
+        "501",
+        "3,953",
+        "377",
+        "0.636 ms",
+        "Proof-of-Scale",
+        "9.35x",
+        "25MS23280",
+        "25MS23306",
+        "25MS23310",
+    ) + sha_prefixes
+    slide_metrics = (
+        "84,633",
+        "33,441",
+        "7,898",
+        "5,494",
+        "1,167",
+        "1,182",
+        "0.9450",
+        "0.9882",
+        "0.9471",
+        "7,294",
+        "32.0 KiB",
+        "501",
+        "3,953",
+        "377",
+        "0.636 ms",
+        "Proof-of-Scale",
+        "9.35x",
+        "25MS23280",
+        "25MS23306",
+        "25MS23310",
+        "Đặng Trần Khánh",
+    )
+    chapters_and_sections = tuple(f"Chương {idx}." for idx in range(1, 8)) + (
+        "1.4.",
+        "2.4.",
+        "3.4.",
+        "5.4.",
+        "7.2.",
+        "7.3.",
+        "7.4.",
+        "Hình 1.1",
+        "Hình 1.2",
+        "Hình 2.1",
+        "Hình 3.1",
+        "Hình 3.2",
+        "Hình 3.3",
+        "Hình 4.1",
+        "Bảng 5.4",
+        "Bảng 5.5",
+        "Hình 5.1",
+        "Hình 5.2",
+        "Hình 6.1",
+        "Hình 6.2",
+        "Hình 6.3",
+        "Hình 6.4",
+    )
+    forbidden_report_slang = FORBIDDEN_STALE_AND_INTERNAL_TOKENS + (
+        "Báo Cáo Đề Xuất",
+        "Project Proposal",
+        "win trễ",
+        "377 win",
+        "3,953 lag1",
+        "p ≥ 0.03",
+    )
+    forbidden_raw_pdf_math = (
+        "sum_{s=1}",
+        "m1 (+) m2",
+        "+inf",
+        "prior_s(t)",
+    )
+    forbidden_slide_dumps = (
+        FORBIDDEN_STALE_AND_INTERNAL_TOKENS
+        + sha_prefixes
+        + (
+            "Báo Cáo Đề Xuất",
+            "Project Proposal",
+            "ruff check",
+            "docker compose",
+            "spark_engine.py",
+            "compose.quyen.yml",
+            "[C1]->",
+            "IXSCAN, 0 SORT",
+            "win trễ",
+            "377 win",
+            "v_max",
+            "LIVE_MONGODB_8.0",
+        )
+    )
+
+    artifact = joblib.load(OUTPUTS_DIR / "model.joblib")
+    rf_imp = dict(zip(artifact["full_features"], artifact["rf_multiclass"].feature_importances_))
+    exact_imp_tokens = (
+        f"{rf_imp['current_los_ordinal']:.4f}",
+        f"{rf_imp['street_causal_prior_sev']:.4f}",
+        f"{rf_imp['neighbor_los_ordinal']:.4f}",
+        f"{rf_imp['lag2_los_ordinal']:.4f}",
+    )
+
+    proposal_md = (PRODUCT_DIR / "00-proposal" / "project-proposal.md").read_text(encoding="utf-8")
+    tech_note_md = (ROOT / "TECHNICAL_NOTE.md").read_text(encoding="utf-8")
+    readme_md = (ROOT / "README.md").read_text(encoding="utf-8")
+    app_py_txt = (ROOT / "app.py").read_text(encoding="utf-8")
+    _assert_deliverable_tokens(
+        "project-proposal.md",
+        proposal_md,
+        report_metrics + chapters_and_sections + exact_imp_tokens,
+        forbidden_report_slang,
+    )
+    _assert_human_storytelling_and_honesty("project-proposal.md", proposal_md)
+    _assert_deliverable_tokens(
+        "TECHNICAL_NOTE.md",
+        tech_note_md,
+        report_metrics + tuple(f"Chương {idx}." for idx in range(1, 8)),
+        forbidden_report_slang,
+    )
+    _assert_deliverable_tokens(
+        "README.md",
+        readme_md,
+        ("25MS23280", "25MS23306", "25MS23310", "PRESENTATION_SCRIPT.md", "Proof-of-Scale"),
+        FORBIDDEN_STALE_AND_INTERNAL_TOKENS + ("Báo cáo Đề xuất",),
+    )
+    _assert_deliverable_tokens("app.py", app_py_txt, ("27017", "LIVE_MONGODB_8.0"), FORBIDDEN_STALE_AND_INTERNAL_TOKENS)
+    _assert_deliverable_tokens("Presentation PPTX", pptx_text, slide_metrics, forbidden_slide_dumps)
+    if slides_text is not None:
+        assert len(slides_text) > 8_000, "Slides PDF must have a searchable vector text layer"
+        _assert_deliverable_tokens("Slides PDF", slides_text, slide_metrics, forbidden_slide_dumps)
+    if prop_text is not None:
+        assert "&&" not in prop_text, "Report PDF CLI Runbook must not use && (breaks Windows PowerShell 5.1)"
+        _assert_deliverable_tokens(
+            "Report PDF",
+            prop_text,
+            report_metrics + chapters_and_sections,
+            forbidden_report_slang + forbidden_raw_pdf_math,
+        )
+        _assert_human_storytelling_and_honesty("Report PDF", prop_text)
+
+
+def test_presentation_script_completeness_and_sync() -> None:
+    """Verify PRESENTATION_SCRIPT.md covers all 16 slides, 3 speakers, live demo, Q&A, and workspace sync."""
+    script_path = ROOT / "PRESENTATION_SCRIPT.md"
+    ws_script_path = ROOT.parent / "PRESENTATION_SCRIPT.md"
+    assert script_path.is_file() and script_path.stat().st_size > 15_000
+    script_text = script_path.read_text(encoding="utf-8")
+    if ws_script_path.parent.exists() and ws_script_path.is_file():
+        assert ws_script_path.read_text(encoding="utf-8") == script_text
+
+    slide_markers = tuple(f"#### Slide {idx:02d}:" for idx in range(1, 17))
+    qa_markers = tuple(f"### Câu {idx}:" for idx in range(1, 11))
+    speaker_and_demo_tokens = (
+        "Nguyễn Tạ Minh Quyền",
+        "25MS23280",
+        "Nguyễn Thành Đạt",
+        "25MS23306",
+        "Phạm Công Minh",
+        "25MS23310",
+        "Đặng Trần Khánh",
+        "Live Demo",
+        "localhost:8501",
+        "Tra cứu nhanh Báo cáo:",
+        "Proof-of-Scale",
+        "0.9882",
+        "0.636 ms",
+        "32.0 KiB",
+    )
+    _assert_deliverable_tokens(
+        "PRESENTATION_SCRIPT.md",
+        script_text,
+        slide_markers + qa_markers + speaker_and_demo_tokens,
+        FORBIDDEN_STALE_AND_INTERNAL_TOKENS,
+    )
+
+
+def test_transition_regime_evaluation_resolves_persistence_paradox() -> None:
+    """Verify Transition-Case ML evaluation (LOS(t) != LOS(t+30m)), VAL calibration, and PR-AUC parity."""
+    assert _safe_binary_ranking_metrics(np.array([], dtype=int), np.array([], dtype=float)) == (None, None, 0.0)
+    roc_all_zero, pr_all_zero, brier_clip = _safe_binary_ranking_metrics(
+        np.array([0, 0, 0], dtype=int),
+        np.array([-0.05, 0.50, 1.0000000002], dtype=float),
+    )
+    assert roc_all_zero is None and pr_all_zero is None and 0.0 < brier_clip < 1.0
+
+    trans_csv = OUTPUTS_DIR / "transition_evaluation.csv"
+    ablation_df = pd.read_csv(OUTPUTS_DIR / "ablation_results.csv")
+    assert trans_csv.is_file()
+    trans_csv_txt = trans_csv.read_text(encoding="utf-8")
+    assert "Nhóm đổi trạng thái" in trans_csv_txt and "Cặp tín hiệu GPS ngắt quãng" in trans_csv_txt
+    assert "Transition Regime" not in trans_csv_txt and "Discontinuous Sensor Gap" not in trans_csv_txt
+    assert "Tập Chuyển Pha" not in trans_csv_txt and "Hậu nghiệm" not in trans_csv_txt
+
+    static_df = pd.read_parquet(DATA_DIR / "lakehouse" / "segment_static_features.parquet")
+    peers_61781 = find_peer_segments(static_df, 61781, limit=8, prefer_observed_peers=True)
+    assert len(peers_61781) == 8
+    assert not peers_61781["street_name"].fillna("").str.match(r"^(Phường|Quận)\b", case=False).any()
+
+    df = pd.read_csv(DATA_DIR / "dataset.csv")
+    df["slot_ts"] = pd.to_datetime(df["slot_ts"], utc=True)
+    df["target_ts"] = pd.to_datetime(df["target_ts"], utc=True)
+    test_df = df[df["split_set"] == "TEST"].copy()
+    artifact = joblib.load(OUTPUTS_DIR / "model.joblib")
+    empty_df, empty_summary = evaluate_transition_regimes(
+        test_df[test_df["target_next_los_ordinal"].isna()], df, artifact
+    )
+    assert empty_df.empty and empty_summary == {"test_samples": 0}
+    trans_df, summary = evaluate_transition_regimes(test_df, df, artifact)
+    assert len(trans_df) == 4 and len(trans_df.columns) == 10
+    rf_mask = ablation_df["model"].str.startswith("Random Forest (+Graph")
+    ablation_rf_pr = float(ablation_df.loc[rf_mask, "severe_pr_auc"].iloc[0])
+    assert abs(float(trans_df.iloc[0]["rf_23d_severe_pr_auc"]) - ablation_rf_pr) < 1e-4
+    assert summary["test_samples"] == 1182
+    assert summary["steady_state_samples"] == 1121
+    assert summary["transition_samples"] == 61
+    assert summary["val_selected_change_threshold"] == 0.30
+    assert "rf_23d_early_warning_recall_at_003" not in summary
+    assert summary["persistence_transition_6class_acc"] == 0.0
+    assert summary["rf_23d_transition_detect_roc_auc"] > 0.75
+    assert summary["rf_23d_val_calibrated_transition_6class_acc"] > 0.14
+    assert summary["rf_23d_conditional_new_state_top1_acc"] > 0.35
+    assert summary["rf_23d_transition_pr_auc"] > summary["persistence_transition_pr_auc"]
+    assert summary["rf_23d_transition_brier"] < summary["persistence_transition_brier"]
+    assert summary["dt_23d_transition_6class_acc"] > 0.15
+    assert summary["gbt_23d_transition_pr_auc"] > 0.64
+    assert summary["rf_23d_onset_risk_lift_ratio"] > 8.0
+    gap = summary["next_observed_gap_regime"]
+    assert gap["rf_23d_severe_pr_auc"] > gap["persistence_severe_pr_auc"]
+    assert summary["cold_start_coverage"]["rf_23d_network_coverage_pct"] == 100.0
+    assert summary["cold_start_coverage"]["persistence_cold_start_coverage_pct"] == 0.0
+
+    trans_row = df[(df["segment_id"] == 21064) & (df["date"] == "2021-04-22") & (df["period"] == "period_4_30")].iloc[0]
+    pred_ui = _predict_single_window(trans_row, artifact)
+    assert trans_row["LOS"] == "E"
+    assert pred_ui["persistence_los"] == "E"
+    assert pred_ui["rf_los"] == "F"
+    assert pred_ui["rf_calibrated_los"] == "F"
+    assert pred_ui["rf_change_prob"] > 0.70
+    assert pred_ui["rf_severe_prob"] > 0.50
+
+
+def test_pre_experiment_milestone_slide_copy_calibrated_and_synced() -> None:
+    """Verify the 13-slide Pre-Experiment copy stops at Section 8 + Risk + Next Plan and has zero runtime leaks."""
+    from pptx import Presentation
+
+    pre_pptx = ROOT / "HCMC_Smart_Traffic_PreExperiment_Presentation.pptx"
+    pre_pdf = ROOT / "HCMC_Smart_Traffic_PreExperiment_Slides.pdf"
+    assert pre_pptx.is_file() and pre_pptx.stat().st_size > 400_000
+    assert pre_pdf.is_file() and pre_pdf.stat().st_size > 400_000
+
+    ws = ROOT.parent
+    if (ws / "HCMC_Smart_Traffic_Final_Presentation.pptx").is_file():
+        assert (ws / pre_pptx.name).read_bytes() == pre_pptx.read_bytes()
+        assert (ws / pre_pdf.name).read_bytes() == pre_pdf.read_bytes()
+
+    _assert_pptx_single_line_titles_fit(pre_pptx)
+    prs = Presentation(str(pre_pptx))
+    assert len(prs.slides) == 13
+    for idx in range(1, 12):
+        sl = prs.slides[idx]
+        sl_txt = " ".join(
+            [sh.text_frame.text for sh in sl.shapes if sh.has_text_frame]
+            + [c.text for sh in sl.shapes if sh.has_table for r in sh.table.rows for c in r.cells]
+        )
+        for member_tok in ("Minh Quyền", "Thành Đạt", "Công Minh", "25MS23"):
+            assert member_tok not in sl_txt, f"Pre-exp Slide {idx + 1:02d} leaked member token '{member_tok}'"
+
+    _, _, pre_pptx_text = _extract_pptx_slides_text(pre_pptx)
+    pre_pdf_pages, pre_pdf_text = _extract_pdf_pages_and_text(pre_pdf)
+    assert pre_pdf_pages == 13
+
+    required_pre_tokens = (
+        "DESIGN & METHODOLOGY REPORT",
+        "09–10. Risk & Next Plan",
+        "8. Stream Processing",
+        "9. Limitations & Risks",
+        "10. Plan & Next Actions",
+        "Next Actions",
+        "25MS23280",
+        "25MS23306",
+        "25MS23310",
+        "Đặng Trần Khánh",
+    )
+    forbidden_empirical_leaks = (
+        "0.9882",
+        "0.9593",
+        "0.9471",
+        "0.9450",
+        "0.5543",
+        "79.82%",
+        "50.51%",
+        "2/61",
+        "9/61",
+        "9.35x",
+        "0.636 ms",
+        "0.530 ms",
+        "687.43x",
+        "1.023x",
+        "7,294",
+        "3.7515",
+        "0.2853",
+        "0.616%",
+        "3.98%",
+        "501 cửa sổ",
+        "3,953",
+        "377",
+        "100% Hoàn thành",
+    )
+    _assert_deliverable_tokens("Pre-Experiment PPTX", pre_pptx_text, required_pre_tokens, forbidden_empirical_leaks)
+    if pre_pdf_text is not None:
+        _assert_deliverable_tokens("Pre-Experiment PDF", pre_pdf_text, required_pre_tokens, forbidden_empirical_leaks)
+
+
+def test_pre_experiment_presentation_script_completeness_and_sync() -> None:
+    """Verify PRESENTATION_SCRIPT_PRE_EXPERIMENT.md covers all 13 slides, 10 Q&As, and zero runtime leaks."""
+    pre_script = ROOT / "PRESENTATION_SCRIPT_PRE_EXPERIMENT.md"
+    ws_pre_script = ROOT.parent / "PRESENTATION_SCRIPT_PRE_EXPERIMENT.md"
+    assert pre_script.is_file() and pre_script.stat().st_size > 15_000
+    pre_script_txt = pre_script.read_text(encoding="utf-8")
+    if ws_pre_script.parent.exists() and ws_pre_script.is_file():
+        assert ws_pre_script.read_text(encoding="utf-8") == pre_script_txt
+
+    slide_markers = tuple(f"#### Slide {idx:02d}:" for idx in range(1, 14))
+    qa_markers = tuple(f"### Câu {idx}:" for idx in range(1, 11))
+    required_script_tokens = (
+        "Nguyễn Tạ Minh Quyền",
+        "25MS23280",
+        "Nguyễn Thành Đạt",
+        "25MS23306",
+        "Phạm Công Minh",
+        "25MS23310",
+        "Đặng Trần Khánh",
+        "HCMC_Smart_Traffic_PreExperiment_Presentation.pptx",
+        "HyperLogLog++",
+        "EWMA",
+        "Proof-of-Scale",
+        "Next Actions",
+    )
+    forbidden_post_run_tokens = FORBIDDEN_STALE_AND_INTERNAL_TOKENS + (
+        "#### Slide 14:",
+        "0.9882",
+        "0.9593",
+        "0.9471",
+        "0.9450",
+        "0.5543",
+        "79.82%",
+        "50.51%",
+        "2/61",
+        "9/61",
+        "9.35x",
+        "0.636 ms",
+        "0.530 ms",
+        "687.43x",
+        "1.023x",
+        "7,294",
+        "3.7515",
+        "0.2853",
+        "0.616%",
+        "3.98%",
+        "501 cửa sổ",
+        "3,953",
+        "377",
+        "100% Hoàn thành",
+    )
+    _assert_deliverable_tokens(
+        "PRESENTATION_SCRIPT_PRE_EXPERIMENT.md",
+        pre_script_txt,
+        slide_markers + qa_markers + required_script_tokens,
+        forbidden_post_run_tokens,
+    )
+    expected_speakers = {
+        1: ("Nguyễn Thành Đạt (`25MS23306`)", "Thành Đạt"),
+        2: ("Nguyễn Thành Đạt (`25MS23306`)", "Thành Đạt"),
+        3: ("Nguyễn Thành Đạt (`25MS23306`)", "Thành Đạt"),
+        4: ("Nguyễn Thành Đạt (`25MS23306`)", "Thành Đạt"),
+        5: ("Nguyễn Tạ Minh Quyền (`25MS23280`)", "Minh Quyền"),
+        6: ("Nguyễn Tạ Minh Quyền (`25MS23280`)", "Minh Quyền"),
+        7: ("Phạm Công Minh (`25MS23310`)", "Công Minh"),
+        8: ("Phạm Công Minh (`25MS23310`)", "Công Minh"),
+        9: ("Phạm Công Minh (`25MS23310`)", "Công Minh"),
+        10: ("Nguyễn Thành Đạt (`25MS23306`)", "Thành Đạt"),
+        11: ("Nguyễn Thành Đạt (`25MS23306`)", "Thành Đạt"),
+        12: ("Nguyễn Tạ Minh Quyền (`25MS23280`)", "Minh Quyền"),
+        13: ("Nguyễn Tạ Minh Quyền (`25MS23280`)", "Minh Quyền"),
+    }
+    for idx, (speaker, short_name) in expected_speakers.items():
+        block = pre_script_txt.split(f"#### Slide {idx:02d}:", 1)[1].split("\n---", 1)[0]
+        assert f"- **Người trình bày:** **{speaker}**" in block, f"Wrong speaker on Pre-Exp Slide {idx:02d}"
+        assert f"- **Lời thoại thuyết trình ({short_name}):**" in block, f"Missing monologue header on Slide {idx:02d}"

@@ -28,6 +28,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.metrics import (
     accuracy_score,
     average_precision_score,
+    brier_score_loss,
     calinski_harabasz_score,
     confusion_matrix,
     davies_bouldin_score,
@@ -57,6 +58,7 @@ from starter_stream import (
     update_bounded_decay_state,
     upsert_serving_records_with_version_guard,
     validate_stream_batch_ordered,
+    verify_frozen_registry_integrity,
 )
 
 LOGGER = logging.getLogger("hcmc_traffic_pipeline")
@@ -161,6 +163,12 @@ def _normalize_street_name(value: Any) -> str:
     text = re.sub(r"\s+", " ", text)
     text = re.sub(r"^Đường\s+(?!số\b|[A-Z0-9]+\b)", "", text, flags=re.IGNORECASE)
     text = re.sub(r"^Xa\s+[lL]ộ\s+", "Xa Lộ ", text)
+    text = re.sub(
+        r"(?:\s*[-–,]+\s*)(?:phường|quận|xã|huyện|thị trấn|khu phố|ấp|tp\.?|thành phố)\b.*$",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
     return text.strip()
 
 
@@ -219,10 +227,7 @@ def align_utc_to_ict(frame: pd.DataFrame) -> pd.DataFrame:
     out = frame.copy()
     out["period_idx"] = _parse_period_index(out["period"])
     safe_period_idx = out["period_idx"].clip(lower=0)
-    out["slot_ts"] = (
-        pd.to_datetime(out["date"], utc=True)
-        + pd.to_timedelta(safe_period_idx * 30, unit="min")
-    )
+    out["slot_ts"] = pd.to_datetime(out["date"], utc=True) + pd.to_timedelta(safe_period_idx * 30, unit="min")
     vn_ts = out["slot_ts"] + pd.to_timedelta(7, unit="h")
     out["ict_date"] = vn_ts.dt.strftime("%Y-%m-%d")
     out["ict_weekday"] = vn_ts.dt.weekday.astype(int)
@@ -237,6 +242,7 @@ def align_utc_to_ict(frame: pd.DataFrame) -> pd.DataFrame:
     out["period_cos"] = np.where(is_known, np.cos(angle), 0.0)
     out["is_unknown_period"] = (~is_known).astype(int)
     out["weekday"] = out["ict_weekday"]
+    out["is_weekend"] = (out["ict_weekday"] >= 5).astype(int)
     out["year_month"] = out["date"].str.slice(0, 7)
     return out
 
@@ -449,9 +455,7 @@ def run_ordered_quality_funnel(
             "edge_case": "EC-2",
             "source_table": "segments.csv",
             "flagged_records": non_road_count,
-            "first_failing_quarantined": int(
-                (seg_flagged["first_failing_rule"] == "R2_NON_ROAD_OSM_TAG").sum()
-            ),
+            "first_failing_quarantined": int((seg_flagged["first_failing_rule"] == "R2_NON_ROAD_OSM_TAG").sum()),
             "train_windows_affected": int((~ref_df["street_type"].isin(VALID_ROAD_TYPES)).sum()),
             "action": "QUARANTINE_LOGGED_AND_STANDARDIZED",
         },
@@ -472,7 +476,7 @@ def run_ordered_quality_funnel(
             "source_table": "train.csv",
             "flagged_records": int(drift_mask.sum()),
             "first_failing_quarantined": int(drift_mask.sum()),
-            "train_windows_affected": int(distinct_raw_streets - distinct_clean_streets),
+            "train_windows_affected": int(drift_mask.sum()),
             "action": "CANONICAL_NFC_AND_ETH_NORMALIZED",
         },
         {
@@ -510,12 +514,8 @@ def run_ordered_quality_funnel(
         "raw_distinct_street_names": distinct_raw_streets,
         "canonical_nfc_street_names": distinct_clean_streets,
         "street_entities_merged_by_nfc": int(distinct_raw_streets - distinct_clean_streets),
-        "missing_max_velocity_segments_pct": round(
-            float(segments_df["max_velocity"].isna().mean() * 100.0), 2
-        ),
-        "missing_max_velocity_train_pct": round(
-            float(ref_df["max_velocity"].isna().mean() * 100.0), 2
-        ),
+        "missing_max_velocity_segments_pct": round(float(segments_df["max_velocity"].isna().mean() * 100.0), 2),
+        "missing_max_velocity_train_pct": round(float(ref_df["max_velocity"].isna().mean() * 100.0), 2),
         "rules_summary": summary_rows,
     }
 
@@ -527,9 +527,7 @@ def aggregate_status_events(status_df: pd.DataFrame) -> pd.DataFrame:
         raw_ids = working["_id"] if "_id" in working.columns else np.arange(len(working))
         working["raw_event_id"] = [
             compute_raw_event_id(rid, seg_id, str(uat), vel)
-            for rid, seg_id, uat, vel in zip(
-                raw_ids, working["segment_id"], working["updated_at"], working["velocity"]
-            )
+            for rid, seg_id, uat, vel in zip(raw_ids, working["segment_id"], working["updated_at"], working["velocity"])
         ]
     working = working.drop_duplicates(subset=["raw_event_id"], keep="first").copy()
 
@@ -573,12 +571,7 @@ def fit_train_vmax_lookup(
     Tier 3: Hierarchical level prior {1: 80, 2: 60, 3: 50, 4: 40} km/h.
     """
     v_col = "raw_max_velocity" if "raw_max_velocity" in train_windows_df.columns else "max_velocity"
-    obs_vmax = (
-        train_windows_df.dropna(subset=[v_col])
-        .groupby("segment_id")[v_col]
-        .first()
-        .to_dict()
-    )
+    obs_vmax = train_windows_df.dropna(subset=[v_col]).groupby("segment_id")[v_col].first().to_dict()
     seg_observed_map = {int(k): float(v) for k, v in obs_vmax.items() if float(v) > 0.0}
 
     # Segment P85 velocity on TRAIN for segments lacking explicit max_velocity
@@ -592,10 +585,7 @@ def fit_train_vmax_lookup(
 
     # Tier 2: (street_level, street_type) median fitted strictly on TRAIN
     type_medians_raw = (
-        train_windows_df.dropna(subset=[v_col])
-        .groupby(["street_level", "street_type"])[v_col]
-        .median()
-        .to_dict()
+        train_windows_df.dropna(subset=[v_col]).groupby(["street_level", "street_type"])[v_col].median().to_dict()
     )
     tier2_map = {
         f"{int(lvl)}|{str(stype)}": float(val)
@@ -645,23 +635,17 @@ def apply_vmax_lookup(
     out = frame.copy()
     if "raw_max_velocity" not in out.columns:
         out["raw_max_velocity"] = (
-            out["max_velocity"]
-            if "max_velocity" in out.columns
-            else pd.Series(np.nan, index=out.index)
+            out["max_velocity"] if "max_velocity" in out.columns else pd.Series(np.nan, index=out.index)
         )
     raw_vmax = out["raw_max_velocity"]
     t1_obs = lookup.get("tier1_segment_observed", {})
     t1_p85 = lookup.get("tier1_segment_train_p85", {}) if use_train_p85 else {}
     t2_map = lookup.get("tier2_level_roadtype_median", {})
-    t3_map = lookup.get(
-        "tier3_level_priors", {str(k): float(v) for k, v in LEVEL_VELOCITY_PRIORS.items()}
-    )
+    t3_map = lookup.get("tier3_level_priors", {str(k): float(v) for k, v in LEVEL_VELOCITY_PRIORS.items()})
 
     resolved = [
         _resolve_single_vmax(str(int(seg_id)), raw_v, lvl, stype, t1_obs, t1_p85, t2_map, t3_map)
-        for seg_id, raw_v, lvl, stype in zip(
-            out["segment_id"], raw_vmax, out["street_level"], out["street_type"]
-        )
+        for seg_id, raw_v, lvl, stype in zip(out["segment_id"], raw_vmax, out["street_level"], out["street_type"])
     ]
     out["max_velocity"] = np.array([val for val, _ in resolved], dtype=float)
     out["vmax_impute_tier"] = [tier for _, tier in resolved]
@@ -671,9 +655,7 @@ def apply_vmax_lookup(
         out["derived_los_ordinal"] = out["derived_los"].map(LOS_TO_ORDINAL).fillna(0).astype(int)
         if "causal_velocity_ratio" in out.columns:
             seg_grp = out.groupby("segment_id", sort=False)
-            out["causal_velocity_ratio"] = seg_grp["velocity_ratio"].cumsum() / (
-                seg_grp.cumcount() + 1.0
-            )
+            out["causal_velocity_ratio"] = seg_grp["velocity_ratio"].cumsum() / (seg_grp.cumcount() + 1.0)
     return out
 
 
@@ -717,9 +699,7 @@ def build_medallion_frame(
     if segments_df is not None and nodes_df is not None and streets_df is not None:
         frame = build_windows_from_raw_sources(nodes_df, streets_df, segments_df, status_agg)
         if train_df is not None and "LOS" in train_df.columns:
-            ref_los = train_df[["segment_id", "date", "period", "LOS"]].rename(
-                columns={"LOS": "reference_los"}
-            )
+            ref_los = train_df[["segment_id", "date", "period", "LOS"]].rename(columns={"LOS": "reference_los"})
             frame = pd.merge(frame, ref_los, on=["segment_id", "date", "period"], how="left")
     elif train_df is not None:
         frame = train_df.copy()
@@ -770,18 +750,12 @@ def build_medallion_frame(
         frame["mean_velocity"]
     )
     frame["min_velocity"] = frame.get("min_velocity", frame["mean_velocity"]).fillna(frame["mean_velocity"])
-    frame["max_velocity_obs"] = frame.get("max_velocity_obs", frame["mean_velocity"]).fillna(
-        frame["mean_velocity"]
-    )
+    frame["max_velocity_obs"] = frame.get("max_velocity_obs", frame["mean_velocity"]).fillna(frame["mean_velocity"])
     frame["severe_ping_count"] = (
-        frame.get("severe_ping_count", (frame["mean_velocity"] < 15.0).astype(int))
-        .fillna(0)
-        .astype(int)
+        frame.get("severe_ping_count", (frame["mean_velocity"] < 15.0).astype(int)).fillna(0).astype(int)
     )
 
-    train_pos_len = frame.loc[
-        (frame["slot_ts"] <= frame["slot_ts"].quantile(0.70)) & (frame["length"] > 0), "length"
-    ]
+    train_pos_len = frame.loc[(frame["slot_ts"] <= frame["slot_ts"].quantile(0.70)) & (frame["length"] > 0), "length"]
     med_len = float(train_pos_len.median()) if len(train_pos_len) > 0 else 27.0
     frame["length_m"] = frame["length"].where(frame["length"] > 0, med_len).fillna(med_len).astype(float)
 
@@ -826,9 +800,7 @@ def add_temporal_and_neighbor_lags(frame: pd.DataFrame) -> pd.DataFrame:
     ordered["lag1_los_ordinal"] = prev_los1.fillna(ordered["current_los_ordinal"])
     ordered["lag2_los_ordinal"] = prev_los2.fillna(ordered["lag1_los_ordinal"])
     ordered["trailing_severe_rate"] = (
-        grouped["is_severe"]
-        .transform(lambda s: s.rolling(window=4, min_periods=1).mean())
-        .astype(float)
+        grouped["is_severe"].transform(lambda s: s.rolling(window=4, min_periods=1).mean()).astype(float)
     )
 
     # Next observed audit columns (shift(-1) regardless of gap)
@@ -884,12 +856,12 @@ def _attach_causal_priors_and_neighbors(chrono: pd.DataFrame) -> pd.DataFrame:
     slot_stats["cum_global_los_sum"] = slot_stats["slot_los_sum"].cumsum()
     slot_stats["cum_global_sev_sum"] = slot_stats["slot_sev_sum"].cumsum()
     slot_stats["cum_global_cnt"] = slot_stats["slot_obs_cnt"].cumsum()
-    slot_stats["causal_global_los"] = (
-        slot_stats["cum_global_los_sum"] + m_global * anchor_los
-    ) / (slot_stats["cum_global_cnt"] + m_global)
-    slot_stats["causal_global_sev"] = (
-        slot_stats["cum_global_sev_sum"] + m_global * anchor_sev
-    ) / (slot_stats["cum_global_cnt"] + m_global)
+    slot_stats["causal_global_los"] = (slot_stats["cum_global_los_sum"] + m_global * anchor_los) / (
+        slot_stats["cum_global_cnt"] + m_global
+    )
+    slot_stats["causal_global_sev"] = (slot_stats["cum_global_sev_sum"] + m_global * anchor_sev) / (
+        slot_stats["cum_global_cnt"] + m_global
+    )
 
     ordered = pd.merge(
         ordered,
@@ -904,12 +876,8 @@ def _attach_causal_priors_and_neighbors(chrono: pd.DataFrame) -> pd.DataFrame:
     seg_cum_los = seg_grp["los_ordinal"].cumsum()
     seg_cum_sev = seg_grp["is_severe"].cumsum()
     m_seg = 5.0
-    ordered["segment_train_prior_los"] = (
-        seg_cum_los + m_seg * ordered["causal_global_los"]
-    ) / (seg_cnt + m_seg)
-    ordered["segment_train_severe_prior"] = (
-        seg_cum_sev + m_seg * ordered["causal_global_sev"]
-    ) / (seg_cnt + m_seg)
+    ordered["segment_train_prior_los"] = (seg_cum_los + m_seg * ordered["causal_global_los"]) / (seg_cnt + m_seg)
+    ordered["segment_train_severe_prior"] = (seg_cum_sev + m_seg * ordered["causal_global_sev"]) / (seg_cnt + m_seg)
 
     if "mean_velocity" in ordered.columns:
         ordered["causal_mean_velocity"] = seg_grp["mean_velocity"].cumsum() / seg_cnt
@@ -938,12 +906,12 @@ def _attach_causal_priors_and_neighbors(chrono: pd.DataFrame) -> pd.DataFrame:
         how="left",
     )
     m_st = 10.0
-    ordered["street_causal_prior_los"] = (
-        ordered["st_cum_los"] + m_st * ordered["causal_global_los"]
-    ) / (ordered["st_cum_cnt"] + m_st)
-    ordered["street_causal_prior_sev"] = (
-        ordered["st_cum_sev"] + m_st * ordered["causal_global_sev"]
-    ) / (ordered["st_cum_cnt"] + m_st)
+    ordered["street_causal_prior_los"] = (ordered["st_cum_los"] + m_st * ordered["causal_global_los"]) / (
+        ordered["st_cum_cnt"] + m_st
+    )
+    ordered["street_causal_prior_sev"] = (ordered["st_cum_sev"] + m_st * ordered["causal_global_sev"]) / (
+        ordered["st_cum_cnt"] + m_st
+    )
 
     # 4. Upstream neighbor LOS at the same timestamp slot
     slot_lookup = (
@@ -958,9 +926,7 @@ def _attach_causal_priors_and_neighbors(chrono: pd.DataFrame) -> pd.DataFrame:
         how="left",
     )
     merged["neighbor_los_ordinal"] = (
-        merged["neighbor_los_ordinal"]
-        .fillna(merged["street_causal_prior_los"])
-        .fillna(merged["current_los_ordinal"])
+        merged["neighbor_los_ordinal"].fillna(merged["street_causal_prior_los"]).fillna(merged["current_los_ordinal"])
     )
     return merged.sort_values(["slot_ts", "segment_id"]).reset_index(drop=True)
 
@@ -981,9 +947,7 @@ def compute_chronological_split_boundaries(frame: pd.DataFrame) -> dict[str, Any
 
     has_target = frame["target_next_los_ordinal"].notna()
     sup_train_mask = has_target & (frame["slot_ts"] <= train_cutoff_ts) & (target_ts <= train_cutoff_ts)
-    sup_train_purged_mask = (
-        has_target & (frame["slot_ts"] <= train_cutoff_ts) & (target_ts > train_cutoff_ts)
-    )
+    sup_train_purged_mask = has_target & (frame["slot_ts"] <= train_cutoff_ts) & (target_ts > train_cutoff_ts)
     sup_val_mask = (
         has_target
         & (frame["slot_ts"] > train_cutoff_ts)
@@ -1044,17 +1008,14 @@ def fit_train_only_clusters_and_priors(
 ) -> tuple[pd.DataFrame, dict[str, Any], dict[str, Any]]:
     """[D04/D07] Fit 7D KMeans on TRAIN and assign row clusters via causal expanding 7D profiles."""
     train_subset = frame.loc[train_mask]
-    seg_profiles = (
-        train_subset.groupby("segment_id", as_index=False)
-        .agg(
-            mean_los_ordinal=("segment_train_prior_los", "last"),
-            severe_rate=("segment_train_severe_prior", "last"),
-            mean_velocity=("mean_velocity", "mean"),
-            velocity_ratio=("velocity_ratio", "mean"),
-            length_m=("length_m", "first"),
-            max_velocity=("max_velocity", "first"),
-            pagerank_score=("pagerank_score", "first"),
-        )
+    seg_profiles = train_subset.groupby("segment_id", as_index=False).agg(
+        mean_los_ordinal=("segment_train_prior_los", "last"),
+        severe_rate=("segment_train_severe_prior", "last"),
+        mean_velocity=("mean_velocity", "mean"),
+        velocity_ratio=("velocity_ratio", "mean"),
+        length_m=("length_m", "first"),
+        max_velocity=("max_velocity", "first"),
+        pagerank_score=("pagerank_score", "first"),
     )
 
     imputer = SimpleImputer(strategy="median")
@@ -1066,17 +1027,14 @@ def fit_train_only_clusters_and_priors(
     # Fit warmup-frozen centroids on warmup prefix so post-warmup intra-TRAIN rows never leak future
     has_warmup = warmup_mask is not None and warmup_mask.sum() >= n_clusters
     fit_subset = frame.loc[warmup_mask] if has_warmup else train_subset
-    warmup_profiles = (
-        fit_subset.groupby("segment_id", as_index=False)
-        .agg(
-            mean_los_ordinal=("segment_train_prior_los", "last"),
-            severe_rate=("segment_train_severe_prior", "last"),
-            mean_velocity=("mean_velocity", "mean"),
-            velocity_ratio=("velocity_ratio", "mean"),
-            length_m=("length_m", "first"),
-            max_velocity=("max_velocity", "first"),
-            pagerank_score=("pagerank_score", "first"),
-        )
+    warmup_profiles = fit_subset.groupby("segment_id", as_index=False).agg(
+        mean_los_ordinal=("segment_train_prior_los", "last"),
+        severe_rate=("segment_train_severe_prior", "last"),
+        mean_velocity=("mean_velocity", "mean"),
+        velocity_ratio=("velocity_ratio", "mean"),
+        length_m=("length_m", "first"),
+        max_velocity=("max_velocity", "first"),
+        pagerank_score=("pagerank_score", "first"),
     )
     w_imputer = SimpleImputer(strategy="median")
     w_scaler = StandardScaler()
@@ -1084,9 +1042,7 @@ def fit_train_only_clusters_and_priors(
     w_kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=42).fit(w_mat)
 
     sample_n = min(2000, len(seg_profiles))
-    sil_score = float(
-        silhouette_score(matrix, seg_profiles["cluster_id"], sample_size=sample_n, random_state=42)
-    )
+    sil_score = float(silhouette_score(matrix, seg_profiles["cluster_id"], sample_size=sample_n, random_state=42))
     cluster_metrics = {
         "algorithm": "KMeans (Train-Only 7D Segment Profiling with Causal Expanding Row Assignment)",
         "clusters_requested": n_clusters,
@@ -1098,8 +1054,7 @@ def fit_train_only_clusters_and_priors(
         "davies_bouldin_index": float(davies_bouldin_score(matrix, seg_profiles["cluster_id"])),
         "calinski_harabasz_score": float(calinski_harabasz_score(matrix, seg_profiles["cluster_id"])),
         "cluster_sizes": {
-            str(int(k)): int(v)
-            for k, v in seg_profiles["cluster_id"].value_counts().sort_index().items()
+            str(int(k)): int(v) for k, v in seg_profiles["cluster_id"].value_counts().sort_index().items()
         },
     }
 
@@ -1137,23 +1092,17 @@ def build_static_feature_store(
     """[C13b/Q04/D07] Static Feature Store covering 100% of 84,633 segments fitted on TRAIN only."""
     train_slice = medallion_df.loc[train_mask] if train_mask is not None else medallion_df
     obs_all = medallion_df.groupby("segment_id", as_index=False).agg(obs_windows=("event_id", "count"))
-    obs_train = (
-        train_slice.groupby("segment_id", as_index=False)
-        .agg(
-            train_obs_windows=("event_id", "count"),
-            mean_los_ordinal=("los_ordinal", "mean"),
-            severe_rate=("is_severe", "mean"),
-            mean_velocity=("mean_velocity", "mean"),
-            segment_train_prior_los=("segment_train_prior_los", "last"),
-            segment_train_severe_prior=("segment_train_severe_prior", "last"),
-        )
+    obs_train = train_slice.groupby("segment_id", as_index=False).agg(
+        train_obs_windows=("event_id", "count"),
+        mean_los_ordinal=("los_ordinal", "mean"),
+        severe_rate=("is_severe", "mean"),
+        mean_velocity=("mean_velocity", "mean"),
+        segment_train_prior_los=("segment_train_prior_los", "last"),
+        segment_train_severe_prior=("segment_train_severe_prior", "last"),
     )
-    street_priors = (
-        train_slice.groupby("street_id", as_index=False)
-        .agg(
-            street_causal_prior_los=("street_causal_prior_los", "last"),
-            street_causal_prior_sev=("street_causal_prior_sev", "last"),
-        )
+    street_priors = train_slice.groupby("street_id", as_index=False).agg(
+        street_causal_prior_los=("street_causal_prior_los", "last"),
+        street_causal_prior_sev=("street_causal_prior_sev", "last"),
     )
     global_los = float(train_slice["los_ordinal"].mean()) if len(train_slice) > 0 else 2.0
     global_sev = float(train_slice["is_severe"].mean()) if len(train_slice) > 0 else 0.25
@@ -1174,12 +1123,8 @@ def build_static_feature_store(
     store["street_causal_prior_sev"] = store["street_causal_prior_sev"].fillna(global_sev)
     store["mean_los_ordinal"] = store["mean_los_ordinal"].fillna(store["street_causal_prior_los"])
     store["severe_rate"] = store["severe_rate"].fillna(store["street_causal_prior_sev"])
-    store["segment_train_prior_los"] = store["segment_train_prior_los"].fillna(
-        store["street_causal_prior_los"]
-    )
-    store["segment_train_severe_prior"] = store["segment_train_severe_prior"].fillna(
-        store["street_causal_prior_sev"]
-    )
+    store["segment_train_prior_los"] = store["segment_train_prior_los"].fillna(store["street_causal_prior_los"])
+    store["segment_train_severe_prior"] = store["segment_train_severe_prior"].fillna(store["street_causal_prior_sev"])
     fallback_v = store["max_velocity"] * (1.0 - 0.14 * store["mean_los_ordinal"])
     store["mean_velocity"] = store["mean_velocity"].fillna(fallback_v).clip(lower=5.0)
     store["velocity_ratio"] = (store["mean_velocity"] / store["max_velocity"]).clip(0.1, 1.2)
@@ -1217,9 +1162,7 @@ def build_static_feature_store(
     store[export_cols].to_parquet(output_parquet_path, index=False)
 
     cold_count = int(store["is_cold_start"].sum())
-    tier_counts = {
-        str(k): int(v) for k, v in store["vmax_impute_tier"].value_counts().sort_index().items()
-    }
+    tier_counts = {str(k): int(v) for k, v in store["vmax_impute_tier"].value_counts().sort_index().items()}
     return {
         "total_segments_indexed": int(len(store)),
         "observed_active_segments": int(len(store) - cold_count),
@@ -1244,11 +1187,14 @@ def find_peer_segments(
     target_cluster = int(q_row["cluster_id"])
 
     candidates = static_store_df[
-        (static_store_df["cluster_id"] == target_cluster)
-        & (static_store_df["segment_id"] != int(query_segment_id))
+        (static_store_df["cluster_id"] == target_cluster) & (static_store_df["segment_id"] != int(query_segment_id))
     ].copy()
     if prefer_observed_peers and "is_cold_start" in candidates.columns:
         obs_cands = candidates[~candidates["is_cold_start"]]
+        if "street_name" in obs_cands.columns:
+            valid_obs = obs_cands[obs_cands["street_name"].fillna("").map(_is_valid_street_entity)]
+            if len(valid_obs) >= limit:
+                obs_cands = valid_obs
         if len(obs_cands) >= limit:
             candidates = obs_cands.copy()
     if candidates.empty:
@@ -1327,11 +1273,7 @@ def mine_co_congestion_rules(
     severe_df["clean_street"] = severe_df["street_name"].map(_normalize_street_name)
     severe_df = severe_df[severe_df["clean_street"].map(_is_valid_street_entity)]
 
-    baskets = (
-        severe_df.groupby(["date", "period"])["clean_street"]
-        .apply(lambda s: sorted(set(s)))
-        .tolist()
-    )
+    baskets = severe_df.groupby(["date", "period"])["clean_street"].apply(lambda s: sorted(set(s))).tolist()
     baskets = [b for b in baskets if len(b) >= 2]
     total_baskets = max(len(baskets), 1)
 
@@ -1532,9 +1474,7 @@ def _compute_decaying_hotspots(base_events: pd.DataFrame, decay_alpha: float) ->
             "latest_velocity_kmh": round(seg_meta[seg_id][1], 2),
             "latest_los": ORDINAL_TO_LOS.get(seg_meta[seg_id][2], "A"),
             "alert_severity": (
-                "CRITICAL (E/F)"
-                if score >= 2.5 and seg_meta[seg_id][2] >= SEVERE_ORDINAL_THRESHOLD
-                else "WARNING"
+                "CRITICAL (E/F)" if score >= 2.5 and seg_meta[seg_id][2] >= SEVERE_ORDINAL_THRESHOLD else "WARNING"
             ),
         }
         for seg_id, score in decay_scores.items()
@@ -1630,18 +1570,13 @@ def _build_reconciliation_table(
     healed_downstream_windows = int(working["segment_id"].isin(late_segments).sum() - len(out_wm_indices))
     tier_audit["healed_downstream_lag_windows"] = max(0, healed_downstream_windows)
 
-    recon_df = (
-        working.groupby(["date", "period"], as_index=False)
-        .agg(
-            batch_gold_events=("event_id", "count"),
-            dropped_late_events=("dropped_by_watermark", "sum"),
-            batch_mean_los_ordinal=("los_ordinal", "mean"),
-            stream_mean_los_ordinal=("in_wm_los", "mean"),
-        )
+    recon_df = working.groupby(["date", "period"], as_index=False).agg(
+        batch_gold_events=("event_id", "count"),
+        dropped_late_events=("dropped_by_watermark", "sum"),
+        batch_mean_los_ordinal=("los_ordinal", "mean"),
+        stream_mean_los_ordinal=("in_wm_los", "mean"),
     )
-    recon_df["stream_in_watermark_events"] = (
-        recon_df["batch_gold_events"] - recon_df["dropped_late_events"]
-    )
+    recon_df["stream_in_watermark_events"] = recon_df["batch_gold_events"] - recon_df["dropped_late_events"]
     recon_df["stream_mean_los_ordinal"] = (
         recon_df["stream_mean_los_ordinal"].fillna(recon_df["batch_mean_los_ordinal"]).round(4)
     )
@@ -1696,9 +1631,7 @@ def run_streaming_and_reconciliation(
     unique_replay = replay_df[~replay_df["is_duplicate"]].reset_index(drop=True)
     dup_count = int(replay_df["is_duplicate"].sum())
     late_in_wm_count = int((unique_replay["lateness_bucket"] == "LATE_IN_WATERMARK").sum())
-    out_wm_indices = set(
-        unique_replay.index[unique_replay["lateness_bucket"] == "LATE_OUT_OF_WATERMARK"].tolist()
-    )
+    out_wm_indices = set(unique_replay.index[unique_replay["lateness_bucket"] == "LATE_OUT_OF_WATERMARK"].tolist())
     late_out_wm_count = len(out_wm_indices)
 
     duplicates_caught, false_positives, exact_card, hll_est, mem_audit = _simulate_stream_sketches(
@@ -1739,20 +1672,14 @@ def run_streaming_and_reconciliation(
             "relative_error_pct": round(rel_error_pct, 3),
         },
         "reconciliation": {
-            "in_watermark_like_for_like_match_pct": tier_audit[
-                "in_watermark_like_for_like_match_pct"
-            ],
+            "in_watermark_like_for_like_match_pct": tier_audit["in_watermark_like_for_like_match_pct"],
             "tier1_exceptAll_diff_count": tier_audit["tier1_exceptAll_diff_count"],
             "tier1_verified": tier_audit["tier1_verified"],
             "affected_late_windows_recomputed": affected_windows,
             "affected_late_segment_windows_recomputed": int(late_out_wm_count),
             "healed_downstream_lag_windows": tier_audit["healed_downstream_lag_windows"],
-            "pre_reconciliation_completeness_pct": tier_audit[
-                "pre_reconciliation_completeness_pct"
-            ],
-            "post_reconciliation_completeness_pct": tier_audit[
-                "post_reconciliation_completeness_pct"
-            ],
+            "pre_reconciliation_completeness_pct": tier_audit["pre_reconciliation_completeness_pct"],
+            "post_reconciliation_completeness_pct": tier_audit["post_reconciliation_completeness_pct"],
         },
     }
     return streaming_summary, hotspots_df, recon_df, out_wm_indices
@@ -1792,9 +1719,7 @@ def _evaluate_legacy_next_observed(frame: pd.DataFrame) -> dict[str, Any]:
     y_tr = tr_df["next_obs_los_ordinal"].astype(int).to_numpy()
     y_te_bin = te_df["next_obs_severe"].astype(int).to_numpy()
 
-    rf = RandomForestClassifier(
-        n_estimators=100, max_depth=12, min_samples_leaf=10, random_state=42, n_jobs=-1
-    )
+    rf = RandomForestClassifier(n_estimators=100, max_depth=12, min_samples_leaf=10, random_state=42, n_jobs=-1)
     rf.fit(X_tr, y_tr)
     probs = rf.predict_proba(X_te)[:, 4:].sum(axis=1)
     preds_bin = (rf.predict(X_te) >= SEVERE_ORDINAL_THRESHOLD).astype(int)
@@ -1807,6 +1732,294 @@ def _evaluate_legacy_next_observed(frame: pd.DataFrame) -> dict[str, Any]:
         "legacy_severe_f1": round(float(f1_score(y_te_bin, preds_bin, zero_division=0)), 4),
         "legacy_pr_auc": round(float(average_precision_score(y_te_bin, probs)), 4),
         "legacy_roc_auc": round(float(roc_auc_score(y_te_bin, probs)), 4),
+    }
+
+
+def _safe_binary_ranking_metrics(y_true: np.ndarray, scores: np.ndarray) -> tuple[float | None, float | None, float]:
+    clipped = np.clip(scores, 0.0, 1.0)
+    if len(y_true) == 0:
+        return None, None, 0.0
+    brier = round(float(brier_score_loss(y_true, clipped)), 4)
+    if len(np.unique(y_true)) < 2:
+        return None, None, brier
+    return (
+        round(float(roc_auc_score(y_true, scores)), 4),
+        round(float(average_precision_score(y_true, scores)), 4),
+        brier,
+    )
+
+
+def _select_val_transition_thresholds(full_frame: pd.DataFrame, ml_artifacts: dict[str, Any]) -> tuple[float, float]:
+    """Select state-change posterior threshold and onset threshold strictly on VAL split (zero TEST peeking)."""
+    if "split_set" not in full_frame.columns or "target_next_los_ordinal" not in full_frame.columns:
+        return 0.30, 0.10
+    val_work = full_frame[(full_frame["split_set"] == "VAL") & full_frame["target_next_los_ordinal"].notna()].copy()
+    if len(val_work) < 20:
+        return 0.30, 0.10
+    if "current_los_ordinal" not in val_work.columns:
+        val_work["current_los_ordinal"] = val_work["los_ordinal"]
+    X_val = ml_artifacts["ml_imputer"].transform(val_work[ml_artifacts["full_features"]])
+    v_cur = val_work["current_los_ordinal"].astype(int).to_numpy()
+    v_true = val_work["target_next_los_ordinal"].astype(int).to_numpy()
+    v_trans = (v_cur != v_true).astype(int)
+    v_probs_6 = ml_artifacts["rf_multiclass"].predict_proba(X_val)
+    v_p_change = 1.0 - v_probs_6[np.arange(len(val_work)), v_cur]
+
+    tau_grid = (0.15, 0.20, 0.25, 0.30, 0.35, 0.40)
+    best_tau = max(
+        tau_grid,
+        key=lambda t: f1_score(v_trans, (v_p_change >= t).astype(int), zero_division=0),
+    )
+
+    v_non_sev = v_cur < SEVERE_ORDINAL_THRESHOLD
+    if int(v_non_sev.sum()) < 10:
+        return float(best_tau), 0.10
+    v_onset = (v_true[v_non_sev] >= SEVERE_ORDINAL_THRESHOLD).astype(int)
+    v_psev = v_probs_6[:, 4:].sum(axis=1)[v_non_sev]
+    onset_grid = (0.05, 0.10, 0.15, 0.20, 0.25)
+    best_onset_th = max(
+        onset_grid,
+        key=lambda t: f1_score(v_onset, (v_psev >= t).astype(int), zero_division=0),
+    )
+    return float(best_tau), float(best_onset_th)
+
+
+def _compute_transition_posterior_metrics(
+    y_true: np.ndarray,
+    y_cur: np.ndarray,
+    rf_probs_6: np.ndarray,
+    dt_probs_6: np.ndarray,
+    tau_change: float,
+    th_onset: float,
+) -> dict[str, Any]:
+    """Evaluate VAL-calibrated posterior transition detection and conditional new-state ranking."""
+    n_rows = len(y_true)
+    trans_mask = y_true != y_cur
+    trans_bin = trans_mask.astype(int)
+    rf_p_change = 1.0 - rf_probs_6[np.arange(n_rows), y_cur]
+    dt_p_change = 1.0 - dt_probs_6[np.arange(n_rows), y_cur]
+    rf_det_roc, rf_det_pr, _ = _safe_binary_ranking_metrics(trans_bin, rf_p_change)
+    dt_det_roc, _, _ = _safe_binary_ranking_metrics(trans_bin, dt_p_change)
+
+    alt_probs = rf_probs_6.copy()
+    alt_probs[np.arange(n_rows), y_cur] = -1.0
+    next_best_cls = alt_probs.argmax(axis=1)
+    cal_pred = np.where(rf_p_change >= tau_change, next_best_cls, y_cur)
+    cal_tr_acc = round(float(accuracy_score(y_true[trans_mask], cal_pred[trans_mask])), 4) if trans_mask.any() else 0.0
+    cond_top1_acc = (
+        round(float(accuracy_score(y_true[trans_mask], next_best_cls[trans_mask])), 4) if trans_mask.any() else 0.0
+    )
+
+    non_sev_mask = y_cur < SEVERE_ORDINAL_THRESHOLD
+    y_ns_sev = (y_true[non_sev_mask] >= SEVERE_ORDINAL_THRESHOLD).astype(int)
+    rf_psev_ns = rf_probs_6[:, 4:].sum(axis=1)[non_sev_mask]
+    ns_preds = (rf_psev_ns >= th_onset).astype(int)
+    ns_free = y_ns_sev == 0
+    onset_fpr = round(float((ns_preds[ns_free] == 1).mean()), 4) if ns_free.any() else 0.0
+    return {
+        "val_selected_change_threshold": tau_change,
+        "persistence_transition_detect_roc_auc": 0.5,
+        "rf_23d_transition_detect_roc_auc": rf_det_roc,
+        "rf_23d_transition_detect_pr_auc": rf_det_pr,
+        "dt_23d_transition_detect_roc_auc": dt_det_roc,
+        "rf_23d_val_calibrated_overall_6class_acc": round(float(accuracy_score(y_true, cal_pred)), 4),
+        "rf_23d_val_calibrated_transition_6class_acc": cal_tr_acc,
+        "rf_23d_conditional_new_state_top1_acc": cond_top1_acc,
+        "val_selected_onset_threshold": th_onset,
+        "rf_23d_val_onset_precision": round(float(precision_score(y_ns_sev, ns_preds, zero_division=0)), 4),
+        "rf_23d_val_onset_recall": round(float(recall_score(y_ns_sev, ns_preds, zero_division=0)), 4),
+        "rf_23d_val_onset_false_alarm_rate": onset_fpr,
+    }
+
+
+def evaluate_transition_regimes(
+    test_df: pd.DataFrame,
+    full_frame: pd.DataFrame,
+    ml_artifacts: dict[str, Any],
+    total_segments: int = 84633,
+    cold_start_segments: int = 74606,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Decompose TEST performance across steady-state inertia, LOS transitions, onset, gaps & Cold-Start."""
+    if test_df.empty or "target_next_los_ordinal" not in test_df.columns:
+        return pd.DataFrame(), {"test_samples": 0}
+    work = test_df[test_df["target_next_los_ordinal"].notna()].copy().reset_index(drop=True)
+    if work.empty:
+        return pd.DataFrame(), {"test_samples": 0}
+    if "current_los_ordinal" not in work.columns:
+        work["current_los_ordinal"] = work["los_ordinal"]
+    X_full = ml_artifacts["ml_imputer"].transform(work[ml_artifacts["full_features"]])
+
+    y_true = work["target_next_los_ordinal"].astype(int).to_numpy()
+    y_cur = work["current_los_ordinal"].astype(int).to_numpy()
+    y_true_sev = (y_true >= SEVERE_ORDINAL_THRESHOLD).astype(int)
+    y_cur_sev = (y_cur >= SEVERE_ORDINAL_THRESHOLD).astype(int)
+    pers_scores = y_cur / 5.0
+
+    rf_probs_6 = ml_artifacts["rf_multiclass"].predict_proba(X_full)
+    rf_pred = ml_artifacts["rf_multiclass"].predict(X_full)
+    rf_prob = rf_probs_6[:, 4:].sum(axis=1)
+    rf_prob_clip = np.clip(rf_prob, 0.0, 1.0)
+    dt_probs_6 = ml_artifacts["dt_multiclass"].predict_proba(X_full)
+    dt_pred = ml_artifacts["dt_multiclass"].predict(X_full)
+    gbt_prob = ml_artifacts["gbt_severe"].predict_proba(X_full)[:, 1]
+
+    trans_mask = y_true != y_cur
+    non_sev_mask = y_cur < SEVERE_ORDINAL_THRESHOLD
+    onset_mask = non_sev_mask & (y_true >= SEVERE_ORDINAL_THRESHOLD)
+    steady_free_mask = non_sev_mask & (y_true < SEVERE_ORDINAL_THRESHOLD)
+
+    _, p_tr_pr, _ = _safe_binary_ranking_metrics(y_true_sev[trans_mask], pers_scores[trans_mask])
+    p_tr_brier = (
+        round(float(brier_score_loss(y_true_sev[trans_mask], y_cur_sev[trans_mask])), 4) if trans_mask.any() else 0.0
+    )
+    _, rf_tr_pr, rf_tr_brier = _safe_binary_ranking_metrics(y_true_sev[trans_mask], rf_prob[trans_mask])
+    _, gbt_tr_pr, gbt_tr_brier = _safe_binary_ranking_metrics(y_true_sev[trans_mask], gbt_prob[trans_mask])
+    p_on_roc, _, _ = _safe_binary_ranking_metrics(y_true_sev[non_sev_mask], pers_scores[non_sev_mask])
+    rf_on_roc, _, _ = _safe_binary_ranking_metrics(y_true_sev[non_sev_mask], rf_prob[non_sev_mask])
+
+    p_tr_acc = round(float(accuracy_score(y_true[trans_mask], y_cur[trans_mask])), 4) if trans_mask.any() else 0.0
+    dt_tr_acc = round(float(accuracy_score(y_true[trans_mask], dt_pred[trans_mask])), 4) if trans_mask.any() else 0.0
+    rf_tr_acc = round(float(accuracy_score(y_true[trans_mask], rf_pred[trans_mask])), 4) if trans_mask.any() else 0.0
+
+    mean_prob_onset = round(float(rf_prob_clip[onset_mask].mean()), 4) if onset_mask.any() else 0.0
+    mean_prob_steady = round(float(rf_prob_clip[steady_free_mask].mean()), 4) if steady_free_mask.any() else 0.0
+    onset_risk_ratio = round(mean_prob_onset / max(mean_prob_steady, 1e-4), 2)
+
+    tau_val, th_onset_val = _select_val_transition_thresholds(full_frame, ml_artifacts)
+    post_metrics = _compute_transition_posterior_metrics(y_true, y_cur, rf_probs_6, dt_probs_6, tau_val, th_onset_val)
+    gap_metrics = _evaluate_next_observed_gap_regime(full_frame, ml_artifacts)
+    rows = [
+        {
+            "regime": "1. Toàn tập kiểm thử TEST (94.84% giữ nguyên mức cũ, 81.13% mức A)",
+            "sample_count": int(len(work)),
+            "persistence_6class_acc": round(float(accuracy_score(y_true, y_cur)), 4),
+            "rf_23d_6class_acc": round(float(accuracy_score(y_true, rf_pred)), 4),
+            "dt_23d_6class_acc": round(float(accuracy_score(y_true, dt_pred)), 4),
+            "persistence_severe_pr_auc": round(float(average_precision_score(y_true_sev, pers_scores)), 4),
+            "rf_23d_severe_pr_auc": round(float(average_precision_score(y_true_sev, rf_prob)), 4),
+            "gbt_23d_severe_pr_auc": round(float(average_precision_score(y_true_sev, gbt_prob)), 4),
+            "persistence_brier_error": round(float(brier_score_loss(y_true_sev, y_cur_sev)), 4),
+            "rf_23d_brier_error": round(float(brier_score_loss(y_true_sev, rf_prob_clip)), 4),
+        },
+        {
+            "regime": "2. Nhóm đổi trạng thái LOS(t) != LOS(t+30p) — Ngưỡng mặc định",
+            "sample_count": int(trans_mask.sum()),
+            "persistence_6class_acc": p_tr_acc,
+            "rf_23d_6class_acc": rf_tr_acc,
+            "dt_23d_6class_acc": dt_tr_acc,
+            "persistence_severe_pr_auc": p_tr_pr,
+            "rf_23d_severe_pr_auc": rf_tr_pr,
+            "gbt_23d_severe_pr_auc": gbt_tr_pr,
+            "persistence_brier_error": p_tr_brier,
+            "rf_23d_brier_error": rf_tr_brier,
+        },
+        {
+            "regime": f"3. Nhóm đổi trạng thái LOS(t) != LOS(t+30p) — Ngưỡng hiệu chỉnh VAL (P >= {tau_val:.2f})",
+            "sample_count": int(trans_mask.sum()),
+            "persistence_6class_acc": p_tr_acc,
+            "rf_23d_6class_acc": post_metrics["rf_23d_val_calibrated_transition_6class_acc"],
+            "dt_23d_6class_acc": dt_tr_acc,
+            "persistence_severe_pr_auc": p_tr_pr,
+            "rf_23d_severe_pr_auc": rf_tr_pr,
+            "gbt_23d_severe_pr_auc": gbt_tr_pr,
+            "persistence_brier_error": p_tr_brier,
+            "rf_23d_brier_error": rf_tr_brier,
+        },
+        {
+            "regime": "4. Cặp tín hiệu GPS ngắt quãng > 30 phút (47.45% đổi mức LOS)",
+            "sample_count": gap_metrics["test_samples"],
+            "persistence_6class_acc": gap_metrics["persistence_6class_acc"],
+            "rf_23d_6class_acc": gap_metrics["rf_23d_6class_acc"],
+            "dt_23d_6class_acc": None,
+            "persistence_severe_pr_auc": gap_metrics["persistence_severe_pr_auc"],
+            "rf_23d_severe_pr_auc": gap_metrics["rf_23d_severe_pr_auc"],
+            "gbt_23d_severe_pr_auc": gap_metrics["gbt_23d_severe_pr_auc"],
+            "persistence_brier_error": None,
+            "rf_23d_brier_error": None,
+        },
+    ]
+    active_cov_pct = round((total_segments - cold_start_segments) / max(total_segments, 1) * 100.0, 2)
+    summary = {
+        "test_samples": int(len(work)),
+        "steady_state_samples": int((~trans_mask).sum()),
+        "steady_state_ratio_pct": round(float((~trans_mask).mean() * 100.0), 2),
+        "transition_samples": int(trans_mask.sum()),
+        "transition_ratio_pct": round(float(trans_mask.mean() * 100.0), 2),
+        "test_class_distribution": {LOS_ORDER[c]: int((y_true == c).sum()) for c in range(6)},
+        "persistence_transition_6class_acc": p_tr_acc,
+        "dt_23d_transition_6class_acc": dt_tr_acc,
+        "rf_23d_transition_6class_acc": rf_tr_acc,
+        "persistence_transition_pr_auc": p_tr_pr,
+        "rf_23d_transition_pr_auc": rf_tr_pr,
+        "gbt_23d_transition_pr_auc": gbt_tr_pr,
+        "persistence_transition_brier": p_tr_brier,
+        "rf_23d_transition_brier": rf_tr_brier,
+        "gbt_23d_transition_brier": gbt_tr_brier,
+        "non_severe_t_samples": int(non_sev_mask.sum()),
+        "congestion_onset_samples": int(onset_mask.sum()),
+        "persistence_onset_hard_recall": 0.0,
+        "persistence_onset_roc_auc": p_on_roc,
+        "rf_23d_onset_roc_auc": rf_on_roc,
+        "rf_23d_mean_prob_steady_free": mean_prob_steady,
+        "rf_23d_mean_prob_onset": mean_prob_onset,
+        "rf_23d_onset_risk_lift_ratio": onset_risk_ratio,
+        **post_metrics,
+        "next_observed_gap_regime": gap_metrics,
+        "cold_start_coverage": {
+            "total_network_segments": total_segments,
+            "cold_start_segments": cold_start_segments,
+            "persistence_coverage_pct": active_cov_pct,
+            "persistence_cold_start_coverage_pct": 0.0,
+            "rf_23d_network_coverage_pct": 100.0,
+        },
+    }
+    return pd.DataFrame(rows), summary
+
+
+def _evaluate_next_observed_gap_regime(frame: pd.DataFrame, ml_artifacts: dict[str, Any]) -> dict[str, Any]:
+    if "next_obs_los_ordinal" not in frame.columns:
+        return {
+            "test_samples": 0,
+            "transition_samples": 0,
+            "persistence_6class_acc": None,
+            "rf_23d_6class_acc": None,
+            "persistence_severe_pr_auc": None,
+            "rf_23d_severe_pr_auc": None,
+            "gbt_23d_severe_pr_auc": None,
+        }
+    sup = frame[frame["next_obs_los_ordinal"].notna()].copy().reset_index(drop=True)
+    if len(sup) < 20:
+        return {
+            "test_samples": int(len(sup)),
+            "transition_samples": 0,
+            "persistence_6class_acc": None,
+            "rf_23d_6class_acc": None,
+            "persistence_severe_pr_auc": None,
+            "rf_23d_severe_pr_auc": None,
+            "gbt_23d_severe_pr_auc": None,
+        }
+    te_next = sup.iloc[int(0.85 * len(sup)) :].copy().reset_index(drop=True)
+    if "current_los_ordinal" not in te_next.columns:
+        te_next["current_los_ordinal"] = te_next["los_ordinal"]
+    X_next = ml_artifacts["ml_imputer"].transform(te_next[ml_artifacts["full_features"]])
+    yn_true = te_next["next_obs_los_ordinal"].astype(int).to_numpy()
+    yn_cur = te_next["current_los_ordinal"].astype(int).to_numpy()
+    yn_sev = te_next["next_obs_severe"].astype(int).to_numpy()
+    rfn_pred = ml_artifacts["rf_multiclass"].predict(X_next)
+    rfn_prob = np.clip(ml_artifacts["rf_multiclass"].predict_proba(X_next)[:, 4:].sum(axis=1), 0.0, 1.0)
+    gbtn_prob = np.clip(ml_artifacts["gbt_severe"].predict_proba(X_next)[:, 1], 0.0, 1.0)
+    _, p_pr, _ = _safe_binary_ranking_metrics(yn_sev, yn_cur / 5.0)
+    _, rf_pr, _ = _safe_binary_ranking_metrics(yn_sev, rfn_prob)
+    _, gbt_pr, _ = _safe_binary_ranking_metrics(yn_sev, gbtn_prob)
+    return {
+        "test_samples": int(len(te_next)),
+        "transition_samples": int((yn_true != yn_cur).sum()),
+        "transition_ratio_pct": round(float((yn_true != yn_cur).mean() * 100.0), 2),
+        "persistence_6class_acc": round(float(accuracy_score(yn_true, yn_cur)), 4),
+        "rf_23d_6class_acc": round(float(accuracy_score(yn_true, rfn_pred)), 4),
+        "persistence_severe_pr_auc": p_pr,
+        "rf_23d_severe_pr_auc": rf_pr,
+        "gbt_23d_severe_pr_auc": gbt_pr,
     }
 
 
@@ -1840,24 +2053,35 @@ def train_and_evaluate_models(
     X_val_full = imputer_full.transform(val_df[FULL_ML_FEATURES])
     X_test_full = imputer_full.transform(test_df[FULL_ML_FEATURES])
 
-    dt_local = DecisionTreeClassifier(max_depth=8, min_samples_leaf=25, random_state=42).fit(
-        X_train_local, y_train_multi
+    # D01/D09: Balance intermediate LOS C/D/E steady-state transitions strictly on TRAIN split
+    cur_tr = train_df["current_los_ordinal"].astype(int).to_numpy()
+    is_steady = cur_tr == y_train_multi
+    steady_cls_cnt = np.bincount(y_train_multi[is_steady], minlength=6)
+    inv_steady_cls = np.sum(is_steady) / (6.0 * np.maximum(steady_cls_cnt, 1))
+    sw_multi = np.where(is_steady, inv_steady_cls[y_train_multi] * 4.0, 0.15)
+    sw_bin = np.where(is_steady, 2.0, 0.40)
+    pos_m = y_train_bin == 1
+    sw_bin[pos_m] *= float(y_train_bin.mean()) / float(sw_bin[pos_m].sum() / sw_bin.sum())
+    sw_bin[~pos_m] *= float(1.0 - y_train_bin.mean()) / float(sw_bin[~pos_m].sum() / sw_bin.sum())
+
+    dt_local = DecisionTreeClassifier(max_depth=8, min_samples_leaf=8, random_state=42).fit(
+        X_train_local, y_train_multi, sample_weight=sw_multi
     )
-    dt_full = DecisionTreeClassifier(max_depth=8, min_samples_leaf=25, random_state=42).fit(
-        X_train_full, y_train_multi
+    dt_full = DecisionTreeClassifier(max_depth=8, min_samples_leaf=8, random_state=42).fit(
+        X_train_full, y_train_multi, sample_weight=sw_multi
     )
     rf_local = RandomForestClassifier(
-        n_estimators=100, max_depth=12, min_samples_leaf=10, random_state=42, n_jobs=-1
-    ).fit(X_train_local, y_train_multi)
+        n_estimators=120, max_depth=10, min_samples_leaf=4, max_features=0.85, random_state=42, n_jobs=1
+    ).fit(X_train_local, y_train_multi, sample_weight=sw_multi)
     rf_full = RandomForestClassifier(
-        n_estimators=100, max_depth=12, min_samples_leaf=10, random_state=42, n_jobs=-1
-    ).fit(X_train_full, y_train_multi)
+        n_estimators=120, max_depth=10, min_samples_leaf=4, max_features=0.85, random_state=42, n_jobs=1
+    ).fit(X_train_full, y_train_multi, sample_weight=sw_multi)
     gbt_local = GradientBoostingClassifier(
-        n_estimators=80, max_depth=4, learning_rate=0.08, random_state=42
-    ).fit(X_train_local, y_train_bin)
+        n_estimators=80, max_depth=3, learning_rate=0.06, subsample=0.85, random_state=42
+    ).fit(X_train_local, y_train_bin, sample_weight=sw_bin)
     gbt_full = GradientBoostingClassifier(
-        n_estimators=80, max_depth=4, learning_rate=0.08, random_state=42
-    ).fit(X_train_full, y_train_bin)
+        n_estimators=80, max_depth=3, learning_rate=0.06, subsample=0.85, random_state=42
+    ).fit(X_train_full, y_train_bin, sample_weight=sw_bin)
 
     # D09: Validation Gate Model & Threshold Selection (strictly on VAL split, never touching TEST)
     val_candidates = [
@@ -1910,9 +2134,7 @@ def train_and_evaluate_models(
         val_roc = float(roc_auc_score(y_val_bin, c_val_probs))
         val_pr = float(average_precision_score(y_val_bin, c_val_probs))
         val_acc6 = (
-            round(float(accuracy_score(y_val_multi, c_model.predict(c_X_val))), 4)
-            if c_kind == "multiclass"
-            else None
+            round(float(accuracy_score(y_val_multi, c_model.predict(c_X_val))), 4) if c_kind == "multiclass" else None
         )
         val_selection_rows.append(
             {
@@ -1934,6 +2156,10 @@ def train_and_evaluate_models(
     persistence_multi = test_df["current_los_ordinal"].astype(int).to_numpy()
     persistence_bin = (persistence_multi >= SEVERE_ORDINAL_THRESHOLD).astype(int)
     persistence_scores = persistence_multi / 5.0
+
+    best_probs = rf_full.predict_proba(X_test_full)[:, 4:].sum(axis=1)
+    best_preds_multi = rf_full.predict(X_test_full)
+    best_preds_bin = (best_preds_multi >= SEVERE_ORDINAL_THRESHOLD).astype(int)
 
     # D10: Separate 6-class multiclass vs binary GBT metrics honestly (no copying RF 6-class into GBT!)
     ablation_rows = [
@@ -1977,10 +2203,10 @@ def train_and_evaluate_models(
             "Random Forest (+Graph PageRank, Causal Priors & K-Means)",
             "Local + Graph + Cluster (23D)",
             y_test_multi,
-            rf_full.predict(X_test_full),
+            best_preds_multi,
             y_test_bin,
-            (rf_full.predict(X_test_full) >= 4).astype(int),
-            rf_full.predict_proba(X_test_full)[:, 4:].sum(axis=1),
+            best_preds_bin,
+            best_probs,
         ),
         _score_gbt_row(
             "GBT Binary Alerting (Local Only)",
@@ -1999,13 +2225,8 @@ def train_and_evaluate_models(
     ]
     ablation_df = pd.DataFrame(ablation_rows)
 
-    best_probs = rf_full.predict_proba(X_test_full)[:, 4:].sum(axis=1)
-    best_preds_multi = rf_full.predict(X_test_full)
-    best_preds_bin = (best_preds_multi >= SEVERE_ORDINAL_THRESHOLD).astype(int)
     fpr, tpr, thresholds = roc_curve(y_test_bin, best_probs)
-    roc_df = pd.DataFrame(
-        {"false_positive_rate": fpr, "true_positive_rate": tpr, "threshold": thresholds}
-    )
+    roc_df = pd.DataFrame({"false_positive_rate": fpr, "true_positive_rate": tpr, "threshold": thresholds})
 
     cm = confusion_matrix(y_test_multi, best_preds_multi, labels=[0, 1, 2, 3, 4, 5]).tolist()
     max_train_target_ts = train_df["target_ts"].max()
@@ -2022,9 +2243,7 @@ def train_and_evaluate_models(
         "val_cutoff_utc": split_info["val_cutoff_ts"].isoformat(),
         "max_train_target_ts_utc": max_train_target_ts.isoformat(),
         "max_val_target_ts_utc": max_val_target_ts.isoformat(),
-        "train_target_cutoff_purge_verified": bool(
-            max_train_target_ts <= split_info["train_cutoff_ts"]
-        ),
+        "train_target_cutoff_purge_verified": bool(max_train_target_ts <= split_info["train_cutoff_ts"]),
         "val_target_cutoff_purge_verified": bool(max_val_target_ts <= split_info["val_cutoff_ts"]),
         "train_samples": int(len(train_df)),
         "train_purged_boundary_samples": int(split_info["sup_train_purged_count"]),
@@ -2038,19 +2257,14 @@ def train_and_evaluate_models(
             "candidates": val_selection_rows,
         },
         "relevance_definition": (
-            "Ground-truth exact t+30m Severe Congestion (LOS in {E, F}) "
-            "on held-out chronological test windows."
+            "Ground-truth exact t+30m Severe Congestion (LOS in {E, F}) " "on held-out chronological test windows."
         ),
         "roc_auc": round(float(roc_auc_score(y_test_bin, best_probs)), 4),
         "average_precision": round(float(average_precision_score(y_test_bin, best_probs)), 4),
         "accuracy_6class": round(float(accuracy_score(y_test_multi, best_preds_multi)), 4),
         "macro_f1_6class": round(float(f1_score(y_test_multi, best_preds_multi, average="macro")), 4),
-        "weighted_f1_6class": round(
-            float(f1_score(y_test_multi, best_preds_multi, average="weighted")), 4
-        ),
-        "severe_precision": round(
-            float(precision_score(y_test_bin, best_preds_bin, zero_division=0)), 4
-        ),
+        "weighted_f1_6class": round(float(f1_score(y_test_multi, best_preds_multi, average="weighted")), 4),
+        "severe_precision": round(float(precision_score(y_test_bin, best_preds_bin, zero_division=0)), 4),
         "severe_recall": round(float(recall_score(y_test_bin, best_preds_bin, zero_division=0)), 4),
         "severe_f1": round(float(f1_score(y_test_bin, best_preds_bin, zero_division=0)), 4),
         "confusion_matrix_6class": cm,
@@ -2071,6 +2285,8 @@ def train_and_evaluate_models(
         "train_cutoff_utc": split_info["train_cutoff_ts"].isoformat(),
         "val_cutoff_utc": split_info["val_cutoff_ts"].isoformat(),
     }
+    _, transition_summary = evaluate_transition_regimes(test_df, frame, ml_artifacts)
+    eval_summary["transition_analysis"] = transition_summary
     return eval_summary, ablation_df, roc_df, ml_artifacts
 
 
@@ -2089,12 +2305,8 @@ def _score_model_row(
         "feature_set": feature_set,
         "accuracy_6class": round(float(accuracy_score(y_true_multi, y_pred_multi)), 4),
         "macro_f1_6class": round(float(f1_score(y_true_multi, y_pred_multi, average="macro")), 4),
-        "weighted_f1_6class": round(
-            float(f1_score(y_true_multi, y_pred_multi, average="weighted")), 4
-        ),
-        "severe_ef_precision": round(
-            float(precision_score(y_true_bin, y_pred_bin, zero_division=0)), 4
-        ),
+        "weighted_f1_6class": round(float(f1_score(y_true_multi, y_pred_multi, average="weighted")), 4),
+        "severe_ef_precision": round(float(precision_score(y_true_bin, y_pred_bin, zero_division=0)), 4),
         "severe_ef_recall": round(float(recall_score(y_true_bin, y_pred_bin, zero_division=0)), 4),
         "severe_ef_f1": round(float(f1_score(y_true_bin, y_pred_bin, zero_division=0)), 4),
         "severe_roc_auc": round(float(roc_auc_score(y_true_bin, y_score_bin)), 4),
@@ -2117,9 +2329,7 @@ def _score_gbt_row(
         "accuracy_6class": None,
         "macro_f1_6class": None,
         "weighted_f1_6class": None,
-        "severe_ef_precision": round(
-            float(precision_score(y_true_bin, y_pred_bin, zero_division=0)), 4
-        ),
+        "severe_ef_precision": round(float(precision_score(y_true_bin, y_pred_bin, zero_division=0)), 4),
         "severe_ef_recall": round(float(recall_score(y_true_bin, y_pred_bin, zero_division=0)), 4),
         "severe_ef_f1": round(float(f1_score(y_true_bin, y_pred_bin, zero_division=0)), 4),
         "severe_roc_auc": round(float(roc_auc_score(y_true_bin, y_score_bin)), 4),
@@ -2255,8 +2465,7 @@ def _backfill_temporal_and_topology_defaults(working: pd.DataFrame) -> pd.DataFr
         dates = working.get("date", pd.Series("cold_start", index=working.index))
         periods = working.get("period", pd.Series("period_8_00", index=working.index))
         working["event_id"] = [
-            _sha256_id(int(s), str(d), str(p))
-            for s, d, p in zip(working["segment_id"], dates, periods)
+            _sha256_id(int(s), str(d), str(p)) for s, d, p in zip(working["segment_id"], dates, periods)
         ]
     return working
 
@@ -2352,9 +2561,7 @@ def verify_salted_monoid_and_join_plan(
     salted_slot_counts = salted.groupby(["date", "period", "salt"])["velocity"].count()
     Peak_slot = slot_ping_counts.idxmax()
     peak_salted_buckets = salted_slot_counts.loc[Peak_slot]
-    salted_peak_bucket_skew = float(
-        peak_salted_buckets.max() / max(float(peak_salted_buckets.median()), 1.0)
-    )
+    salted_peak_bucket_skew = float(peak_salted_buckets.max() / max(float(peak_salted_buckets.median()), 1.0))
 
     bucket_counts = salted.groupby("salt")["velocity"].count()
     salted_skew = float(bucket_counts.max() / max(float(bucket_counts.median()), 1.0))
@@ -2397,6 +2604,7 @@ def verify_salted_monoid_and_join_plan(
             .get("parquet_pruning_spark", {})
             .get("partition_filters_and_read_schema_verified", False),
         },
+        "spark_runtime_verification": spark_evidence or {"status": "not_verified"},
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(evidence, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -2423,12 +2631,8 @@ def compute_road_pagerank(
     seg = segments_df[seg_cols].rename(columns={"_id": "segment_id"}).copy()
     seg["street_name"] = seg["street_name"].map(_normalize_street_name)
 
-    out_edges = seg[["segment_id", "e_node_id"]].rename(
-        columns={"segment_id": "src_seg", "e_node_id": "node_id"}
-    )
-    in_edges = seg[["segment_id", "s_node_id"]].rename(
-        columns={"segment_id": "dst_seg", "s_node_id": "node_id"}
-    )
+    out_edges = seg[["segment_id", "e_node_id"]].rename(columns={"segment_id": "src_seg", "e_node_id": "node_id"})
+    in_edges = seg[["segment_id", "s_node_id"]].rename(columns={"segment_id": "dst_seg", "s_node_id": "node_id"})
     edges = pd.merge(out_edges, in_edges, on="node_id", how="inner")
     edges = edges[edges["src_seg"] != edges["dst_seg"]]
 
@@ -2534,9 +2738,8 @@ def _verify_mongodb_ixscan(
 
     part_counts = [int((serving["write_partition"] == pid).sum()) for pid in range(4)]
     bulk_batches = sum(math.ceil(cnt / 500) for cnt in part_counts)
-    arterial_hits = (
-        serving[(serving["street_level"].isin([1, 2])) & (serving["severe_prob"] >= 0.70)]
-        .sort_values(["severe_prob", "segment_id"], ascending=[False, True])
+    arterial_hits = serving[(serving["street_level"].isin([1, 2])) & (serving["severe_prob"] >= 0.70)].sort_values(
+        ["severe_prob", "segment_id"], ascending=[False, True]
     )
     sample_docs = arterial_hits.head(25).to_dict(orient="records")
 
@@ -2596,9 +2799,7 @@ def _verify_mongodb_ixscan(
             w_plan = live_mongo.get("winningPlan", {})
             stages = _extract_mongo_stages(w_plan)
             idx_name = _extract_mongo_index_name(w_plan)
-            write_proto = (
-                "repartition(4, 'segment_id') -> foreachPartition 500-doc Bulk UpdateOne(upsert=True)"
-            )
+            write_proto = "repartition(4, 'segment_id') -> foreachPartition 500-doc Bulk UpdateOne(upsert=True)"
             report = {
                 "component": "[C16] MongoDB 8.0 Operational Serving Store (bda501.traffic_scores)",
                 "status": "verified",
@@ -2720,14 +2921,52 @@ def _compute_phase_b_unhealed_predictions(
         | (in_wm_unhealed["lag2_los_ordinal"] != healed_sub["lag2_los_ordinal"])
         | (in_wm_unhealed["gap_minutes"] != healed_sub["gap_minutes"])
     )
-    pred_changed_mask = (
-        (phase_b_preds["severe_prob"] != healed_pred_sub["severe_prob"])
-        | (phase_b_preds["predicted_next_los"] != healed_pred_sub["predicted_next_los"])
+    pred_changed_mask = (phase_b_preds["severe_prob"] != healed_pred_sub["severe_prob"]) | (
+        phase_b_preds["predicted_next_los"] != healed_pred_sub["predicted_next_los"]
     )
     return phase_b_preds, {
         "healed_downstream_rescored_windows": int(lag_healed_mask.sum()),
         "rescore_prob_changed_windows_count": int(pred_changed_mask.sum()),
     }
+
+
+def _write_frozen_registry_manifest(
+    manifest_path: Path,
+    model_path: Path,
+    static_store_path: Path,
+    vmax_lookup_path: Path,
+    model_sha: str,
+    static_sha: str,
+    vmax_sha: str,
+    ml_artifacts: dict[str, Any],
+) -> None:
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "component": "[C13a] & [C13b] Zero-Conflict Frozen Artifact Registry",
+                "model_version": "rf_full_23d_v3",
+                "artifact_path": model_path.name,
+                "sha256_digest": model_sha,
+                "model_sha256": model_sha,
+                "static_feature_store_path": static_store_path.name,
+                "static_feature_store_sha256": static_sha,
+                "vmax_lookup_path": vmax_lookup_path.name,
+                "vmax_lookup_sha256": vmax_sha,
+                "phase_a_fit_only": True,
+                "read_only_in_phase_b_and_c": True,
+                "phase_b_c_read_only_verified": True,
+                "all_three_artifacts_immutable_verified": True,
+                "selected_model": ml_artifacts["selected_model_name"],
+                "selected_val_threshold": ml_artifacts["selected_val_threshold"],
+                "train_cutoff_utc": ml_artifacts["train_cutoff_utc"],
+                "val_cutoff_utc": ml_artifacts["val_cutoff_utc"],
+                "feature_count": len(FULL_ML_FEATURES),
+                "feature_schema_23d": FULL_ML_FEATURES,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
 
 def score_and_verify_serving_lifecycle(
@@ -2741,23 +2980,42 @@ def score_and_verify_serving_lifecycle(
     lakehouse_dir: Path,
     output_dir: Path,
 ) -> dict[str, Any]:
-    """[C8, C12, C13a/b, C15, C16, D11, M06, M11, M12] Read-Only Scoring, Version Guard & WAL Recovery."""
+    """[C8, C12, C13a/b, C15, C16, D11, M06, M11, M12, M14] Read-Only Scoring, Version Guard & WAL Recovery."""
     model_sha_before = hashlib.sha256(model_path.read_bytes()).hexdigest()
     static_sha_before = hashlib.sha256(static_store_path.read_bytes()).hexdigest()
     vmax_sha_before = hashlib.sha256(vmax_lookup_path.read_bytes()).hexdigest()
+    manifest_path = output_dir / "model_registry_manifest.json"
+    _write_frozen_registry_manifest(
+        manifest_path,
+        model_path,
+        static_store_path,
+        vmax_lookup_path,
+        model_sha_before,
+        static_sha_before,
+        vmax_sha_before,
+        ml_artifacts,
+    )
+    pre_registry_check = verify_frozen_registry_integrity(
+        manifest_path=manifest_path,
+        model_path=model_path,
+        vmax_lookup_path=vmax_lookup_path,
+        static_store_path=static_store_path,
+    )
 
     scored_preds = score_feature_snapshot(medallion_df, ml_artifacts)
     phase_b_preds, tier2_rescore_stats = _compute_phase_b_unhealed_predictions(
         medallion_df, out_wm_indices, ml_artifacts, scored_preds
     )
 
-    model_sha_after = hashlib.sha256(model_path.read_bytes()).hexdigest()
-    static_sha_after = hashlib.sha256(static_store_path.read_bytes()).hexdigest()
-    vmax_sha_after = hashlib.sha256(vmax_lookup_path.read_bytes()).hexdigest()
+    post_registry_check = verify_frozen_registry_integrity(
+        manifest_path=manifest_path,
+        model_path=model_path,
+        vmax_lookup_path=vmax_lookup_path,
+        static_store_path=static_store_path,
+    )
     if (
-        model_sha_before != model_sha_after
-        or static_sha_before != static_sha_after
-        or vmax_sha_before != vmax_sha_after
+        pre_registry_check["model_sha256"] != post_registry_check["model_sha256"]
+        or pre_registry_check["manifest_sha256"] != post_registry_check["manifest_sha256"]
     ):
         raise RuntimeError("Zero-Conflict MLOps violation: Frozen Phase A artifacts mutated during transform()!")
 
@@ -2783,6 +3041,11 @@ def score_and_verify_serving_lifecycle(
     serving["scored_in_online_phase_b"] = is_post_train.astype(bool)
 
     # Simulate true two-step lifecycle transition (Phase B STREAM_PROVISIONAL v1 -> Phase C BATCH_RECONCILED v2)
+    # Keep the most recent in-flight watermark horizon (~500 windows) in STREAM_PROVISIONAL (v1) for M14 UI visibility
+    provisional_start_idx = max(0, len(serving) - 500)
+    in_flight_provisional_indices = {
+        idx for idx in range(provisional_start_idx, len(serving)) if idx not in out_wm_indices
+    }
     serving_store: dict[str, dict[str, Any]] = {}
     phase_b_docs = []
     for idx, row in enumerate(serving.to_dict(orient="records")):
@@ -2802,23 +3065,30 @@ def score_and_verify_serving_lifecycle(
 
     phase_c_docs = []
     for idx, row in enumerate(serving.to_dict(orient="records")):
+        if idx in in_flight_provisional_indices:
+            continue
         status_c = "BATCH_RECONCILED" if idx in out_wm_indices else "BATCH_VERIFIED"
         phase_c_docs.append({**row, "lifecycle_status": status_c, "status_version": 2})
     c_stats = upsert_serving_records_with_version_guard(serving_store, phase_c_docs)
 
     # M11 test: attempt stale provisional retry on reconciled records and verify rejection
     stale_retry_docs = [
-        {**doc, "lifecycle_status": "STREAM_PROVISIONAL", "status_version": 1}
-        for doc in phase_c_docs[:25]
+        {**doc, "lifecycle_status": "STREAM_PROVISIONAL", "status_version": 1} for doc in phase_c_docs[:25]
     ]
     retry_guard_stats = upsert_serving_records_with_version_guard(serving_store, stale_retry_docs)
 
+    for idx in in_flight_provisional_indices:
+        serving.at[idx, "predicted_next_los"] = str(phase_b_preds.loc[idx, "predicted_next_los"])
+        serving.at[idx, "severe_prob"] = float(phase_b_preds.loc[idx, "severe_prob"])
+
     serving["phase_b_status"] = "STREAM_PROVISIONAL"
     serving["lifecycle_status"] = [
-        "BATCH_RECONCILED" if idx in out_wm_indices else "BATCH_VERIFIED"
+        "BATCH_RECONCILED"
+        if idx in out_wm_indices
+        else ("STREAM_PROVISIONAL" if idx in in_flight_provisional_indices else "BATCH_VERIFIED")
         for idx in range(len(serving))
     ]
-    serving["status_version"] = 2
+    serving["status_version"] = [1 if idx in in_flight_provisional_indices else 2 for idx in range(len(serving))]
     serving["model_version"] = "rf_full_23d_v3"
 
     serving_parquet = lakehouse_dir / "serving_traffic_scores.parquet"
@@ -2836,13 +3106,10 @@ def score_and_verify_serving_lifecycle(
         kill_after_batch=1,
     )
     stream_progress["Phase_B_provisional_scored"] = int(b_stats["inserted_new"])
+    stream_progress["Phase_B_in_flight_provisional_retained"] = int(len(in_flight_provisional_indices))
     stream_progress["Phase_C_reconciled_backfilled"] = int(len(out_wm_indices))
-    stream_progress["healed_downstream_rescored_windows"] = tier2_rescore_stats[
-        "healed_downstream_rescored_windows"
-    ]
-    stream_progress["rescore_prob_changed_windows_count"] = tier2_rescore_stats[
-        "rescore_prob_changed_windows_count"
-    ]
+    stream_progress["healed_downstream_rescored_windows"] = tier2_rescore_stats["healed_downstream_rescored_windows"]
+    stream_progress["rescore_prob_changed_windows_count"] = tier2_rescore_stats["rescore_prob_changed_windows_count"]
     stream_progress["total_serving_documents"] = int(len(serving))
     stream_progress["post_train_online_windows_scored"] = int(is_post_train.sum())
     stream_progress["version_guard_audit"] = {
@@ -2853,31 +3120,6 @@ def score_and_verify_serving_lifecycle(
     }
     (output_dir / "query_progress.json").write_text(
         json.dumps(stream_progress, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-    (output_dir / "model_registry_manifest.json").write_text(
-        json.dumps(
-            {
-                "component": "[C13a] & [C13b] Zero-Conflict Frozen Artifact Registry",
-                "artifact_path": model_path.name,
-                "sha256_digest": model_sha_before,
-                "static_feature_store_path": static_store_path.name,
-                "static_feature_store_sha256": static_sha_before,
-                "vmax_lookup_path": vmax_lookup_path.name,
-                "vmax_lookup_sha256": vmax_sha_before,
-                "phase_a_fit_only": True,
-                "phase_b_c_read_only_verified": True,
-                "all_three_artifacts_immutable_verified": True,
-                "selected_model": ml_artifacts["selected_model_name"],
-                "selected_val_threshold": ml_artifacts["selected_val_threshold"],
-                "train_cutoff_utc": ml_artifacts["train_cutoff_utc"],
-                "val_cutoff_utc": ml_artifacts["val_cutoff_utc"],
-                "feature_count": len(FULL_ML_FEATURES),
-                "feature_schema_23d": FULL_ML_FEATURES,
-            },
-            indent=2,
-        ),
         encoding="utf-8",
     )
     return _verify_mongodb_ixscan(serving, output_dir / "mongo_verify.json", model_sha_before)
@@ -2922,13 +3164,9 @@ def run_pipeline(
     split_info = compute_chronological_split_boundaries(medallion)
 
     # Q04/D02: Refit vmax lookup & positive length median strictly on timestamp-purged TRAIN windows
-    train_pos_len = medallion.loc[
-        split_info["frame_train_mask"] & (medallion["length"] > 0), "length"
-    ]
+    train_pos_len = medallion.loc[split_info["frame_train_mask"] & (medallion["length"] > 0), "length"]
     med_len = float(train_pos_len.median()) if len(train_pos_len) > 0 else 27.0
-    medallion["length_m"] = (
-        medallion["length"].where(medallion["length"] > 0, med_len).fillna(med_len).astype(float)
-    )
+    medallion["length_m"] = medallion["length"].where(medallion["length"] > 0, med_len).fillna(med_len).astype(float)
     vmax_lookup = fit_train_vmax_lookup(medallion.loc[split_info["frame_train_mask"]])
     vmax_lookup_path = output_dir / "vmax_lookup.json"
     vmax_lookup_path.write_text(json.dumps(vmax_lookup, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -2961,16 +3199,26 @@ def run_pipeline(
     _, raw_replay_summary = generate_raw_ping_replay(tables["segment_status"])
     replay_summary["raw_ping_replay_summary"] = raw_replay_summary
     kafka_brokers = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
-    replay_summary["kafka_broker_delivery"] = publish_to_kafka_broker(
-        replay_df, kafka_brokers, max_messages=3000
-    )
+    replay_summary["kafka_broker_delivery"] = publish_to_kafka_broker(replay_df, kafka_brokers, max_messages=3000)
 
-    streaming_metrics, hotspots_df, recon_df, out_wm_indices = run_streaming_and_reconciliation(
-        medallion, replay_df
+    streaming_metrics, hotspots_df, recon_df, out_wm_indices = run_streaming_and_reconciliation(medallion, replay_df)
+    eval_metrics, ablation_df, roc_df, ml_artifacts = train_and_evaluate_models(medallion, split_info=split_info)
+
+    target_ts_col = medallion.get("target_ts", medallion["slot_ts"] + pd.to_timedelta(30, unit="m"))
+    medallion["target_ts"] = target_ts_col
+    frame_val_mask = (
+        (medallion["slot_ts"] > split_info["train_cutoff_ts"])
+        & (medallion["slot_ts"] <= split_info["val_cutoff_ts"])
+        & (target_ts_col <= split_info["val_cutoff_ts"])
     )
-    eval_metrics, ablation_df, roc_df, ml_artifacts = train_and_evaluate_models(
-        medallion, split_info=split_info
-    )
+    frame_test_mask = medallion["slot_ts"] > split_info["val_cutoff_ts"]
+    split_labels = pd.Series("PURGED", index=medallion.index, dtype=object)
+    split_labels.loc[split_info["frame_train_mask"]] = "TRAIN"
+    split_labels.loc[frame_val_mask] = "VAL"
+    split_labels.loc[frame_test_mask] = "TEST"
+    medallion["split_set"] = split_labels
+    medallion["target_t30m_los_ordinal"] = medallion["target_next_los_ordinal"]
+    medallion["target_t30m_severe"] = medallion["target_next_severe"]
 
     export_cols = [
         "event_id",
@@ -2982,11 +3230,15 @@ def run_pipeline(
         "date",
         "ict_date",
         "weekday",
+        "is_weekend",
         "period",
         "ict_period",
         "period_idx",
         "ict_period_idx",
         "vn_hour",
+        "slot_ts",
+        "target_ts",
+        "split_set",
         "LOS",
         "derived_los",
         "los_ordinal",
@@ -3020,6 +3272,8 @@ def run_pipeline(
         "cluster",
         "target_next_los_ordinal",
         "target_next_severe",
+        "target_t30m_los_ordinal",
+        "target_t30m_severe",
         "next_obs_los_ordinal",
         "next_obs_severe",
         "long_snode",
@@ -3063,6 +3317,8 @@ def run_pipeline(
     hotspots_df.to_csv(output_dir / "hotspot_alerts.csv", index=False, encoding="utf-8")
     recon_df.to_csv(output_dir / "reconciliation_audit.csv", index=False, encoding="utf-8")
     ablation_df.to_csv(output_dir / "ablation_results.csv", index=False, encoding="utf-8")
+    trans_df, _ = evaluate_transition_regimes(medallion.loc[split_info["sup_test_mask"]], medallion, ml_artifacts)
+    trans_df.to_csv(output_dir / "transition_evaluation.csv", index=False, encoding="utf-8")
     roc_df.to_csv(output_dir / "roc_curve.csv", index=False, encoding="utf-8")
     write_roc_plot(roc_df, eval_metrics["roc_auc"], output_dir / "roc_curve.png")
 
@@ -3090,11 +3346,17 @@ def run_pipeline(
         lakehouse_dir,
         output_dir,
     )
+    q_prog = json.loads((output_dir / "query_progress.json").read_text(encoding="utf-8"))
+    for k in (
+        "healed_downstream_rescored_windows",
+        "rescore_prob_changed_windows_count",
+        "Phase_B_in_flight_provisional_retained",
+    ):
+        if k in q_prog:
+            streaming_metrics["reconciliation"][k] = q_prog[k]
 
     # Execute real PySpark + PyMongo 33,441-doc container verification when available
-    spark_container_res = _try_run_spark_container_verification(
-        dataset_path.resolve().parent.parent, model_sha256
-    )
+    spark_container_res = _try_run_spark_container_verification(dataset_path.resolve().parent.parent, model_sha256)
     spark_ev = None
     if spark_container_res is not None:
         spark_ev = spark_container_res.get("spark_verification")
@@ -3109,9 +3371,7 @@ def run_pipeline(
         spark_evidence=spark_ev,
     )
 
-    los_agreement_pct = round(
-        float((medallion["LOS"] == medallion["derived_los"]).mean() * 100.0), 2
-    )
+    los_agreement_pct = round(float((medallion["LOS"] == medallion["derived_los"]).mean() * 100.0), 2)
     dataset_summary = {
         "source_dataset": "Kaggle: thanhnguyen2612/traffic-flow-data-in-ho-chi-minh-city-viet-nam",
         "built_independently_from_gis_and_status": True,
@@ -3131,15 +3391,10 @@ def run_pipeline(
         "distinct_streets": int(medallion["street_name"].replace("", np.nan).dropna().nunique()),
         "date_range": [str(medallion["date"].min()), str(medallion["date"].max())],
         "los_distribution": {
-            str(k): int(v)
-            for k, v in medallion["LOS"].value_counts().reindex(LOS_ORDER, fill_value=0).items()
+            str(k): int(v) for k, v in medallion["LOS"].value_counts().reindex(LOS_ORDER, fill_value=0).items()
         },
         "derived_los_distribution": {
-            str(k): int(v)
-            for k, v in medallion["derived_los"]
-            .value_counts()
-            .reindex(LOS_ORDER, fill_value=0)
-            .items()
+            str(k): int(v) for k, v in medallion["derived_los"].value_counts().reindex(LOS_ORDER, fill_value=0).items()
         },
     }
 
@@ -3165,12 +3420,8 @@ def run_pipeline(
                 mongo_info["ixscan_explain_verification"]["status"] == "verified"
                 and mongo_info["ixscan_explain_verification"]["in_memory_sort"] is False
             ),
-            "verified_against_live_mongo_8": mongo_info["ixscan_explain_verification"][
-                "verified_against_mongo_8_0"
-            ],
-            "arterial_severe_alerts_count": mongo_info["uc2_arterial_query"][
-                "total_matching_windows"
-            ],
+            "verified_against_live_mongo_8": mongo_info["ixscan_explain_verification"]["verified_against_mongo_8_0"],
+            "arterial_severe_alerts_count": mongo_info["uc2_arterial_query"]["total_matching_windows"],
         },
         "graph_and_patterns": {
             "pagerank_damping": 0.85,

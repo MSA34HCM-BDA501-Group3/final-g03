@@ -102,7 +102,7 @@ ICT date rollover (`date` + `date_utc`), and actual Spark `BroadcastHashJoin`/Pa
 ## Validation on 08–09/11/2026
 
 - Verified on both **Apache Spark 3.5.7 (Java 17)** (`song-recommender-spark:3.5.7`) and **PySpark 4.2.0 (Java 21)** (`Dockerfile.spark`).
-- Unit & integration tests: **5/5 Spark tests pass (`test_quyen_spark.py`)** and **14/14 Platform V3 tests pass (`test_platform_v3.py`)** (`19/19` total in `pytest -v`).
+- Unit & integration tests: **5/5 Spark tests pass (`test_quyen_spark.py`)** and **15/15 Platform V3 tests pass (`test_platform_v3.py`)** (`20/20` total in `pytest -v`).
 - Full raw snapshot using exclusive warmup cutoff `2020-08-01T00:00:00Z`, `local[2]`, 4 shuffle partitions:
 - 90,938 input deliveries = 90,787 accepted unique + 151 quarantined + 0 retries.
   All 151 are `E4_UNKNOWN_SEGMENT` after 427 non-road GIS entities (`S3_NON_ROAD_TYPE`) were excluded (accounting for exactly `33,441 - 33,394 = 47` windows).
@@ -111,7 +111,7 @@ ICT date rollover (`date` + `date_utc`), and actual Spark `BroadcastHashJoin`/Pa
 - Independent raw Python fold: **0 mismatches in all five monoid fields and mean**;
   **0 missing/extra/duplicate window keys**. Salted (2-stage) vs unsalted (1-stage) and baseline vs broadcast two-way `exceptAll` both `0`.
 - Final executed optimized plan contains **three `BroadcastHashJoin`** nodes (`0` `SortMergeJoin`s) for `segments ⋈ lookup`, `windows ⋈ dim`, and `result ⋈ streets`; observed Exchange nodes drop from `5` shuffle `Exchange`s to `3` `BroadcastExchange`s (`0` shuffle `Exchange`s).
-- Timing sample on Spark 3.5.7: sort-merge `1.040s` vs broadcast `0.721s`; 1-stage unsalted `0.400s` vs 2-stage salted `0.496s` (with final reducer stage max/median task ratio `1.15` vs `1.25`).
+- Timing sample on Spark 3.5.7: sort-merge `0.932s` vs broadcast `0.666s`; 1-stage unsalted `0.409s` vs 2-stage salted `0.509s` (with final reducer stage max/median task ratio `1.18` vs `1.25`).
 - Compact evidence is preserved in [`outputs/quyen_validation/`](../outputs/quyen_validation/).
 
 API reference checked while implementing: [Spark try_cast](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Column.try_cast.html),

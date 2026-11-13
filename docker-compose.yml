@@ -79,6 +79,8 @@ services:
     ports:
       - "8501:8501"
     volumes:
+      - ./app.py:/app/app.py
+      - ./pipeline.py:/app/pipeline.py
       - ./raw_data:/app/raw_data
       - ./product:/app/product
       - ./data:/app/data

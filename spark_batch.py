@@ -1,4 +1,5 @@
 """Raw GPS -> verified Spark Medallion snapshot. See docs/QUYEN_DATA_ENGINEERING.md."""
+
 from __future__ import annotations
 
 import argparse
@@ -15,8 +16,16 @@ from baseline import compare_window_aggregates
 try:
     from pyspark.sql import SparkSession, functions as F
     from traffic_data.spark_etl import (
-        aggregate_monoid, clean_events, clean_segments, deduplicate_events,
-        differences, enrich_windows, fit_velocity_lookup, physical_nodes, prune_nodes, read_strings,
+        aggregate_monoid,
+        clean_events,
+        clean_segments,
+        deduplicate_events,
+        differences,
+        enrich_windows,
+        fit_velocity_lookup,
+        physical_nodes,
+        prune_nodes,
+        read_strings,
     )
 except ModuleNotFoundError:
     SparkSession = None  # type: ignore[assignment,misc]
@@ -97,9 +106,7 @@ def execute(args):
     try:
         raw = Path(args.raw_dir)
         segments, bad_segments, streets, nodes = _load_validated_topology(spark, raw)
-        events_raw = read_strings(spark, str(raw / "segment_status.csv")).withColumnRenamed(
-            "_id", "raw_event_id"
-        )
+        events_raw = read_strings(spark, str(raw / "segment_status.csv")).withColumnRenamed("_id", "raw_event_id")
         events_raw.write.mode("error").parquet(str(root / "bronze_raw_events"))
         clean, rejected = clean_events(events_raw, segments)
         events, conflicts = deduplicate_events(clean)
@@ -125,9 +132,7 @@ def execute(args):
         if any(monoid_diff.values()):
             raise AssertionError(f"Salted monoid differs: {monoid_diff}")
         windows.write.mode("error").parquet(str(root / "silver_cleaned_windows"))
-        optimized, timings, node_names, join_diff = _measure_join_plans(
-            root, windows, segments, lookup, streets
-        )
+        optimized, timings, node_names, join_diff = _measure_join_plans(root, windows, segments, lookup, streets)
         optimized.write.mode("error").partitionBy("year_month").parquet(str(root / "curated_gold"))
         windows.write.mode("error").parquet(str(root / "window_metrics" / "batch_id=0"))
         month = optimized.select("year_month").first()[0]
@@ -137,9 +142,7 @@ def execute(args):
             .select("segment_id", "mean_velocity")
         )
         scan.collect()
-        (root / "pruning_plan.txt").write_text(
-            scan._jdf.queryExecution().executedPlan().toString(), encoding="utf-8"
-        )
+        (root / "pruning_plan.txt").write_text(scan._jdf.queryExecution().executedPlan().toString(), encoding="utf-8")
         with (raw / "segment_status.csv").open(encoding="utf-8", newline="") as handle:
             raw_rows = list(csv.DictReader(handle))
         accepted_ids = {row.raw_event_id for row in events.select("raw_event_id").collect()}
@@ -159,8 +162,7 @@ def execute(args):
             "accepted_unique_events": accepted_count,
             "rejected_events": quality_rejected,
             "rejected_by_rule": {
-                r.first_failing_rule: r["count"]
-                for r in rejected.groupBy("first_failing_rule").count().collect()
+                r.first_failing_rule: r["count"] for r in rejected.groupBy("first_failing_rule").count().collect()
             },
             "duplicate_deliveries_removed": clean.count() - conflict_count - accepted_count,
             "quarantined_segments": bad_segments.count(),
@@ -172,17 +174,11 @@ def execute(args):
             "join_seconds": timings,
             "aggregate_seconds": aggregate_times,
             "physical_node_names": node_names,
-            "exchange_counts": {
-                name: sum("Exchange" in node for node in names)
-                for name, names in node_names.items()
-            },
+            "exchange_counts": {name: sum("Exchange" in node for node in names) for name, names in node_names.items()},
             "benchmark_limitations": (
                 "single ordered local run, not a claim of speedup; task metrics in task_metrics.json"
             ),
-            "inputs_sha256": {
-                (raw / f).name: hashlib.sha256((raw / f).read_bytes()).hexdigest()
-                for f in raw_files
-            },
+            "inputs_sha256": {(raw / f).name: hashlib.sha256((raw / f).read_bytes()).hexdigest() for f in raw_files},
         }
         (root / "manifest.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
         print(json.dumps(metrics, indent=2))
@@ -212,18 +208,18 @@ def _parse_event_log_file(path: Path, groups: dict[int, str | None], tasks: list
                 info, metric = event["Task Info"], event.get("Task Metrics", {})
                 read = metric.get("Shuffle Read Metrics", {})
                 write = metric.get("Shuffle Write Metrics", {})
-                tasks.append({
-                    "stage": event["Stage ID"],
-                    "partition": info["Index"],
-                    "duration_ms": info["Finish Time"] - info["Launch Time"],
-                    "executor_run_ms": metric.get("Executor Run Time"),
-                    "shuffle_read_bytes": (
-                        read.get("Remote Bytes Read", 0) + read.get("Local Bytes Read", 0)
-                    ),
-                    "shuffle_write_bytes": write.get("Shuffle Bytes Written", 0),
-                    "shuffle_records_read": read.get("Total Records Read", 0),
-                    "successful": event.get("Task End Reason", {}).get("Reason") == "Success",
-                })
+                tasks.append(
+                    {
+                        "stage": event["Stage ID"],
+                        "partition": info["Index"],
+                        "duration_ms": info["Finish Time"] - info["Launch Time"],
+                        "executor_run_ms": metric.get("Executor Run Time"),
+                        "shuffle_read_bytes": (read.get("Remote Bytes Read", 0) + read.get("Local Bytes Read", 0)),
+                        "shuffle_write_bytes": write.get("Shuffle Bytes Written", 0),
+                        "shuffle_records_read": read.get("Total Records Read", 0),
+                        "successful": event.get("Task End Reason", {}).get("Reason") == "Success",
+                    }
+                )
 
 
 def _summarize_stage_metrics(measured: list[dict]) -> list[dict]:
@@ -235,16 +231,18 @@ def _summarize_stage_metrics(measured: list[dict]) -> list[dict]:
             continue
         durations = [t["duration_ms"] for t in stage_tasks]
         median = statistics.median(durations)
-        summaries.append({
-            "stage": stage,
-            "job_group": stage_tasks[0]["job_group"],
-            "successful_tasks": len(stage_tasks),
-            "median_duration_ms": median,
-            "max_duration_ms": max(durations),
-            "max_to_median_duration": max(durations) / median if median else None,
-            "shuffle_read_bytes": sum(t["shuffle_read_bytes"] for t in stage_tasks),
-            "shuffle_write_bytes": sum(t["shuffle_write_bytes"] for t in stage_tasks),
-        })
+        summaries.append(
+            {
+                "stage": stage,
+                "job_group": stage_tasks[0]["job_group"],
+                "successful_tasks": len(stage_tasks),
+                "median_duration_ms": median,
+                "max_duration_ms": max(durations),
+                "max_to_median_duration": max(durations) / median if median else None,
+                "shuffle_read_bytes": sum(t["shuffle_read_bytes"] for t in stage_tasks),
+                "shuffle_write_bytes": sum(t["shuffle_write_bytes"] for t in stage_tasks),
+            }
+        )
     return summaries
 
 
@@ -277,4 +275,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

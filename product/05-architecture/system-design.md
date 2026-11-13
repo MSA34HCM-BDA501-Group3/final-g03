@@ -24,7 +24,7 @@ flowchart LR
     subgraph ZD["Zone D: Batch Layer (Phase A Fit & Phase C Recon)"]
         C9["[C9] Commutative Monoid Combiner,\n2-Stage Key Salting & BroadcastHashJoin"]
         C10["[C10] MMDS Multi-Pass Mining Suite\n(Ch.5 Line-Graph PR, Ch.6 FPGrowth, Ch.7 7D K-Means)"]
-        C11["[C11] Leak-Free Causal ML Trainer (Phase A)\n(Causal Priors <= t, 70/15/15 Split, .fit())"]
+        C11["[C11] Leak-Free Causal ML Trainer (Phase A)\n(Causal Priors < t, 70/15/15 Split, .fit())"]
         C12["[C12] Two-Tier Reconciliation Engine (Phase C)\n(Tier 1 exceptAll==0 · Tier 2 Backfill 501 seg-windows / 219 slots)"]
     end
 
@@ -41,38 +41,38 @@ flowchart LR
     end
 
     C1 -->|"(1) Event-Time Stream"| C4
+    C4 -->|"Kafka Events"| C5
     C2 -->|"(2) Static GIS Tables"| C5
-    C4 -->|"(3a) Online Feed"| C6
-    C4 -.->|"(3b) Raw GPS Feed"| C5
-    C5 -->|"(4a) Clean Windows & Dims"| C9
-    C5 -.->|"(4b) First-Failing Rule"| C15
-    C6 -->|"(5) In-WM Windows"| C7 --> C8
-    C6 -->|"(6a) Sink 1 Raw + WAL"| C14 & C15
-    C9 -->|"(7) Phase A Batch Flow"| C10 --> C11
-    C9 & C10 -->|"(6b) Gold Parquet"| C14
-    C14 -->|"(6c) 100% Raw Events"| C12
-    C11 -->|"(7) Freeze Artifacts"| C13A & C13B
-    C13A & C13B -.->|"(8) Read-Only .transform()"| C8 & C12
+    C5 -.->|"Quarantine (first_failing_rule)"| C15
+    C5 -->|"(3) Validated Stream"| C6 --> C7 --> C8
+    C5 -->|"(4) Validated Batch"| C9 --> C10 --> C11
+    C6 -.->|"(5a) Sink 1: Bronze Raw 100%"| C14
+    C7 -.->|"(5b) WAL Checkpoints"| C15
+    C9 -->|"(6a) Gold Parquet (10m)"| C14
+    C14 -->|"(6b) Backfill 501 late"| C12
+    C11 -->|"(7a) Freeze SHA-256"| C13A
+    C10 -->|"(7b) Freeze 84,633 segs"| C13B
+    C13A & C13B -.->|"(8) Read-Only SHA-256"| C8 & C12
     C8 -->|"(9a) Upsert STREAM_PROVISIONAL (v1)"| C16
     C12 -->|"(9b) Upsert BATCH_RECONCILED (v2)"| C16
-    C14 & C15 & C16 -->|"(10) IXSCAN & Lakehouse"| C17 --> C3
+    C16 <-->|"(10a) Compound IXSCAN (0.636 ms)"| C17 <-->|"(10b) Live UI :8501"| C3
 ```
 
 ---
 
 ## 2. Đặc Tả Toán Học Các Mô-Đun Cốt Lõi (`Low-Level Mathematical Specification`)
 
-1. **Vị nhóm Giao hoán `Commutative Monoid` (`[C9]`, `Pillar I1`):**
+1. **Đại số `5-Tuple Commutative Monoid` (`[C9]`, `Pillar I1`):**
    $$\mathbf{m}_{s,w} = (\text{cnt}, \sum v, \min v, \max v, \text{severe\_cnt}), \quad \mathbf{e} = (0, 0.0, +\infty, 0.0, 0)$$
    $$\mathbf{m}_1 \oplus \mathbf{m}_2 = (\text{cnt}_1 + \text{cnt}_2, \textstyle\sum v_1 + \sum v_2, \min(\min v_1, \min v_2), \max(\max v_1, \max v_2), \text{sev}_1 + \text{sev}_2)$$
    Phép chia $\bar{v}_{s,w} = \sum v / \text{cnt}$ và suy diễn nhãn $\text{LOS}_{s,w}$ chỉ được thực hiện duy nhất một lần tại bước `final_aggregate`.
-2. **`Directed Line-Graph PageRank` Có Bù Nút Cụt (`[C10]`, `MMDS Ch. 5`):**
-   Trên đồ thị chuyển tiếp đoạn đường $L(\mathcal{G}) = (\mathcal{E}, \mathcal{T})$ với $N = |\mathcal{E}| = 84{,}633$, $|\mathcal{T}| = 151{,}929$ và tập nút cụt $\mathcal{D} = \{s \in \mathcal{E} \mid d_{\text{out}}(s) = 0\}$ ($|\mathcal{D}| = 48$):
+2. **`Directed Line-Graph PageRank` Có Bù `Dangling Nodes` (`[C10]`, `MMDS Ch. 5`):**
+   Trên đồ thị chuyển tiếp đoạn đường $L(\mathcal{G}) = (\mathcal{E}, \mathcal{T})$ với $N = |\mathcal{E}| = 84{,}633$, $|\mathcal{T}| = 151{,}929$ và tập `Dangling Nodes` $\mathcal{D} = \{s \in \mathcal{E} \mid d_{\text{out}}(s) = 0\}$ ($|\mathcal{D}| = 48$):
    $$r_s^{(k+1)} = \frac{1 - \beta}{N} + \beta \left( \sum_{u \in \text{In}(s)} \frac{r_u^{(k)}}{d_{\text{out}}(u)} + \frac{1}{N} \sum_{d \in \mathcal{D}} r_d^{(k)} \right), \quad \beta = 0.85$$
 3. **Đặc trưng Nhân quả Mở rộng `Causal Expanding Empirical-Bayes Priors` (`[C11]`, `Pillar I3`):**
-   $$\text{Prior}_s(t) = \frac{\sum_{\tau < t} y_{s,\tau} + m_{\text{seg}} \cdot \bar{y}_{\text{global}}(\tau \le t)}{\text{count}_s(\tau < t) + m_{\text{seg}}} \quad (m_{\text{seg}} = 5, \; m_{\text{street}} = 10)$$
+   $$\text{Prior}_s(t) = \frac{\sum_{\tau < t} y_{s,\tau} + m_{\text{seg}} \cdot \bar{y}_{\text{global}}(\tau < t)}{\text{count}_s(\tau < t) + m_{\text{seg}}} \quad (m_{\text{seg}} = 5, \; m_{\text{street}} = 10)$$
    Mọi quan sát có cùng `slot_ts` trên cùng tuyến đường được gom theo nhóm timestamp trước khi tính tổng tích lũy mở rộng (`expanding sum`), đảm bảo bất biến nhân quả tuyệt đối trước mọi nhiễu tương lai tại $\tau > t$.
 4. **Kiểm chứng Kế hoạch Thực thi Vật lý `Spark 3.5.7` & `MongoDB 8.0.34` (`[C9]`, `[C14]`, `[C16]`):**
    - `Catalyst Join Plan`: Giảm từ `10 Exchanges` (`SortMergeJoin`) xuống `2 Exchanges` (`BroadcastHashJoin` trên bảng chiều `segments` và `streets`), với `exceptAll() == 0` hai chiều giữa `DataFrame DSL` và `Spark SQL`.
-   - `MongoDB 8.0 Compound IXSCAN`: Ghi `33,441` bản ghi qua `4` phân vùng (`69` lô `500` bản ghi `UpdateOne(upsert=True)`), truy vấn `UC-2` sử dụng chỉ mục phức hợp `level_prob_segment_idx` (`{street_level: 1, severe_prob: -1, segment_id: 1}`) với `in_memory_sort = false`, `nReturned = 25`, `totalDocsExamined = 25`, và độ trễ `warm_p95_ms = 0.767 ms < 10 ms`.
+   - `MongoDB 8.0 Compound IXSCAN`: Ghi `33,441` bản ghi qua `4` phân vùng (`69` lô `500` bản ghi `UpdateOne(upsert=True)`), truy vấn `UC-2` sử dụng `Compound Index` `level_prob_segment_idx` (`{street_level: 1, severe_prob: -1, segment_id: 1}`) với `in_memory_sort = false`, `nReturned = 25`, `totalDocsExamined = 25`, và độ trễ `warm_p95_ms = 0.636 ms < 10 ms`.
 

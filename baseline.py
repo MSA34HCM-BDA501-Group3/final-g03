@@ -181,9 +181,7 @@ def accumulate_raw_monoid(
                 rejected += 1
                 continue
 
-            raw_eid = row.get("raw_event_id") or compute_raw_event_id(
-                raw_id_val, seg_id, updated_at, velocity
-            )
+            raw_eid = row.get("raw_event_id") or compute_raw_event_id(raw_id_val, seg_id, updated_at, velocity)
             if raw_eid in seen_raw_ids:
                 dedup_dropped += 1
                 continue
@@ -365,9 +363,7 @@ def audit_records_against_monoid(
         "missing_keys_in_dataset": missing_keys,
         "extra_keys_in_dataset": int(counters["extra_keys_in_dataset"]),
         "duplicate_window_keys": duplicate_window_keys,
-        "utc_window_join_match_pct": round(
-            counters["matched_windows"] / max(len(monoid_map), 1) * 100.0, 2
-        ),
+        "utc_window_join_match_pct": round(counters["matched_windows"] / max(len(monoid_map), 1) * 100.0, 2),
         "obs_count_discrepancies": int(counters["count_discrepancies"]),
         "sum_velocity_discrepancies": int(counters["sum_discrepancies"]),
         "min_velocity_discrepancies": int(counters["min_discrepancies"]),

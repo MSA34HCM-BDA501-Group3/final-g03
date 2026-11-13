@@ -6,8 +6,8 @@
     "unsalted_windows": 33441,
     "stage1_salted_groups": 59828,
     "stage2_reduced_windows": 33441,
-    "unsalted_runtime_ms": 1206.33,
-    "salted_runtime_ms": 1172.83,
+    "unsalted_runtime_ms": 1054.17,
+    "salted_runtime_ms": 1073.37,
     "two_way_exceptAll_diff": 0
   },
   "catalyst_join_spark": {
@@ -22,31 +22,37 @@
   },
   "parquet_pruning_spark": {
     "partition_filters_and_read_schema_verified": true,
-    "pruning_plan_excerpt": "== Physical Plan ==\n*(1) Project [segment_id#715L, date#716, period#717, LOS#762]\n+- *(1) ColumnarToRow\n   +- FileScan parquet [segment_id#715L,date#716,period#717,LOS#762,year_month#750] Batched: true, DataFilters: [], Format: Parquet, Location: InMemoryFileIndex(1 paths)[file:/workspace/data/lakehouse/curated_gold], PartitionFilters: [isnotnull(year_month#750), (year_month#750 = 2020-08)], PushedFilters: [], ReadSchema: struct<segment_id:bigint,date:string,period:string,LOS:string>\n\n\n== Parsed Logical Plan ==\n'Project ['segment_id, 'date, 'period, 'LOS]\n+- Filter (year_month#750 = 2020-08)\n   +- Relation [segment_id#715L,date#716,period#717,mean_velocity#718,median_velocity#719,obs_count#720L,sum_velocity#721L,min_velocity#722L,max_velocity_obs#723L,severe_ping_count#724L,created_at#725,updated_at#726,s_node_id#727L,e_node_id#728L,length#729L,street_id#730L,max_velocity#731,street_leve"
+    "pruning_plan_excerpt": "== Physical Plan ==\n*(1) Project [segment_id#715L, date#716, period#717, LOS#763]\n+- *(1) ColumnarToRow\n   +- FileScan parquet [segment_id#715L,date#716,period#717,LOS#763,year_month#751] Batched: true, DataFilters: [], Format: Parquet, Location: InMemoryFileIndex(1 paths)[file:/workspace/data/lakehouse/curated_gold], PartitionFilters: [isnotnull(year_month#751), (year_month#751 = 2020-08)], PushedFilters: [], ReadSchema: struct<segment_id:bigint,date:string,period:string,LOS:string>\n\n\n== Parsed Logical Plan ==\n'Project ['segment_id, 'date, 'period, 'LOS]\n+- Filter (year_month#751 = 2020-08)\n   +- Relation [segment_id#715L,date#716,period#717,mean_velocity#718,median_velocity#719,obs_count#720L,sum_velocity#721L,min_velocity#722L,max_velocity_obs#723L,severe_ping_count#724L,created_at#725,updated_at#726,s_node_id#727L,e_node_id#728L,length#729L,street_id#730L,max_velocity#731,street_leve"
   },
   "spark_fpgrowth_rules_count": 335,
   "spark_kmeans_clusters_populated": 6,
+  "spark_kmeans_train_only_verified": true,
+  "spark_kmeans_standard_scaler_verified": true,
+  "spark_kmeans_train_segments": 6926,
+  "spark_rf_train_rows": 5494,
+  "spark_rf_numeric_features_count": 23,
   "spark_pipeline_model_saved": true,
   "spark_pipeline_reload_parity": true,
   "spark_unseen_category_handled": true,
   "spark_structured_streaming_wal_created": true,
+  "spark_sink1_output_path": "outputs/spark_bronze_stream_sink",
   "spark_sink1_last_progress": {
-    "id": "667c6ff9-bd0d-42cd-b13d-9b2788d8c61b",
-    "runId": "d1feecf6-d301-4b9b-b80c-2009e55b4361",
+    "id": "f1c5e56f-53d3-4cfb-8764-2717ac071bf2",
+    "runId": "c8541d4d-0887-47a9-a9e0-ac7c9e6193fe",
     "name": null,
-    "timestamp": "2026-11-08T17:21:25.289Z",
+    "timestamp": "2026-11-09T13:25:11.038Z",
     "batchId": 0,
-    "numInputRows": 0,
+    "numInputRows": 200,
     "inputRowsPerSecond": 0.0,
-    "processedRowsPerSecond": 0.0,
+    "processedRowsPerSecond": 262.4671916010499,
     "durationMs": {
-      "addBatch": 96,
-      "commitOffsets": 121,
-      "getBatch": 62,
-      "latestOffset": 190,
-      "queryPlanning": 25,
-      "triggerExecution": 648,
-      "walCommit": 132
+      "addBatch": 252,
+      "commitOffsets": 115,
+      "getBatch": 58,
+      "latestOffset": 168,
+      "queryPlanning": 34,
+      "triggerExecution": 762,
+      "walCommit": 114
     },
     "stateOperators": [],
     "sources": [
@@ -57,33 +63,33 @@
           "logOffset": 0
         },
         "latestOffset": null,
-        "numInputRows": 0,
+        "numInputRows": 200,
         "inputRowsPerSecond": 0.0,
-        "processedRowsPerSecond": 0.0
+        "processedRowsPerSecond": 262.4671916010499
       }
     ],
     "sink": {
-      "description": "FileSink[data/lakehouse/window_metrics/batch_id=0]",
+      "description": "FileSink[outputs/spark_bronze_stream_sink]",
       "numOutputRows": -1
     }
   },
   "spark_sink2_last_progress": {
-    "id": "57e29b6f-ea05-46a7-b6ce-873f7191707f",
-    "runId": "0070d866-ff4a-42ad-8615-c5af48b0ad9f",
+    "id": "061a7333-3d69-484f-8424-e01aa65e0ed7",
+    "runId": "c2c41bfe-8eae-49e3-94ff-8d9826d5d425",
     "name": "hcmc_agg_sink2",
-    "timestamp": "2026-11-08T17:21:26.171Z",
+    "timestamp": "2026-11-09T13:25:12.014Z",
     "batchId": 0,
     "numInputRows": 200,
     "inputRowsPerSecond": 0.0,
-    "processedRowsPerSecond": 125.31328320802004,
+    "processedRowsPerSecond": 146.09203798392988,
     "durationMs": {
-      "addBatch": 1063,
-      "commitOffsets": 140,
-      "getBatch": 47,
-      "latestOffset": 172,
-      "queryPlanning": 37,
-      "triggerExecution": 1596,
-      "walCommit": 125
+      "addBatch": 907,
+      "commitOffsets": 116,
+      "getBatch": 38,
+      "latestOffset": 158,
+      "queryPlanning": 32,
+      "triggerExecution": 1369,
+      "walCommit": 108
     },
     "eventTime": {
       "avg": "2020-07-29T10:45:36.000Z",
@@ -96,10 +102,10 @@
         "operatorName": "stateStoreSave",
         "numRowsTotal": 14,
         "numRowsUpdated": 14,
-        "allUpdatesTimeMs": 226,
+        "allUpdatesTimeMs": 253,
         "numRowsRemoved": 0,
         "allRemovalsTimeMs": 4,
-        "commitTimeMs": 763,
+        "commitTimeMs": 632,
         "memoryUsedBytes": 10944,
         "numRowsDroppedByWatermark": 0,
         "numShufflePartitions": 8,
@@ -121,7 +127,7 @@
         "latestOffset": null,
         "numInputRows": 200,
         "inputRowsPerSecond": 0.0,
-        "processedRowsPerSecond": 125.31328320802004
+        "processedRowsPerSecond": 146.09203798392988
       }
     ],
     "sink": {

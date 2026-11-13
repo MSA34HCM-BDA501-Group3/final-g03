@@ -58,9 +58,7 @@ def _assign_delays_and_duplicates(
     out_wm_indices = rng.choice(total_valid, size=late_out_wm_count, replace=False)
     out_wm_set = set(out_wm_indices.tolist())
 
-    remaining_pool = np.array(
-        [idx for idx in range(total_valid) if idx not in out_wm_set], dtype=int
-    )
+    remaining_pool = np.array([idx for idx in range(total_valid) if idx not in out_wm_set], dtype=int)
     in_wm_indices = rng.choice(
         remaining_pool,
         size=min(late_in_wm_count, len(remaining_pool)),
@@ -108,15 +106,11 @@ def generate_raw_ping_replay(
 
     working["date"] = working["event_ts_dt"].dt.strftime("%Y-%m-%d")
     minute_bucket = np.where(working["event_ts_dt"].dt.minute < 30, "00", "30")
-    working["period"] = (
-        "period_" + working["event_ts_dt"].dt.hour.astype(str) + "_" + minute_bucket
-    )
+    working["period"] = "period_" + working["event_ts_dt"].dt.hour.astype(str) + "_" + minute_bucket
     raw_ids = working["_id"] if "_id" in working.columns else np.arange(total_valid)
     working["raw_event_id"] = [
         compute_raw_event_id(rid, seg_id, str(uat), vel)
-        for rid, seg_id, uat, vel in zip(
-            raw_ids, working["segment_id"], working["updated_at"], working["velocity"]
-        )
+        for rid, seg_id, uat, vel in zip(raw_ids, working["segment_id"], working["updated_at"], working["velocity"])
     ]
     working["event_id"] = [
         compute_event_id(int(seg_id), str(d_str), str(p_str))
@@ -126,14 +120,10 @@ def generate_raw_ping_replay(
     working["arrival_delay_seconds"] = delays
     ingest_dt = working["event_ts_dt"] + pd.to_timedelta(delays, unit="s")
     working["ingest_ts"] = ingest_dt.dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-    working["kafka_partition"] = [
-        compute_kafka_partition(int(seg_id)) for seg_id in working["segment_id"]
-    ]
+    working["kafka_partition"] = [compute_kafka_partition(int(seg_id)) for seg_id in working["segment_id"]]
     working["is_duplicate"] = False
     working["lateness_bucket"] = [
-        "LATE_OUT_OF_WATERMARK"
-        if idx in out_wm_set
-        else ("LATE_IN_WATERMARK" if idx in in_wm_set else "ON_TIME")
+        "LATE_OUT_OF_WATERMARK" if idx in out_wm_set else ("LATE_IN_WATERMARK" if idx in in_wm_set else "ON_TIME")
         for idx in range(total_valid)
     ]
 
@@ -157,18 +147,11 @@ def generate_raw_ping_replay(
     dups["is_duplicate"] = True
     replay_df = pd.concat([base, dups], ignore_index=True)
 
-    affected_seg_windows = int(
-        base.loc[base["lateness_bucket"] == "LATE_OUT_OF_WATERMARK", "event_id"].nunique()
-    )
+    affected_seg_windows = int(base.loc[base["lateness_bucket"] == "LATE_OUT_OF_WATERMARK", "event_id"].nunique())
     affected_slot_windows = int(
-        base.loc[base["lateness_bucket"] == "LATE_OUT_OF_WATERMARK"]
-        .groupby(["date", "period"])
-        .ngroups
+        base.loc[base["lateness_bucket"] == "LATE_OUT_OF_WATERMARK"].groupby(["date", "period"]).ngroups
     )
-    part_counts = {
-        str(int(k)): int(v)
-        for k, v in replay_df["kafka_partition"].value_counts().sort_index().items()
-    }
+    part_counts = {str(int(k)): int(v) for k, v in replay_df["kafka_partition"].value_counts().sort_index().items()}
     summary = {
         "replay_mode": "raw_gps_pings",
         "seed": seed,
@@ -245,14 +228,10 @@ def generate_replay_Batch(
             base.get("mean_velocity", np.zeros(total_valid)),
         )
     ]
-    base["kafka_partition"] = [
-        compute_kafka_partition(int(seg_id)) for seg_id in base["segment_id"]
-    ]
+    base["kafka_partition"] = [compute_kafka_partition(int(seg_id)) for seg_id in base["segment_id"]]
     base["is_duplicate"] = False
     base["lateness_bucket"] = [
-        "LATE_OUT_OF_WATERMARK"
-        if idx in out_wm_set
-        else ("LATE_IN_WATERMARK" if idx in in_wm_set else "ON_TIME")
+        "LATE_OUT_OF_WATERMARK" if idx in out_wm_set else ("LATE_IN_WATERMARK" if idx in in_wm_set else "ON_TIME")
         for idx in range(total_valid)
     ]
 
@@ -261,15 +240,10 @@ def generate_replay_Batch(
     replay_df = pd.concat([base, dups], ignore_index=True)
 
     affected_slot_windows = int(
-        base.loc[base["lateness_bucket"] == "LATE_OUT_OF_WATERMARK"]
-        .groupby(["date", "period"])
-        .ngroups
+        base.loc[base["lateness_bucket"] == "LATE_OUT_OF_WATERMARK"].groupby(["date", "period"]).ngroups
     )
     affected_segment_windows = int(len(out_wm_set))
-    part_counts = {
-        str(int(k)): int(v)
-        for k, v in replay_df["kafka_partition"].value_counts().sort_index().items()
-    }
+    part_counts = {str(int(k)): int(v) for k, v in replay_df["kafka_partition"].value_counts().sort_index().items()}
     summary = {
         "component": "[C1] GPS Probe Fleet & Replay Producer -> [C4] Kafka 4.1.0 KRaft",
         "replay_mode": "window_aggregated_30m",
@@ -302,9 +276,7 @@ def _ensure_kafka_topic(brokers: list[str], topic: str, num_partitions: int = NU
     try:
         existing = set(admin.list_topics())
         if topic not in existing:
-            admin.create_topics(
-                [NewTopic(name=topic, num_partitions=num_partitions, replication_factor=1)]
-            )
+            admin.create_topics([NewTopic(name=topic, num_partitions=num_partitions, replication_factor=1)])
     except TopicAlreadyExistsError:
         pass
     finally:
@@ -415,9 +387,7 @@ def main() -> None:
         frame = pd.read_csv(args.dataset_path)
         if args.limit > 0:
             frame = frame.head(args.limit).copy()
-        replay_df, summary = generate_replay_Batch(
-            frame, seed=args.seed, late_seconds=args.late_seconds
-        )
+        replay_df, summary = generate_replay_Batch(frame, seed=args.seed, late_seconds=args.late_seconds)
 
     raw_status_path = args.raw_dir / "segment_status.csv"
     raw_replay_df: pd.DataFrame | None = None
@@ -454,4 +424,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

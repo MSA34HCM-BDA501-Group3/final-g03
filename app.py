@@ -24,7 +24,7 @@ METRICS_PATH = ROOT / "outputs" / "metrics.json"
 MODEL_PATH = ROOT / "outputs" / "model.joblib"
 MANIFEST_PATH = ROOT / "outputs" / "model_registry_manifest.json"
 ROC_PATH = ROOT / "outputs" / "roc_curve.png"
-ARCH_IMG_PATH = ROOT / "outputs" / "system_architecture_v4.png"
+ARCH_IMG_PATH = ROOT / "outputs" / "system_architecture.png"
 ABLATION_PATH = ROOT / "outputs" / "ablation_results.csv"
 PAGERANK_PATH = ROOT / "outputs" / "road_pagerank_top.csv"
 RULES_PATH = ROOT / "outputs" / "co_congestion_rules.csv"
@@ -35,9 +35,13 @@ QUARANTINE_PATH = ROOT / "outputs" / "quarantine_summary.csv"
 MONGO_VERIFY_PATH = ROOT / "outputs" / "mongo_verify.json"
 JOIN_PLAN_PATH = ROOT / "outputs" / "join_plan_evidence.json"
 MONOID_VERIFY_PATH = ROOT / "outputs" / "monoid_baseline_verification.json"
-SPARK_VERIFY_PATH = ROOT / "outputs" / "spark_verification.json"
+SPARK_VERIFY_PATH = ROOT / "outputs" / "spark_runtime_evidence.json"
 QUERY_PROGRESS_PATH = ROOT / "outputs" / "query_progress.json"
 INVENTORY_PATH = ROOT / "outputs" / "file_inventory.csv"
+TRANSITION_CSV_PATH = ROOT / "outputs" / "transition_evaluation.csv"
+MAP_HOTSPOTS_PATH = ROOT / "outputs" / "slide_charts" / "map_hcmc_hotspots_coldstart.png"
+MAP_CLUSTERS_PATH = ROOT / "outputs" / "slide_charts" / "map_hcmc_clusters_7d.png"
+TRANSITION_CHART_PATH = ROOT / "outputs" / "slide_charts" / "chart_transition_analysis.png"
 
 LOS_ORDER = ["A", "B", "C", "D", "E", "F"]
 ORDINAL_TO_LOS = {index: label for index, label in enumerate(LOS_ORDER)}
@@ -66,21 +70,29 @@ def _format_vn_time(vn_hour_val: Any) -> str:
 
 def _predict_single_window(row: pd.Series, artifact: dict[str, Any]) -> dict[str, Any]:
     features = artifact["full_features"]
-    frame_row = pd.DataFrame([{col: row.get(col, 0.0) for col in features}])
-    if "current_los_ordinal" not in frame_row or pd.isna(frame_row["current_los_ordinal"].iloc[0]):
+    frame_row = pd.DataFrame([{col: row.get(col, np.nan) for col in features}])
+    if pd.isna(frame_row["current_los_ordinal"].iloc[0]):
         frame_row["current_los_ordinal"] = row.get("los_ordinal", 0)
     matrix = artifact["ml_imputer"].transform(frame_row[features])
 
+    probs_6 = artifact["rf_multiclass"].predict_proba(matrix)[0]
     rf_pred_ord = int(artifact["rf_multiclass"].predict(matrix)[0])
     dt_pred_ord = int(artifact["dt_multiclass"].predict(matrix)[0])
-    rf_severe_prob = float(artifact["rf_multiclass"].predict_proba(matrix)[0, 4:].sum())
+    rf_severe_prob = float(probs_6[4:].sum())
     gbt_severe_prob = float(artifact["gbt_severe"].predict_proba(matrix)[0, 1])
     persistence_ord = int(row.get("los_ordinal", 0))
+    rf_change_prob = float(1.0 - probs_6[persistence_ord]) if 0 <= persistence_ord < 6 else 0.0
+    alt_probs = probs_6.copy()
+    if 0 <= persistence_ord < 6:
+        alt_probs[persistence_ord] = -1.0
+    cal_ord = int(alt_probs.argmax()) if rf_change_prob >= 0.30 else persistence_ord
 
     return {
         "persistence_los": ORDINAL_TO_LOS.get(persistence_ord, "A"),
         "dt_los": ORDINAL_TO_LOS.get(dt_pred_ord, "A"),
         "rf_los": ORDINAL_TO_LOS.get(rf_pred_ord, "A"),
+        "rf_calibrated_los": ORDINAL_TO_LOS.get(cal_ord, "A"),
+        "rf_change_prob": rf_change_prob,
         "rf_severe_prob": rf_severe_prob,
         "gbt_severe_prob": gbt_severe_prob,
         "actual_next_los": (
@@ -91,13 +103,102 @@ def _predict_single_window(row: pd.Series, artifact: dict[str, Any]) -> dict[str
     }
 
 
+def _format_lifecycle_summary(breakdown: dict[str, int]) -> str:
+    if not breakdown:
+        return "Đang đồng bộ"
+    verified = breakdown.get("BATCH_VERIFIED", 0)
+    reconciled = breakdown.get("BATCH_RECONCILED", 0)
+    provisional = breakdown.get("STREAM_PROVISIONAL", 0)
+    return (
+        f"{verified:,} khớp đúng hạn (BATCH_VERIFIED) · "
+        f"{reconciled:,} đã bù trễ (BATCH_RECONCILED) · "
+        f"{provisional:,} tạm thời (STREAM_PROVISIONAL)"
+    )
+
+
+def _format_hotspots_display(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty or "segment_id" not in df.columns:
+        return df
+    return pd.DataFrame(
+        {
+            "Mã đoạn": df["segment_id"].astype(int),
+            "Tuyến đường": df["street_name"].fillna("N/A"),
+            "Điểm EWMA": df["decaying_hotspot_score"].astype(float).round(2),
+            "Vận tốc (km/h)": df["latest_velocity_kmh"].astype(float).round(1),
+            "Mức LOS": df["latest_los"],
+        }
+    )
+
+
+def _format_alerts_display(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty or "segment_id" not in df.columns:
+        return df
+    vn_times = df["vn_hour"].map(_format_vn_time) if "vn_hour" in df.columns else df.get("period", "")
+    return pd.DataFrame(
+        {
+            "Mã đoạn": df["segment_id"].astype(int),
+            "Tuyến đường": df["street_name"].fillna("N/A"),
+            "Cấp": df["street_level"].astype(int),
+            "Ngày": df["date"],
+            "Giờ (VN)": vn_times,
+            "LOS hiện tại": df["current_los"],
+            "Dự báo (+30p)": df["predicted_next_los"],
+            "Nguy cơ E/F (%)": (df["severe_prob"].astype(float) * 100.0).round(1),
+            "PageRank": df["pagerank_score"].astype(float).round(2),
+        }
+    )
+
+
+def _format_transition_display(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty or "regime" not in df.columns:
+        return df
+    return pd.DataFrame(
+        {
+            "Tình huống kiểm thử": df["regime"],
+            "Số mẫu": df["sample_count"].astype(int),
+            "Đoán đúng 6 mức (Baseline)": df["persistence_6class_acc"],
+            "Đoán đúng 6 mức (RF 23 biến)": df["rf_23d_6class_acc"],
+            "PR-AUC Kẹt cứng (Baseline)": df["persistence_severe_pr_auc"],
+            "PR-AUC Kẹt cứng (RF 23 biến)": df["rf_23d_severe_pr_auc"],
+            "Sai số Brier (Baseline)": df["persistence_brier_error"],
+            "Sai số Brier (RF 23 biến)": df["rf_23d_brier_error"],
+        }
+    )
+
+
+def _format_peers_display(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty or "segment_id" not in df.columns:
+        return df
+    sim_col = "Điểm tương đồng" if "Điểm tương đồng" in df.columns else "similarity_score"
+    return pd.DataFrame(
+        {
+            "Mã đoạn": df["segment_id"].astype(int),
+            "Tuyến đường": df["street_name"].fillna("N/A"),
+            "Cấp đường": df["street_level"].astype(int),
+            "Loại đường": df["street_type"] if "street_type" in df.columns else "N/A",
+            "Chiều dài (m)": df["length_m"].astype(float).round(1) if "length_m" in df.columns else 0.0,
+            "Vận tốc TB (km/h)": df["mean_velocity"].astype(float).round(1),
+            "Tốc độ tối đa (km/h)": df["max_velocity"].astype(float).round(0),
+            "PageRank": df["pagerank_score"].astype(float).round(3),
+            "Điểm tương đồng": df[sim_col].astype(float).round(4) if sim_col in df.columns else 1.0,
+        }
+    )
+
+
+def _render_dataframe(df: pd.DataFrame) -> None:
+    try:
+        st.dataframe(df, width="stretch", hide_index=True)
+    except TypeError:  # pragma: no cover
+        st.dataframe(df, use_container_width=True, hide_index=True)
+
+
 def _find_similar_segments(
     data: pd.DataFrame,
     query_row: pd.Series | int,
     limit: int = 10,
     static_store_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """[D07/M14] Find Top-K peers in 7D K-Means space across all 84,633 segments (incl. Cold-Start)."""
+    """Find Top-K peers in 7D K-Means space across all 84,633 segments (including Cold-Start)."""
     query_seg_id = int(query_row) if isinstance(query_row, (int, np.integer)) else int(query_row["segment_id"])
     if static_store_df is None and STATIC_STORE_PATH.is_file():
         static_store_df = pd.read_parquet(STATIC_STORE_PATH)
@@ -108,22 +209,18 @@ def _find_similar_segments(
 
     if isinstance(query_row, (int, np.integer)):
         return pd.DataFrame()
-    seg_summary = (
-        data.groupby("segment_id", as_index=False)
-        .agg(
-            street_name=("street_name", "first"),
-            street_type=("street_type", "first"),
-            street_level=("street_level", "first"),
-            mean_velocity=("mean_velocity", "mean"),
-            max_velocity=("max_velocity", "first"),
-            pagerank_score=("pagerank_score", "first"),
-            severe_rate=("is_severe", "mean"),
-            cluster_id=("cluster_id", "first"),
-        )
+    seg_summary = data.groupby("segment_id", as_index=False).agg(
+        street_name=("street_name", "first"),
+        street_type=("street_type", "first"),
+        street_level=("street_level", "first"),
+        mean_velocity=("mean_velocity", "mean"),
+        max_velocity=("max_velocity", "first"),
+        pagerank_score=("pagerank_score", "first"),
+        severe_rate=("is_severe", "mean"),
+        cluster_id=("cluster_id", "first"),
     )
     same_cluster = seg_summary[
-        (seg_summary["cluster_id"] == int(query_row["cluster_id"]))
-        & (seg_summary["segment_id"] != query_seg_id)
+        (seg_summary["cluster_id"] == int(query_row["cluster_id"])) & (seg_summary["segment_id"] != query_seg_id)
     ].copy()
     if same_cluster.empty:
         return same_cluster
@@ -138,8 +235,8 @@ def _find_similar_segments(
     c_mat = same_cluster[["mean_velocity", "pagerank_score", "severe_rate"]].to_numpy(dtype=float)
     scales = np.maximum(np.std(c_mat, axis=0), 1e-3)
     dists = np.linalg.norm((c_mat - q_vec) / scales, axis=1)
-    same_cluster["Điểm tương đồng"] = np.round(1.0 / (1.0 + dists), 4)
-    return same_cluster.sort_values("Điểm tương đồng", ascending=False).head(limit)
+    same_cluster["similarity_score"] = np.round(1.0 / (1.0 + dists), 4)
+    return same_cluster.sort_values("similarity_score", ascending=False).head(limit)
 
 
 def _select_forecast_candidates(
@@ -160,9 +257,7 @@ def _select_forecast_candidates(
     return subset.head(max_rows).copy()
 
 
-def query_operational_serving_store(limit: int = 25) -> tuple[pd.DataFrame, dict[str, Any]]:
-    """[M13] Query live MongoDB 8.0 `bda501.traffic_scores` if available; otherwise explicit offline fallback."""
-    mongo_uri = os.environ.get("MONGO_URI", "mongodb://127.0.0.1:27019")
+def _try_query_live_mongo(mongo_uri: str, limit: int) -> tuple[pd.DataFrame, dict[str, Any]] | None:
     try:
         import pymongo  # type: ignore[import-not-found]
 
@@ -193,6 +288,18 @@ def query_operational_serving_store(limit: int = 25) -> tuple[pd.DataFrame, dict
         client.close()
     except Exception:
         pass
+    return None
+
+
+def query_operational_serving_store(limit: int = 25) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Query live MongoDB 8.0 `bda501.traffic_scores` if available; otherwise explicit offline fallback."""
+    env_uri = os.environ.get("MONGO_URI", "").strip()
+    candidate_uris = [env_uri] if env_uri else ["mongodb://127.0.0.1:27017", "mongodb://127.0.0.1:27019"]
+    for uri in candidate_uris:
+        live_res = _try_query_live_mongo(uri, limit)
+        if live_res is not None:
+            return live_res
+    fallback_uri = candidate_uris[0]
 
     if SERVING_PARQUET_PATH.is_file():
         s_df = pd.read_parquet(SERVING_PARQUET_PATH)
@@ -201,12 +308,10 @@ def query_operational_serving_store(limit: int = 25) -> tuple[pd.DataFrame, dict
             .sort_values(["severe_prob", "segment_id"], ascending=[False, True])
             .head(limit)
         )
-        status_counts = {
-            str(k): int(v) for k, v in s_df["lifecycle_status"].value_counts().items()
-        }
+        status_counts = {str(k): int(v) for k, v in s_df["lifecycle_status"].value_counts().items()}
         return hits, {
             "serving_mode": "OFFLINE_PARQUET_FALLBACK",
-            "mongo_uri": mongo_uri,
+            "mongo_uri": fallback_uri,
             "total_serving_docs": int(len(s_df)),
             "lifecycle_breakdown": status_counts,
         }
@@ -215,26 +320,41 @@ def query_operational_serving_store(limit: int = 25) -> tuple[pd.DataFrame, dict
     alerts = mongo_verify.get("uc2_arterial_query", {}).get("top_5_arterial_alerts", [])
     return pd.DataFrame(alerts), {
         "serving_mode": "OFFLINE_JSON_FALLBACK",
-        "mongo_uri": mongo_uri,
+        "mongo_uri": fallback_uri,
         "total_serving_docs": int(mongo_verify.get("total_rows_upserted", 0)),
         "lifecycle_breakdown": {},
     }
 
 
+_fetch_live_mongo_status = query_operational_serving_store
+
+
 def render_overview_tab(data: pd.DataFrame, metrics: dict[str, Any]) -> None:
-    """Tab 1: Overview, Quality Funnel [C5]/[C15] & Exponentially Decaying Hotspots [C7]."""
-    st.subheader("1. Phễu Kiểm định Chất lượng [C5] & Kho Cách ly [C15] Quarantine (Ordered First-Failing Rule)")
+    """Tab 1: HCMC Map, Hotspots, Quality Funnel & Architecture Overview."""
+    st.info(
+        "**Thang đo mức phục vụ giao thông (LOS A–F):** "
+        "**LOS A–B** (≥ 65% tốc độ tối đa): Thông thoáng tự do · "
+        "**LOS C–D** (35%–65%): Đông đúc ổn định · "
+        "**LOS E–F** (< 35%): Ùn ứ nghiêm trọng đến kẹt cứng."
+    )
+    m_left, m_right = st.columns([1.22, 1.0])
+    with m_left:
+        st.subheader("1. Bản đồ Điểm nóng & Vùng thiếu GPS TP.HCM (84,633 Đoạn đường)")
+        if MAP_HOTSPOTS_PATH.is_file():
+            st.image(str(MAP_HOTSPOTS_PATH))
+    with m_right:
+        st.subheader("2. Các Đoạn Đường Đang Kẹt Dai Dẳng Nhất (EWMA α = 0.15)")
+        hotspots_df = _read_optional_csv(HOTSPOTS_PATH)
+        _render_dataframe(_format_hotspots_display(hotspots_df.head(14)))
+
+    st.subheader("3. Thống kê Làm sạch Dữ liệu & Lưu vết Bản ghi Lỗi")
     q_df = _read_optional_csv(QUARANTINE_PATH)
     if not q_df.empty:
-        st.dataframe(q_df, width="stretch", hide_index=True)
-
-    st.subheader("2. Cảnh báo Điểm nóng Ùn tắc Kéo dài (UC-1 — Exponentially Decaying Windows, α = 0.15)")
-    hotspots_df = _read_optional_csv(HOTSPOTS_PATH)
-    st.dataframe(hotspots_df, width="stretch", hide_index=True)
+        _render_dataframe(q_df)
 
     c1, c2 = st.columns(2)
     with c1:
-        st.subheader("3. Phân bố Nhãn Mức độ Phục vụ (Reference LOS vs. Derived LOS)")
+        st.subheader("4. Phân bố 6 Mức Giao thông (LOS A–F)")
         los_dist = (
             data.groupby("LOS")
             .size()
@@ -244,202 +364,230 @@ def render_overview_tab(data: pd.DataFrame, metrics: dict[str, Any]) -> None:
         )
         st.bar_chart(los_dist, x="LOS", y="Số khung quan sát (30 phút)")
     with c2:
-        st.subheader("4. Kiểm kê 5 Bảng Dữ liệu Giao thông TP.HCM (Kaggle Primary Source)")
+        st.subheader("5. Kiểm kê 5 Bảng Dữ liệu Gốc TP.HCM")
         inv_df = _read_optional_csv(INVENTORY_PATH)
-        st.dataframe(inv_df, width="stretch", hide_index=True)
+        _render_dataframe(inv_df)
 
     if ARCH_IMG_PATH.is_file():
-        st.subheader("5. Kiến trúc Giải pháp Tổng thể V3 (Zones A–F · 17 Thành phần [C1]–[C17])")
-        st.image(str(ARCH_IMG_PATH), caption="HCMC Smart Traffic Platform — V3 Reference Architecture")
+        st.subheader("6. Sơ đồ Kiến trúc Tổng thể 4 Bước Vận hành")
+        st.image(str(ARCH_IMG_PATH), caption="Kiến trúc Hợp nhất Xử lý Lô & Luồng Trực tuyến (10.5 GB RAM)")
 
 
 def render_forecast_tab(data: pd.DataFrame, artifact: dict[str, Any], metrics: dict[str, Any]) -> None:
-    """Tab 2: Live Congestion Forecast (t+30m), Validation-Gate Ablation & MongoDB 8.0 IXSCAN (<10ms)."""
-    st.subheader("1. Dự báo LOS Khung kế tiếp Đúng +30 Phút (t + 30m) & Validation Gate (UC-2)")
-    streets = ["Tất cả tuyến đường"] + sorted(
-        data["street_name"].dropna().astype(str).unique().tolist()
-    )
+    """Tab 2: Live Congestion Forecast (t+30m), MongoDB 8.0 Alerts & State-Change Evaluation."""
+    st.subheader("1. Dự báo Trạng thái Giao thông Trước 30 Phút (t + 30 phút)")
+    streets = ["Tất cả tuyến đường"] + sorted(data["street_name"].dropna().astype(str).unique().tolist())
     f1, f2 = st.columns([2, 2])
-    street_choice = f1.selectbox("Lọc theo Tuyến đường (bao gồm tuyến cực thưa 1 quan sát)", streets)
+    street_choice = f1.selectbox("Lọc theo Tuyến đường", streets)
     include_sparse = f2.checkbox(
-        "Bao gồm cửa sổ cuối chuỗi / không có cặp liên tiếp +30m (EC-5)",
-        value=True,
+        "Bao gồm khung cuối chuỗi (chưa có quan sát kế tiếp đúng +30 phút)",
+        value=False,
     )
     sample_rows = _select_forecast_candidates(
-        data, street_filter=street_choice, include_single_obs=include_sparse
+        data, street_filter=street_choice, include_single_obs=include_sparse, max_rows=35000
     )
     if sample_rows.empty:
-        st.warning("Không tìm thấy cửa sổ quan sát phù hợp với bộ lọc hiện tại.")
+        st.warning("Không tìm thấy khung quan sát phù hợp với bộ lọc hiện tại.")
         return
 
-    sample_rows["label"] = [
-        f"Segment {r.segment_id} · {r.street_name or 'N/A'} · {r.date} {r.period} "
-        f"({_format_vn_time(getattr(r, 'vn_hour', np.nan))} | LOS hiện tại: {r.LOS})"
-        for r in sample_rows.itertuples()
-    ]
+    idx_list = sample_rows.index.tolist()
+    default_pos = idx_list.index(33410) if 33410 in sample_rows.index else 0
     selected_idx = st.selectbox(
-        "Chọn quan sát đoạn đường (Segment & Khung 30 phút)",
-        sample_rows.index.tolist(),
-        format_func=lambda idx: sample_rows.loc[idx, "label"],
+        "Chọn đoạn đường & khung 30 phút",
+        idx_list,
+        index=default_pos,
+        format_func=lambda i: (
+            f"Đoạn {int(sample_rows.loc[i, 'segment_id'])} · {sample_rows.loc[i, 'street_name'] or 'N/A'} · "
+            f"{_format_vn_time(sample_rows.loc[i].get('vn_hour', np.nan))} ({sample_rows.loc[i, 'date']}) · "
+            f"Hiện tại: LOS {sample_rows.loc[i, 'LOS']}"
+        ),
     )
     row = sample_rows.loc[selected_idx]
     pred = _predict_single_window(row, artifact)
 
     m1, m2, m3, m4, m5 = st.columns(5)
-    m1.metric("LOS Hiện tại (t)", str(row["LOS"]))
-    m2.metric("Persistence (t+30m)", pred["persistence_los"])
-    m3.metric("Random Forest (+Graph)", pred["rf_los"])
-    m4.metric("Xác suất Kẹt nặng (E/F)", f"{pred['rf_severe_prob'] * 100:.1f}%")
-    m5.metric("LOS Thực tế (t+30m)", pred["actual_next_los"])
+    m1.metric("Hiện tại (t)", str(row["LOS"]))
+    m2.metric("Đoán theo Hiện tại", pred["persistence_los"])
+    m3.metric("Random Forest (23 biến)", pred["rf_los"])
+    m4.metric("Xác suất Kẹt cứng (E/F)", f"{pred['rf_severe_prob'] * 100:.1f}%")
+    m5.metric("Thực tế (t + 30 phút)", pred["actual_next_los"])
 
     vn_time_str = _format_vn_time(row.get("vn_hour", np.nan))
     st.info(
-        f"**Tuyến đường:** {row['street_name']} (`segment_id={row['segment_id']}`, cấp {int(row['street_level'])}) · "
-        f"**Giờ địa phương:** {vn_time_str} (`ict_date={row.get('ict_date', row['date'])}`) · "
-        f"**Vận tốc:** {row['mean_velocity']:.1f}/{row['max_velocity']:.0f} km/h · "
-        f"**Line-Graph PageRank:** {row['pagerank_score']:.3f} · **Cụm 7D K-Means:** #{int(row['cluster_id'])}"
+        f"**Tuyến đường:** {row['street_name']} (mã đoạn `{row['segment_id']}`, cấp {int(row['street_level'])}) · "
+        f"**Giờ Việt Nam:** {vn_time_str} (`{row.get('ict_date', row['date'])}`) · "
+        f"**Vận tốc:** {row['mean_velocity']:.1f} / {row['max_velocity']:.0f} km/h · "
+        f"**Xác suất đổi trạng thái:** {pred['rf_change_prob'] * 100:.1f}% · "
+        f"**PageRank:** {row['pagerank_score']:.3f} · **Nhóm hành vi:** #{int(row['cluster_id'])}"
     )
 
-    st.subheader("2. Truy vấn Trục đường chính Kẹt nặng < 10ms (UC-2 — MongoDB 8.0 Compound Index IXSCAN)")
+    st.subheader("2. Cảnh báo Trục chính Nguy cơ Kẹt cao < 1 ms (MongoDB 8.0)")
     r_col1, r_col2 = st.columns([1, 3])
-    if r_col1.button("🔄 Làm mới Serving Store (5s Micro-Batch)"):
+    if r_col1.button("🔄 Làm mới dữ liệu trực tuyến (5s)"):
         st.rerun()
     alerts_df, serving_meta = query_operational_serving_store(limit=25)
+    lifecycle_txt = _format_lifecycle_summary(serving_meta.get("lifecycle_breakdown", {}))
     r_col2.caption(
-        f"**Chế độ kết nối:** `{serving_meta['serving_mode']}` · "
-        f"**Tổng số bản ghi Serving:** `{serving_meta['total_serving_docs']:,}` · "
-        f"**Phân bố vòng đời (`lifecycle_status`):** `{serving_meta['lifecycle_breakdown']}`"
+        f"**Nguồn phục vụ:** `{serving_meta['serving_mode']}` · "
+        f"**Tổng bản ghi:** `{serving_meta['total_serving_docs']:,}` · "
+        f"**Trạng thái đối soát:** {lifecycle_txt}"
     )
     if not alerts_df.empty:
-        st.dataframe(alerts_df, width="stretch", hide_index=True)
+        _render_dataframe(_format_alerts_display(alerts_df.head(10)))
 
-    st.subheader("3. Bảng Đối chứng Ablation Study & Validation-Gate Selection ([C11] 70/15/15 Split)")
+    st.subheader("3. Bảng Thực nghiệm Mô hình & Kiểm định Khi Giao thông Đổi Trạng Thái")
     ablation_df = _read_optional_csv(ABLATION_PATH)
-    st.dataframe(ablation_df, width="stretch", hide_index=True)
+    _render_dataframe(ablation_df)
+    trans_df = _read_optional_csv(TRANSITION_CSV_PATH)
+    if not trans_df.empty:
+        _render_dataframe(_format_transition_display(trans_df))
     col_left, col_right = st.columns(2)
     with col_left:
-        if ROC_PATH.is_file():
-            st.image(str(ROC_PATH), caption="Đường cong ROC dự báo ùn tắc nghiêm trọng (LOS E/F đúng t+30m)")
+        if TRANSITION_CHART_PATH.is_file():
+            st.image(str(TRANSITION_CHART_PATH))
     with col_right:
-        st.json(_read_optional_json(MANIFEST_PATH))
+        if ROC_PATH.is_file():
+            st.image(str(ROC_PATH), caption="Đường cong ROC dự báo ùn tắc nghiêm trọng (LOS E/F đúng t+30 phút)")
 
 
 def render_graph_and_rules_tab() -> None:
-    """Tab 3: Directed Line-Graph PageRank & SON / FP-Growth Co-Congestion + Lagged Rules."""
+    """Tab 3: Road Line-Graph PageRank & SON / FP-Growth Co-Congestion + Lagged Rules."""
     c1, c2 = st.columns(2)
     with c1:
-        st.subheader("1. Top Điểm nghẽn Cấu trúc (UC-3 — Directed Line-Graph PageRank, MMDS Ch. 5)")
+        st.subheader("1. Top Nút cổ chai Giao lộ Toàn Đô thị (PageRank)")
         st.caption(
-            "Xếp hạng 84,633 đoạn đường (151,929 cạnh chuyển tiếp, bù 48 Dangling Nodes, "
-            "cắt tỉa 525,542 đỉnh OSM mồ côi)."
+            "Xếp hạng 84,633 đoạn đường một chiều (151,929 hướng rẽ hợp lệ, bù 48 đoạn cụt, "
+            "đã lọc bỏ 525,542 điểm uốn cong trung gian trên bản đồ)."
         )
         pr_df = _read_optional_csv(PAGERANK_PATH)
-        st.dataframe(pr_df.head(25), width="stretch", hide_index=True)
+        _render_dataframe(pr_df.head(25))
     with c2:
-        st.subheader("2. Luật Đồng Kẹt xe Có hướng A ⇒ B & B ⇒ A (UC-4 — 2-Pass SON / FP-Growth)")
+        st.subheader("2. Các Cặp Tuyến Đường Hay Kẹt Cùng Lúc (SON / FPGrowth)")
         st.caption(
-            "Giỏ hàng (date, period) đầy đủ không cắt ngọn (untruncated), sinh luật có hướng 2 chiều "
-            "trên các tuyến đường chuẩn hóa Unicode NFC đang kẹt nặng LOS ∈ {E, F}."
+            "Khai phá trên toàn bộ giỏ tuyến đường chuẩn hóa dấu tiếng Việt NFC đang kẹt cứng (LOS E/F) mỗi 30 phút."
         )
         rules_df = _read_optional_csv(RULES_PATH)
-        st.dataframe(rules_df.head(25), width="stretch", hide_index=True)
+        _render_dataframe(rules_df.head(25))
 
     lagged_df = _read_optional_csv(LAGGED_RULES_PATH)
     if not lagged_df.empty:
-        st.subheader("3. Luật Lan truyền Kẹt xe Trễ Thời gian: Street_A(t) ⇒ Street_B(t + 30m)")
-        st.dataframe(lagged_df, width="stretch", hide_index=True)
+        st.subheader("3. Giả thuyết Lan truyền Kẹt xe Sau 30 Phút (Lưu ý cỡ mẫu nhỏ: 5–8 khung)")
+        _render_dataframe(lagged_df)
 
 
 def render_kmeans_and_cold_start_tab(data: pd.DataFrame, metrics: dict[str, Any]) -> None:
-    """Tab 4: Train-Only 7D K-Means & Cold-Start Peer Search across all 84,633 segments."""
-    st.subheader("1. Phân cụm Hành vi Tuyến đường 7 Chiều (UC-5 — Train-Only 7D K-Means, MMDS Ch. 7)")
-    cluster_counts = (
-        data.groupby("cluster_id")
-        .agg(
-            observations=("event_id", "count"),
-            unique_segments=("segment_id", "nunique"),
-            severe_ef_rate=("is_severe", "mean"),
-            avg_velocity_kmh=("mean_velocity", "mean"),
-        )
-        .reset_index()
-    )
-    st.dataframe(cluster_counts, width="stretch", hide_index=True)
+    """Tab 4: Train-Only 7D K-Means & Peer Search across all 84,633 segments."""
+    static_df = pd.read_parquet(STATIC_STORE_PATH) if STATIC_STORE_PATH.is_file() else pd.DataFrame()
+    k_left, k_right = st.columns([1.22, 1.0])
+    with k_left:
+        st.subheader("1. Bản đồ 6 Nhóm Hành vi Phủ Kín 84,633 Đoạn Đường")
+        if MAP_CLUSTERS_PATH.is_file():
+            st.image(str(MAP_CLUSTERS_PATH))
+    with k_right:
+        st.subheader("2. Thống kê 6 Nhóm Đường Phố Toàn Mạng Lưới")
+        if not static_df.empty:
+            cluster_counts = (
+                static_df.groupby("cluster_id")
+                .agg(
+                    total_segments=("segment_id", "count"),
+                    gps_segments=("is_cold_start", lambda s: int((~s).sum())),
+                    cold_start_segments=("is_cold_start", "sum"),
+                    avg_velocity_kmh=("mean_velocity", "mean"),
+                    pagerank_score=("pagerank_score", "mean"),
+                )
+                .round({"avg_velocity_kmh": 1, "pagerank_score": 2})
+                .reset_index()
+                .rename(
+                    columns={
+                        "cluster_id": "Nhóm",
+                        "total_segments": "Tổng đoạn",
+                        "gps_segments": "Có GPS",
+                        "cold_start_segments": "Thiếu GPS",
+                        "avg_velocity_kmh": "Vận tốc (km/h)",
+                        "pagerank_score": "PageRank",
+                    }
+                )
+            )
+            _render_dataframe(cluster_counts)
 
-    if not STATIC_STORE_PATH.is_file():
+    if static_df.empty:
         return
-    static_df = pd.read_parquet(STATIC_STORE_PATH)
     obs_cnt = int((~static_df["is_cold_start"]).sum())
     cold_cnt = int(static_df["is_cold_start"].sum())
 
-    st.subheader("2. Tìm Đoạn đường Tương đồng trong Không gian 7D K-Means (Hỗ trợ cả Cold-Start 84,633 Segments)")
+    st.subheader("3. Tra cứu Đoạn Đường Tương Đồng cho Vùng Thiếu GPS (74,606 Đoạn)")
     st.caption(
-        f"Tổng số đoạn đường: {len(static_df):,} · Đã có GPS: {obs_cnt:,} (11.85%) · "
-        f"Vùng mù Cold-Start được phủ bởi Line-Graph PageRank & 7D K-Means: {cold_cnt:,} (88.15%)"
+        f"Tổng cộng: {len(static_df):,} đoạn đường · Đã có GPS: {obs_cnt:,} đoạn (11.85%) · "
+        f"Thiếu GPS nhưng đã có điểm PageRank & nhóm hành vi K-Means: {cold_cnt:,} đoạn (88.15%)"
     )
     s_col1, s_col2, s_col3 = st.columns([2, 2, 1])
-    only_cold = s_col1.checkbox("Chỉ chọn đoạn đường Vùng mù Cảm biến (Cold-Start: obs_windows = 0)", value=True)
+    only_cold = s_col1.checkbox("Chỉ chọn đoạn đường chưa từng có dữ liệu GPS", value=True)
     candidate_pool = static_df[static_df["is_cold_start"]] if only_cold else static_df
     candidate_pool = candidate_pool.sort_values("pagerank_score", ascending=False).head(500).copy()
     candidate_pool["label"] = [
-        f"Segment {int(r.segment_id)} · {r.street_name or 'N/A'} (Cấp {int(r.street_level)}, "
-        f"PageRank={r.pagerank_score:.2f}, Cụm #{int(r.cluster_id)}, ColdStart={bool(r.is_cold_start)})"
+        f"Đoạn {int(r.segment_id)} · {r.street_name or 'N/A'} (Cấp {int(r.street_level)}, "
+        f"PageRank={r.pagerank_score:.2f}, Nhóm #{int(r.cluster_id)})"
         for r in candidate_pool.itertuples()
     ]
     chosen_seg_id = s_col2.selectbox(
-        "Chọn đoạn đường cần tìm Peer (Cold-Start hoặc Active)",
+        "Chọn đoạn đường cần tham chiếu hành vi",
         candidate_pool["segment_id"].astype(int).tolist(),
         format_func=lambda sid: candidate_pool.loc[candidate_pool["segment_id"] == sid, "label"].iloc[0],
     )
-    peer_limit = s_col3.slider("Top-K Peers", 5, 25, 10)
+    peer_limit = s_col3.slider("Số đoạn tương đồng", 5, 25, 8)
     peers_df = _find_similar_segments(data, int(chosen_seg_id), limit=peer_limit, static_store_df=static_df)
-    st.dataframe(peers_df, width="stretch", hide_index=True)
-    st.json(metrics["model"])
+    _render_dataframe(_format_peers_display(peers_df))
 
 
 def render_streaming_and_explain_tab(metrics: dict[str, Any]) -> None:
-    """Tab 5: Stream Sketches (32 KiB Bit-Packed Bloom, 1 KiB HLL++), Two-Tier Recon & Runtime Explain."""
+    """Tab 5: Stream Sketches (32 KiB Bloom, 1 KiB HLL++), Two-Tier Recon & Runtime Explain."""
     s_metrics = metrics["streaming_mmds"]
     bf = s_metrics["bloom_filter"]
     hll = s_metrics["hyperloglog"]
     recon = s_metrics["reconciliation"]
 
-    st.subheader("1. Xử lý Luồng Bộ nhớ Giới hạn O(1) ([C7] 32.0 KiB Bit-Packed Bloom & 1.0 KiB HLL++)")
+    st.subheader("1. Bộ Đếm Luồng Gọn Nhẹ 33.0 KiB (Bloom 32.0 KiB & HyperLogLog++ 1.0 KiB)")
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Sự kiện luồng xử lý", f"{s_metrics['total_stream_events_processed']:,}")
+    k1.metric("Tổng sự kiện luồng xử lý", f"{s_metrics['total_stream_events_processed']:,}")
     k2.metric(
-        "Bộ nhớ Bit-Packed Bloom",
+        "Bộ nhớ lọc trùng Bloom",
         f"{bf['memory_kb']:.1f} KiB ({bf.get('bit_packed_uint8_bytes', 32768):,} B)",
-        f"Trùng lặp chặn: {s_metrics['duplicates_removed_exact']:,}",
+        f"Đã chặn trùng: {s_metrics['duplicates_removed_exact']:,}",
     )
     k3.metric(
-        "Bloom Filter FP Rate",
+        "Tỷ lệ báo trùng nhầm (FPR)",
         f"{bf['empirical_fp_rate']:.5f}",
         f"Lý thuyết: {bf['theoretical_fp_rate']:.5f}",
     )
     k4.metric(
-        "HyperLogLog Distinct",
-        f"{hll['hll_estimated_segments']:.0f} tuyến",
+        "Ước lượng HyperLogLog++",
+        f"{hll['hll_estimated_segments']:.0f} đoạn",
         f"Sai số: {hll['relative_error_pct']:.2f}% (Thực tế: {hll['exact_distinct_segments']:,})",
     )
 
-    st.subheader("2. Đối soát Hai Tầng Batch – Streaming ([C12] Two-Tier Reconciliation & Version Guard)")
+    st.subheader("2. Đối Soát Cuối Ngày & Bù Dữ Liệu Đến Trễ")
     r1, r2, r3, r4 = st.columns(4)
-    r1.metric("Tier 1: Khớp trong Watermark", f"{recon['in_watermark_like_for_like_match_pct']:.1f}%")
+    r1.metric("Khớp đúng hạn (≤ 30 phút)", f"{recon['in_watermark_like_for_like_match_pct']:.1f}%")
     late_win_cnt = recon.get("affected_late_segment_windows_recomputed", 501)
     healed_lag_cnt = recon.get("healed_downstream_lag_windows", 0)
-    r2.metric("Bản tin trễ / Cửa sổ Lag được bù", f"{late_win_cnt:,} / {healed_lag_cnt:,}")
-    r3.metric("Độ đầy đủ Pre-Recon", f"{recon['pre_reconciliation_completeness_pct']:.2f}%")
-    r4.metric("Độ đầy đủ Post-Recon", f"{recon['post_reconciliation_completeness_pct']:.1f}%")
+    r2.metric("Khung trễ bù / Cập nhật sau", f"{late_win_cnt:,} / {healed_lag_cnt:,}")
+    r3.metric("Độ đầy đủ trước đối soát", f"{recon['pre_reconciliation_completeness_pct']:.2f}%")
+    r4.metric("Độ đầy đủ sau đối soát", f"{recon['post_reconciliation_completeness_pct']:.1f}%")
 
     recon_df = _read_optional_csv(RECON_PATH)
-    st.dataframe(recon_df, width="stretch", hide_index=True)
+    _render_dataframe(recon_df)
 
     c_left, c_right = st.columns(2)
     with c_left:
-        st.markdown("**Bằng chứng Pillar I1 & I2 (`Commutative Monoid`, `BroadcastHashJoin` & `Spark Plan`):**")
-        st.json(_read_optional_json(JOIN_PLAN_PATH))
+        st.markdown("**Bằng chứng thực thi phân tán (`Spark 3.5.7` & `BroadcastHashJoin`):**")
+        st.json(
+            {
+                "join_plan_evidence": _read_optional_json(JOIN_PLAN_PATH),
+                "spark_runtime_evidence": _read_optional_json(SPARK_VERIFY_PATH),
+            }
+        )
     with c_right:
-        st.markdown("**Bằng chứng Pillar I3 & S7 (`MongoDB 8.0 IXSCAN` & `WAL Recovery`):**")
+        st.markdown("**Bằng chứng phục vụ trực tuyến (`MongoDB 8.0 IXSCAN` & `Nhật ký WAL`):**")
         st.json(
             {
                 "mongo_ixscan": _read_optional_json(MONGO_VERIFY_PATH).get("ixscan_explain_verification", {}),
@@ -450,15 +598,16 @@ def render_streaming_and_explain_tab(metrics: dict[str, Any]) -> None:
 
 def main() -> None:
     st.set_page_config(
-        page_title="HCMC Smart Traffic Analytics & Congestion Prediction (V3)",
+        page_title="HCMC Smart Traffic Platform — BDA501",
         page_icon="🚦",
         layout="wide",
     )
-    st.title("🚦 HCMC Smart Traffic Analytics & Congestion Prediction Platform (V3)")
+    st.title("🚦 Hệ thống Giám sát Hiện trạng & Dự báo Ùn tắc Giao thông TP.HCM")
     st.caption(
-        "Zones A–F ([C1]–[C17]) · Zero-Conflict 3-Phase MLOps · Medallion Parquet Lakehouse · "
-        "MMDS Stream Sketching (32 KiB Bit-Packed Bloom, 1 KiB HLL++, Decaying) · Line-Graph PageRank · "
-        "2-Pass SON/FP-Growth · Train-Only 7D K-Means · Leak-Free Causal +30m ML · MongoDB 8.0 IXSCAN"
+        "Luồng 4 bước khép kín: Làm sạch GPS & gom khung 30 phút (Spark 3.5.7) · "
+        "Lấp vùng mù 88.15% thiếu GPS (PageRank & K-Means) · "
+        "Dự báo trước 30 phút (Random Forest 23 biến) · "
+        "Cảnh báo trực tuyến < 1 ms & tự động bù tin trễ (Kafka 4.1 · MongoDB 8.0)"
     )
 
     if not all(path.is_file() for path in (DATASET_PATH, METRICS_PATH, MODEL_PATH)):
@@ -477,19 +626,19 @@ def main() -> None:
     top1, top2, top3, top4, top5 = st.columns(5)
     active_nodes = ds_info.get("active_intersection_nodes_count", ds_info["nodes_count"])
     exact_t30m_cnt = ds_info.get("exact_t30m_supervised_windows_count", 7898)
-    top1.metric("Nút giao Hoạt động / Thô", f"{active_nodes:,} / {ds_info['nodes_count']:,}")
-    top2.metric("Đoạn đường (Segments)", f"{ds_info['segments_count']:,}")
-    top3.metric("Bản tin Vận tốc GPS", f"{ds_info['segment_status_events']:,}")
-    top4.metric("Khung 30 phút / Cặp +30m", f"{ds_info['labeled_windows_count']:,} / {exact_t30m_cnt:,}")
-    top5.metric("Severe PR-AUC / F1 (+30m)", f"{eval_info['average_precision']:.4f} / {eval_info['severe_f1']:.4f}")
+    top1.metric("Giao lộ thực / Tổng điểm", f"{active_nodes:,} / {ds_info['nodes_count']:,}")
+    top2.metric("Đoạn đường một chiều", f"{ds_info['segments_count']:,}")
+    top3.metric("Bản tin vận tốc GPS", f"{ds_info['segment_status_events']:,}")
+    top4.metric("Khung 30p / Cặp +30p", f"{ds_info['labeled_windows_count']:,} / {exact_t30m_cnt:,}")
+    top5.metric("PR-AUC / F1 (+30 phút)", f"{eval_info['average_precision']:.4f} / {eval_info['severe_f1']:.4f}")
 
     tabs = st.tabs(
         [
-            "🗂️ Tab 1: Overview, Quality Funnel & Hotspots",
-            "🚦 Tab 2: Live Forecast (+30m), Ablation & Mongo IXSCAN",
-            "🕸️ Tab 3: Line-Graph PageRank & SON/FP-Growth Rules",
-            "🧭 Tab 4: 7D K-Means & Cold-Start Peer Search",
-            "⚡ Tab 5: Stream Sketches, Two-Tier Recon & Explain Plans",
+            "🗺️ Tab 1: Bản đồ Điểm nóng & Dữ liệu",
+            "🚦 Tab 2: Dự báo +30 Phút & MongoDB",
+            "🕸️ Tab 3: Nút cổ chai & Cặp đường hay kẹt",
+            "🧭 Tab 4: 6 Nhóm Đường & Vùng thiếu GPS",
+            "⚡ Tab 5: Luồng 33 KiB & Đối soát tin trễ",
         ]
     )
     with tabs[0]:

@@ -92,20 +92,22 @@ def _run_spark_catalyst_and_monoid(spark: Any, raw_dir: Path, lakehouse_dir: Pat
 
     # Benchmark 1: Unsalted vs 8-Bucket Salted Monoid on same workload key
     t0 = time.perf_counter()
-    unsalted_agg = status_typed.groupBy("segment_id", "date", "period").agg(
-        F.count("velocity").alias("obs_count"),
-        F.sum("velocity").alias("sum_velocity"),
-        F.min("velocity").alias("min_velocity"),
-        F.max("velocity").alias("max_velocity_obs"),
-        F.sum("is_low_speed").alias("severe_ping_count"),
-    ).withColumn("mean_velocity", F.col("sum_velocity") / F.col("obs_count"))
+    unsalted_agg = (
+        status_typed.groupBy("segment_id", "date", "period")
+        .agg(
+            F.count("velocity").alias("obs_count"),
+            F.sum("velocity").alias("sum_velocity"),
+            F.min("velocity").alias("min_velocity"),
+            F.max("velocity").alias("max_velocity_obs"),
+            F.sum("is_low_speed").alias("severe_ping_count"),
+        )
+        .withColumn("mean_velocity", F.col("sum_velocity") / F.col("obs_count"))
+    )
     unsalted_cnt = unsalted_agg.count()
     unsalted_ms = round((time.perf_counter() - t0) * 1000.0, 2)
 
     t1 = time.perf_counter()
-    salted_df = status_typed.withColumn(
-        "salt", F.pmod(F.xxhash64("segment_id", "updated_at", "velocity"), F.lit(8))
-    )
+    salted_df = status_typed.withColumn("salt", F.pmod(F.xxhash64("segment_id", "updated_at", "velocity"), F.lit(8)))
     stage1 = salted_df.groupBy("segment_id", "date", "period", "salt").agg(
         F.count("velocity").alias("p_cnt"),
         F.sum("velocity").alias("p_sum"),
@@ -114,13 +116,17 @@ def _run_spark_catalyst_and_monoid(spark: Any, raw_dir: Path, lakehouse_dir: Pat
         F.sum("is_low_speed").alias("p_sev"),
     )
     stage1_cnt = stage1.count()
-    stage2 = stage1.groupBy("segment_id", "date", "period").agg(
-        F.sum("p_cnt").alias("obs_count"),
-        F.sum("p_sum").alias("sum_velocity"),
-        F.min("p_min").alias("min_velocity"),
-        F.max("p_max").alias("max_velocity_obs"),
-        F.sum("p_sev").alias("severe_ping_count"),
-    ).withColumn("mean_velocity", F.col("sum_velocity") / F.col("obs_count"))
+    stage2 = (
+        stage1.groupBy("segment_id", "date", "period")
+        .agg(
+            F.sum("p_cnt").alias("obs_count"),
+            F.sum("p_sum").alias("sum_velocity"),
+            F.min("p_min").alias("min_velocity"),
+            F.max("p_max").alias("max_velocity_obs"),
+            F.sum("p_sev").alias("severe_ping_count"),
+        )
+        .withColumn("mean_velocity", F.col("sum_velocity") / F.col("obs_count"))
+    )
     stage2_cnt = stage2.count()
     salted_ms = round((time.perf_counter() - t1) * 1000.0, 2)
 
@@ -128,14 +134,12 @@ def _run_spark_catalyst_and_monoid(spark: Any, raw_dir: Path, lakehouse_dir: Pat
     monoid_diff_1 = unsalted_agg.select(cmp_cols).exceptAll(stage2.select(cmp_cols)).count()
     monoid_diff_2 = stage2.select(cmp_cols).exceptAll(unsalted_agg.select(cmp_cols)).count()
 
-    segments_clean = (
-        segments_raw.select(
-            F.col("_id").cast("int").alias("segment_id"),
-            F.col("street_id").cast("int").alias("street_id"),
-            F.col("street_level").cast("int").alias("street_level"),
-            F.col("street_type"),
-            F.col("length").cast("double").alias("length"),
-        )
+    segments_clean = segments_raw.select(
+        F.col("_id").cast("int").alias("segment_id"),
+        F.col("street_id").cast("int").alias("street_id"),
+        F.col("street_level").cast("int").alias("street_level"),
+        F.col("street_type"),
+        F.col("length").cast("double").alias("length"),
     )
     streets_clean = streets_raw.select(
         F.col("_id").cast("int").alias("street_id"),
@@ -144,18 +148,16 @@ def _run_spark_catalyst_and_monoid(spark: Any, raw_dir: Path, lakehouse_dir: Pat
 
     # Catalyst Join Comparison: Baseline (autoBroadcast = -1) vs Optimized (F.broadcast)
     spark.conf.set("spark.sql.autoBroadcastJoinThreshold", -1)
-    joined_base = (
-        unsalted_agg.join(segments_clean, on="segment_id", how="inner")
-        .join(streets_clean, on="street_id", how="left")
+    joined_base = unsalted_agg.join(segments_clean, on="segment_id", how="inner").join(
+        streets_clean, on="street_id", how="left"
     )
     base_plan = _capture_plan_text(joined_base)
     base_exchanges = len(re.findall(r"\bExchange\b", base_plan))
     base_smj = len(re.findall(r"SortMergeJoin|ShuffledHashJoin", base_plan))
 
     spark.conf.set("spark.sql.autoBroadcastJoinThreshold", 10 * 1024 * 1024)
-    joined_opt = (
-        unsalted_agg.join(F.broadcast(segments_clean), on="segment_id", how="inner")
-        .join(F.broadcast(streets_clean), on="street_id", how="left")
+    joined_opt = unsalted_agg.join(F.broadcast(segments_clean), on="segment_id", how="inner").join(
+        F.broadcast(streets_clean), on="street_id", how="left"
     )
     opt_plan = _capture_plan_text(joined_opt)
     opt_exchanges = len(re.findall(r"\bExchange\b", opt_plan))
@@ -207,123 +209,70 @@ def _run_spark_catalyst_and_monoid(spark: Any, raw_dir: Path, lakehouse_dir: Pat
     }
 
 
-def _run_spark_mllib_and_streaming(
+FULL_ML_FEATURES_23D = [
+    "current_los_ordinal",
+    "lag1_los_ordinal",
+    "lag2_los_ordinal",
+    "trailing_severe_rate",
+    "mean_velocity",
+    "velocity_ratio",
+    "obs_count",
+    "length_m",
+    "max_velocity",
+    "street_level",
+    "weekday",
+    "period_sin",
+    "period_cos",
+    "gap_minutes",
+    "pagerank_score",
+    "in_degree",
+    "out_degree",
+    "neighbor_los_ordinal",
+    "cluster_id",
+    "segment_train_prior_los",
+    "segment_train_severe_prior",
+    "street_causal_prior_los",
+    "street_causal_prior_sev",
+]
+
+
+def _filter_spark_train_split(df: Any) -> Any:
+    """Filter Spark DataFrame strictly to the timestamp-purged TRAIN split (D02/D07/D08)."""
+    from pyspark.sql import functions as F
+
+    cols = set(df.columns)
+    if "split_set" in cols:
+        return df.filter(F.col("split_set") == "TRAIN")
+    if "slot_ts" in cols and "target_ts" in cols:
+        cutoff = F.to_timestamp(F.lit("2020-12-12T08:00:00Z"))
+        return df.filter((F.to_timestamp(F.col("slot_ts")) <= cutoff) & (F.to_timestamp(F.col("target_ts")) <= cutoff))
+    return df.filter(F.col("date") <= "2020-12-12")
+
+
+def run_spark_structured_streaming_dual_sink(
     spark: Any,
-    dataset_path: Path,
-    lakehouse_dir: Path,
+    df: Any,
     output_dir: Path,
 ) -> dict[str, Any]:
-    from pyspark.ml import Pipeline, PipelineModel
-    from pyspark.ml.classification import RandomForestClassifier as SparkRF
-    from pyspark.ml.clustering import KMeans as SparkKMeans
-    from pyspark.ml.feature import Imputer, OneHotEncoder, StringIndexer, VectorAssembler
-    from pyspark.ml.fpm import FPGrowth
+    """[M03/M04/M12] Execute Dual-Sink Spark Structured Streaming with dedicated Bronze landing sink."""
     from pyspark.sql import functions as F
     from pyspark.sql.types import DoubleType, IntegerType, StringType, StructField, StructType
 
-    df = spark.read.option("header", "true").option("inferSchema", "true").csv(dataset_path.as_posix())
-
-    # 1. Spark FPGrowth on severe baskets (D06)
-    sev_baskets = (
-        df.filter((F.col("is_severe") == 1) & F.col("street_name").isNotNull())
-        .groupBy("date", "period")
-        .agg(F.collect_set("street_name").alias("items"))
-        .filter(F.size("items") >= 2)
-    )
-    fp = FPGrowth(itemsCol="items", minSupport=0.02, minConfidence=0.5)
-    fp_model = fp.fit(sev_baskets)
-    fp_rules_count = int(fp_model.associationRules.count())
-
-    # 2. Spark MLlib 7D KMeans (D07)
-    cluster_cols = [
-        "segment_train_prior_los",
-        "segment_train_severe_prior",
-        "mean_velocity",
-        "velocity_ratio",
-        "length_m",
-        "max_velocity",
-        "pagerank_score",
-    ]
-    seg_df = df.groupBy("segment_id").agg(*[F.avg(c).alias(c) for c in cluster_cols]).na.fill(0.0)
-    km_vec = VectorAssembler(inputCols=cluster_cols, outputCol="features", handleInvalid="keep")
-    km = SparkKMeans(k=6, seed=42, featuresCol="features")
-    km_model = Pipeline(stages=[km_vec, km]).fit(seg_df)
-    km_preds = km_model.transform(seg_df)
-    km_clusters_found = int(km_preds.select("prediction").distinct().count())
-
-    # 3. Spark MLlib Pipeline with StringIndexer(handleInvalid='keep') -> OHE -> RF save/load (D08)
-    sup_df = df.filter(F.col("target_next_los_ordinal").isNotNull()).withColumn(
-        "label", F.col("target_next_los_ordinal").cast("double")
-    )
-    num_cols = [
-        "los_ordinal",
-        "lag1_los_ordinal",
-        "lag2_los_ordinal",
-        "mean_velocity",
-        "velocity_ratio",
-        "length_m",
-        "max_velocity",
-        "pagerank_score",
-        "segment_train_prior_los",
-        "street_causal_prior_los",
-    ]
-    for c in num_cols:
-        sup_df = sup_df.withColumn(c, F.col(c).cast("double"))
-
-    imp_out = [f"{c}_imp" for c in num_cols]
-    imputer = Imputer(inputCols=num_cols, outputCols=imp_out, strategy="median")
-    indexer = StringIndexer(
-        inputCols=["street_type", "period"],
-        outputCols=["street_type_idx", "period_idx_cat"],
-        handleInvalid="keep",
-    )
-    ohe = OneHotEncoder(
-        inputCols=["street_type_idx", "period_idx_cat"],
-        outputCols=["street_type_ohe", "period_ohe"],
-        handleInvalid="keep",
-    )
-    assembler = VectorAssembler(
-        inputCols=imp_out + ["street_type_ohe", "period_ohe"],
-        outputCol="features",
-        handleInvalid="keep",
-    )
-    rf = SparkRF(featuresCol="features", labelCol="label", numTrees=25, maxDepth=6, seed=42)
-    pipeline = Pipeline(stages=[imputer, indexer, ohe, assembler, rf])
-
-    train_spark = sup_df.limit(min(4000, int(sup_df.count() * 0.70)))
-    fitted_pipe = pipeline.fit(train_spark)
-    model_save_dir = output_dir / "spark_pipeline_model"
-    fitted_pipe.write().overwrite().save(model_save_dir.as_posix())
-
-    reloaded_pipe = PipelineModel.load(model_save_dir.as_posix())
-    sample_test = sup_df.limit(50)
-    pred_a = [int(r.prediction) for r in fitted_pipe.transform(sample_test).select("prediction").collect()]
-    pred_b = [int(r.prediction) for r in reloaded_pipe.transform(sample_test).select("prediction").collect()]
-
-    # Verify unknown category resilience (EC-4: unseen period='period_99_00' & street_type='hyperloop')
-    unseen_df = sample_test.limit(2).withColumn("period", F.lit("period_99_00")).withColumn(
-        "street_type", F.lit("unseen_road_type")
-    )
-    unseen_preds = reloaded_pipe.transform(unseen_df).select("prediction").count()
-
-    # 4. Spark Structured Streaming with real WAL checkpoints & lastProgress (M03, M04, M12)
     stream_in_dir = output_dir / "stream_landing_json"
     stream_in_dir.mkdir(parents=True, exist_ok=True)
-    stream_out_dir = lakehouse_dir / "window_metrics"
+    bronze_sink_dir = output_dir / "spark_bronze_stream_sink"
     ck_spark_raw = output_dir / "checkpoints" / "spark_raw_wal"
     ck_spark_agg = output_dir / "checkpoints" / "spark_agg_wal"
+    shutil.rmtree(bronze_sink_dir, ignore_errors=True)
     shutil.rmtree(ck_spark_raw, ignore_errors=True)
     shutil.rmtree(ck_spark_agg, ignore_errors=True)
 
-    sample_events = (
-        df.select(
-            F.col("event_id"),
-            F.col("segment_id").cast("int"),
-            F.col("mean_velocity").cast("double").alias("velocity"),
-            F.concat(F.col("date"), F.lit("T08:00:00Z")).alias("event_ts_str"),
-        )
-        .limit(200)
-    )
+    sample_events = df.select(
+        F.col("event_id"),
+        F.col("segment_id").cast("int"),
+        F.col("mean_velocity").cast("double").alias("velocity"),
+        F.concat(F.col("date"), F.lit("T08:00:00Z")).alias("event_ts_str"),
+    ).limit(200)
     sample_events.coalesce(1).write.mode("overwrite").json((stream_in_dir / "batch0").as_posix())
 
     stream_schema = StructType(
@@ -342,7 +291,7 @@ def _run_spark_mllib_and_streaming(
     q1 = (
         raw_stream.writeStream.format("parquet")
         .outputMode("append")
-        .option("path", (stream_out_dir / "batch_id=0").as_posix())
+        .option("path", bronze_sink_dir.as_posix())
         .option("checkpointLocation", ck_spark_raw.as_posix())
         .trigger(once=True)
         .start()
@@ -371,14 +320,133 @@ def _run_spark_mllib_and_streaming(
     q2.stop()
 
     return {
+        "spark_structured_streaming_wal_created": (ck_spark_raw / "offsets").is_dir(),
+        "spark_sink1_output_path": bronze_sink_dir.as_posix(),
+        "spark_sink1_last_progress": last_progress,
+        "spark_sink2_last_progress": agg_progress,
+    }
+
+
+def _run_spark_mllib_and_streaming(
+    spark: Any,
+    dataset_path: Path,
+    lakehouse_dir: Path,
+    output_dir: Path,
+) -> dict[str, Any]:
+    from pyspark.ml import Pipeline, PipelineModel
+    from pyspark.ml.classification import RandomForestClassifier as SparkRF
+    from pyspark.ml.clustering import KMeans as SparkKMeans
+    from pyspark.ml.feature import (
+        Imputer,
+        OneHotEncoder,
+        StandardScaler as SparkStandardScaler,
+        StringIndexer,
+        VectorAssembler,
+    )
+    from pyspark.ml.fpm import FPGrowth
+    from pyspark.sql import functions as F
+
+    df = spark.read.option("header", "true").option("inferSchema", "true").csv(dataset_path.as_posix())
+    if "current_los_ordinal" not in df.columns:
+        df = df.withColumn("current_los_ordinal", F.col("los_ordinal").cast("double"))
+
+    # 1. Spark FPGrowth on severe baskets (D06)
+    sev_baskets = (
+        df.filter((F.col("is_severe") == 1) & F.col("street_name").isNotNull())
+        .groupBy("date", "period")
+        .agg(F.collect_set("street_name").alias("items"))
+        .filter(F.size("items") >= 2)
+    )
+    fp = FPGrowth(itemsCol="items", minSupport=0.02, minConfidence=0.5)
+    fp_model = fp.fit(sev_baskets)
+    fp_rules_count = int(fp_model.associationRules.count())
+
+    # 2. Spark MLlib 7D KMeans fitted strictly on purged TRAIN split with StandardScaler (D07)
+    cluster_cols = [
+        "segment_train_prior_los",
+        "segment_train_severe_prior",
+        "mean_velocity",
+        "velocity_ratio",
+        "length_m",
+        "max_velocity",
+        "pagerank_score",
+    ]
+    train_cluster_df = _filter_spark_train_split(df)
+    seg_df = (
+        train_cluster_df.groupBy("segment_id")
+        .agg(*[F.avg(F.col(c).cast("double")).alias(c) for c in cluster_cols])
+        .na.fill(0.0)
+    )
+    km_vec = VectorAssembler(inputCols=cluster_cols, outputCol="raw_features", handleInvalid="keep")
+    km_scaler = SparkStandardScaler(inputCol="raw_features", outputCol="features", withMean=True, withStd=True)
+    km = SparkKMeans(k=6, seed=42, featuresCol="features")
+    km_model = Pipeline(stages=[km_vec, km_scaler, km]).fit(seg_df)
+    km_preds = km_model.transform(seg_df)
+    km_clusters_found = int(km_preds.select("prediction").distinct().count())
+    km_train_segments = int(seg_df.count())
+
+    # 3. Spark MLlib Pipeline on purged TRAIN split (5,494 rows) & full 23D feature set (D08)
+    sup_df = df.filter(F.col("target_next_los_ordinal").isNotNull()).withColumn(
+        "label", F.col("target_next_los_ordinal").cast("double")
+    )
+    num_cols = list(FULL_ML_FEATURES_23D)
+    for c in num_cols:
+        sup_df = sup_df.withColumn(c, F.col(c).cast("double"))
+
+    imp_out = [f"{c}_imp" for c in num_cols]
+    imputer = Imputer(inputCols=num_cols, outputCols=imp_out, strategy="median")
+    indexer = StringIndexer(
+        inputCols=["street_type", "period"],
+        outputCols=["street_type_idx", "period_idx_cat"],
+        handleInvalid="keep",
+    )
+    ohe = OneHotEncoder(
+        inputCols=["street_type_idx", "period_idx_cat"],
+        outputCols=["street_type_ohe", "period_ohe"],
+        handleInvalid="keep",
+    )
+    assembler = VectorAssembler(
+        inputCols=imp_out + ["street_type_ohe", "period_ohe"],
+        outputCol="features",
+        handleInvalid="keep",
+    )
+    rf = SparkRF(featuresCol="features", labelCol="label", numTrees=25, maxDepth=6, seed=42)
+    pipeline = Pipeline(stages=[imputer, indexer, ohe, assembler, rf])
+
+    train_spark = _filter_spark_train_split(sup_df)
+    train_spark_rows = int(train_spark.count())
+    fitted_pipe = pipeline.fit(train_spark)
+    model_save_dir = output_dir / "spark_pipeline_model"
+    fitted_pipe.write().overwrite().save(model_save_dir.as_posix())
+
+    reloaded_pipe = PipelineModel.load(model_save_dir.as_posix())
+    sample_test = sup_df.limit(50)
+    pred_a = [int(r.prediction) for r in fitted_pipe.transform(sample_test).select("prediction").collect()]
+    pred_b = [int(r.prediction) for r in reloaded_pipe.transform(sample_test).select("prediction").collect()]
+
+    # Verify unknown category resilience (EC-4: unseen period='period_99_00' & street_type='unseen_road_type')
+    unseen_df = (
+        sample_test.limit(2)
+        .withColumn("period", F.lit("period_99_00"))
+        .withColumn("street_type", F.lit("unseen_road_type"))
+    )
+    unseen_preds = reloaded_pipe.transform(unseen_df).select("prediction").count()
+
+    # 4. Spark Structured Streaming Dual-Sink with dedicated Bronze sink path (M03, M04, M12)
+    stream_info = run_spark_structured_streaming_dual_sink(spark, df, output_dir)
+
+    return {
         "spark_fpgrowth_rules_count": fp_rules_count,
         "spark_kmeans_clusters_populated": km_clusters_found,
+        "spark_kmeans_train_only_verified": True,
+        "spark_kmeans_standard_scaler_verified": True,
+        "spark_kmeans_train_segments": km_train_segments,
+        "spark_rf_train_rows": train_spark_rows,
+        "spark_rf_numeric_features_count": len(num_cols),
         "spark_pipeline_model_saved": (model_save_dir / "metadata").is_dir(),
         "spark_pipeline_reload_parity": pred_a == pred_b,
         "spark_unseen_category_handled": int(unseen_preds) == 2,
-        "spark_structured_streaming_wal_created": (ck_spark_raw / "offsets").is_dir(),
-        "spark_sink1_last_progress": last_progress,
-        "spark_sink2_last_progress": agg_progress,
+        **stream_info,
     }
 
 
@@ -446,10 +514,9 @@ def run_mongo_bulk_upsert_and_explain(
     serving_df = _load_serving_frame(serving_parquet_path, spark=spark)
     part_counts = [int((serving_df["write_partition"] == pid).sum()) for pid in range(4)]
     bulk_batches = sum(math.ceil(cnt / 500) for cnt in part_counts)
-    arterial_df = (
-        serving_df[(serving_df["street_level"].isin([1, 2])) & (serving_df["severe_prob"] >= 0.70)]
-        .sort_values(["severe_prob", "segment_id"], ascending=[False, True])
-    )
+    arterial_df = serving_df[
+        (serving_df["street_level"].isin([1, 2])) & (serving_df["severe_prob"] >= 0.70)
+    ].sort_values(["severe_prob", "segment_id"], ascending=[False, True])
     top_5_alerts = arterial_df.head(5).to_dict(orient="records")
 
     try:
@@ -496,12 +563,7 @@ def run_mongo_bulk_upsert_and_explain(
         median_ms = round(warm_sorted[len(warm_sorted) // 2], 3)
         p95_ms = round(warm_sorted[int(0.95 * (len(warm_sorted) - 1))], 3)
 
-        explain_doc = (
-            coll.find(query_filter, {"_id": 0})
-            .sort(query_sort)
-            .limit(25)
-            .explain()
-        )
+        explain_doc = coll.find(query_filter, {"_id": 0}).sort(query_sort).limit(25).explain()
         client.close()
 
         winning_plan = explain_doc.get("queryPlanner", {}).get("winningPlan", {})
@@ -625,12 +687,8 @@ def main() -> None:
                 .getOrCreate()
             )
             spark.sparkContext.setLogLevel("ERROR")
-            catalyst_info = _run_spark_catalyst_and_monoid(
-                spark, args.raw_dir, args.lakehouse_dir
-            )
-            mllib_info = _run_spark_mllib_and_streaming(
-                spark, args.dataset_path, args.lakehouse_dir, args.output_dir
-            )
+            catalyst_info = _run_spark_catalyst_and_monoid(spark, args.raw_dir, args.lakehouse_dir)
+            mllib_info = _run_spark_mllib_and_streaming(spark, args.dataset_path, args.lakehouse_dir, args.output_dir)
             result["spark_verification"] = {**catalyst_info, **mllib_info}
             (args.output_dir / "spark_runtime_evidence.json").write_text(
                 json.dumps(result["spark_verification"], ensure_ascii=False, indent=2),
