@@ -556,6 +556,19 @@ def _append_cover_and_ch1_context(story: list, s: dict[str, ParagraphStyle], gt:
     story.append(Spacer(1, 6))
     story.append(
         Paragraph(
+            "<b>Phạm vi cập nhật 18/11/2026:</b> Chữ ký artifact được đồng bộ với manifest của lần chạy lại. "
+            f"MongoDB warm median/p95 mới: {gt['mongo_med']} / {gt['mongo_p95']} (MongoDB 8.0.38). "
+            "Các số đo 0.530/0.636 ms, phiên bản 8.0.34 và ảnh chụp bên dưới thuộc lần chạy trước. "
+            "Nguồn nghiệm thu hiện tại: evidence/session9/README.md và manifest.json. "
+            "Consumer Kafka/Mongo được kiểm thử riêng; availability lịch sử vẫn UNVERIFIED. "
+            "Không dùng các số skew khác population, latency truy vấn warm hoặc độ phủ cold-start "
+            "để khẳng định giảm task skew, latency toàn hệ thống hoặc accuracy. "
+            "Bản PDF này chỉ được nghiệm thu sau khi render và kiểm tra cùng DOCX/PPTX.",
+            s["caption"],
+        )
+    )
+    story.append(
+        Paragraph(
             "Hệ Thống Giám Sát Hiện Trạng &amp; Dự Báo Ùn Tắc Giao Thông Đô Thị TP. Hồ Chí Minh",
             s["title"],
         )
@@ -2931,7 +2944,7 @@ def build_proposal_pdf(out_path: Path) -> None:
     doc.build(story, canvasmaker=NumberedCanvas)
 
 
-def main() -> None:
+def _legacy_main() -> None:
     primary_pdf = REPO_DIR / "HCMC_Smart_Traffic_Final_Report.pdf"
     build_proposal_pdf(primary_pdf)
     sync_targets = [
@@ -2944,6 +2957,17 @@ def main() -> None:
             except OSError:
                 pass
     print(f"Built {primary_pdf} ({primary_pdf.stat().st_size:,} bytes)")
+
+
+def main() -> None:
+    """Build the current report from the same evidence as the manual and slides."""
+    import sys
+
+    sys.path.insert(0, str(REPO_DIR))
+    from scripts.session9_build_artifacts import main as build_current
+
+    sys.argv = [sys.argv[0], "--only", "report"]
+    build_current()
 
 
 if __name__ == "__main__":

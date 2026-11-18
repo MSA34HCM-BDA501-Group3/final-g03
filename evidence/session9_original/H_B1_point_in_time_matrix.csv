@@ -1,0 +1,47 @@
+forecast_origin_ict,target_time_ict,feature_idx,feature_name,feature_group,source_window_rule,source_timestamp_ict,availability_timestamp_ict,uses_target_interval_t_to_t30m,pass_fail
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,1,mean_velocity,Local & Lag (7D),"Window [t-30m, t]",2020-07-03 10:00 ICT,2020-07-03 10:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,2,velocity_ratio,Local & Lag (7D),"Window [t-30m, t] / Train Vmax",2020-07-03 10:00 ICT,2020-07-03 10:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,3,los_ordinal,Local & Lag (7D),Derived from velocity_ratio at t,2020-07-03 10:00 ICT,2020-07-03 10:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,4,lag_1_velocity,Local & Lag (7D),"Window [t-60m, t-30m] (t-1 slot)",2020-07-03 10:00 ICT,2020-07-03 10:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,5,lag_2_velocity,Local & Lag (7D),"Window [t-90m, t-60m] (t-2 slot)",2020-07-03 10:00 ICT,2020-07-03 10:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,6,rolling_3_mean_v,Local & Lag (7D),"Mean over [t-60m, t-30m, t]",2020-07-03 10:00 ICT,2020-07-03 10:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,7,velocity_delta_1,Local & Lag (7D),mean_velocity(t) - lag_1_velocity(t-30m),2020-07-03 10:00 ICT,2020-07-03 10:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,8,period_sin,Calendar & Geometry (7D),Deterministic clock at t (ICT UTC+7),2020-07-03 10:00 ICT,2020-07-03 10:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,9,period_cos,Calendar & Geometry (7D),Deterministic clock at t (ICT UTC+7),2020-07-03 10:00 ICT,2020-07-03 10:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,10,weekday,Calendar & Geometry (7D),Deterministic calendar at t (ICT UTC+7),2020-07-03 10:00 ICT,2020-07-03 10:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,11,is_weekend,Calendar & Geometry (7D),Deterministic calendar at t (ICT UTC+7),2020-07-03 10:00 ICT,2020-07-03 10:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,12,length_m,Calendar & Geometry (7D),Static OSM road segment length,TRAIN Split (< 2020-12-06 UTC),Frozen before inference (Phase A),NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,13,street_level,Calendar & Geometry (7D),Static road hierarchy level (1..4),TRAIN Split (< 2020-12-06 UTC),Frozen before inference (Phase A),NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,14,max_velocity,Calendar & Geometry (7D),Train-only 3-Tier Vmax lookup,TRAIN Split (< 2020-12-06 UTC),Frozen before inference (Phase A),NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,15,pagerank_score,"Graph, Cluster & Priors (9D)",Directed Line-Graph PageRank (beta=0.85),TRAIN Split (< 2020-12-06 UTC),Frozen before inference (Phase A),NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,16,in_degree,"Graph, Cluster & Priors (9D)",Pruned intersection incoming edges,TRAIN Split (< 2020-12-06 UTC),Frozen before inference (Phase A),NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,17,out_degree,"Graph, Cluster & Priors (9D)",Pruned intersection outgoing edges,TRAIN Split (< 2020-12-06 UTC),Frozen before inference (Phase A),NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,18,neighbor_lag1_velocity,"Graph, Cluster & Priors (9D)",Upstream segment velocity at t-30m,2020-07-03 10:00 ICT,2020-07-03 10:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,19,neighbor_severe_Exposure,"Graph, Cluster & Priors (9D)",Upstream severe flag at t-30m,2020-07-03 10:00 ICT,2020-07-03 10:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,20,segment_causal_prior_los,"Graph, Cluster & Priors (9D)",Cumulative mean LOS strictly tau < t,2020-07-03 10:00 ICT,2020-07-03 10:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,21,segment_causal_prior_sev,"Graph, Cluster & Priors (9D)",Cumulative severe rate strictly tau < t,2020-07-03 10:00 ICT,2020-07-03 10:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,22,street_causal_prior_los,"Graph, Cluster & Priors (9D)",Street-level prior strictly tau < t,2020-07-03 10:00 ICT,2020-07-03 10:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 10:00 ICT,2020-07-03 10:30 ICT,23,cluster_id,"Graph, Cluster & Priors (9D)",Train-only 7D K-Means behavioral archetype,TRAIN Split (< 2020-12-06 UTC),Frozen before inference (Phase A),NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,1,mean_velocity,Local & Lag (7D),"Window [t-30m, t]",2020-07-03 11:00 ICT,2020-07-03 11:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,2,velocity_ratio,Local & Lag (7D),"Window [t-30m, t] / Train Vmax",2020-07-03 11:00 ICT,2020-07-03 11:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,3,los_ordinal,Local & Lag (7D),Derived from velocity_ratio at t,2020-07-03 11:00 ICT,2020-07-03 11:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,4,lag_1_velocity,Local & Lag (7D),"Window [t-60m, t-30m] (t-1 slot)",2020-07-03 11:00 ICT,2020-07-03 11:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,5,lag_2_velocity,Local & Lag (7D),"Window [t-90m, t-60m] (t-2 slot)",2020-07-03 11:00 ICT,2020-07-03 11:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,6,rolling_3_mean_v,Local & Lag (7D),"Mean over [t-60m, t-30m, t]",2020-07-03 11:00 ICT,2020-07-03 11:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,7,velocity_delta_1,Local & Lag (7D),mean_velocity(t) - lag_1_velocity(t-30m),2020-07-03 11:00 ICT,2020-07-03 11:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,8,period_sin,Calendar & Geometry (7D),Deterministic clock at t (ICT UTC+7),2020-07-03 11:00 ICT,2020-07-03 11:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,9,period_cos,Calendar & Geometry (7D),Deterministic clock at t (ICT UTC+7),2020-07-03 11:00 ICT,2020-07-03 11:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,10,weekday,Calendar & Geometry (7D),Deterministic calendar at t (ICT UTC+7),2020-07-03 11:00 ICT,2020-07-03 11:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,11,is_weekend,Calendar & Geometry (7D),Deterministic calendar at t (ICT UTC+7),2020-07-03 11:00 ICT,2020-07-03 11:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,12,length_m,Calendar & Geometry (7D),Static OSM road segment length,TRAIN Split (< 2020-12-06 UTC),Frozen before inference (Phase A),NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,13,street_level,Calendar & Geometry (7D),Static road hierarchy level (1..4),TRAIN Split (< 2020-12-06 UTC),Frozen before inference (Phase A),NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,14,max_velocity,Calendar & Geometry (7D),Train-only 3-Tier Vmax lookup,TRAIN Split (< 2020-12-06 UTC),Frozen before inference (Phase A),NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,15,pagerank_score,"Graph, Cluster & Priors (9D)",Directed Line-Graph PageRank (beta=0.85),TRAIN Split (< 2020-12-06 UTC),Frozen before inference (Phase A),NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,16,in_degree,"Graph, Cluster & Priors (9D)",Pruned intersection incoming edges,TRAIN Split (< 2020-12-06 UTC),Frozen before inference (Phase A),NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,17,out_degree,"Graph, Cluster & Priors (9D)",Pruned intersection outgoing edges,TRAIN Split (< 2020-12-06 UTC),Frozen before inference (Phase A),NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,18,neighbor_lag1_velocity,"Graph, Cluster & Priors (9D)",Upstream segment velocity at t-30m,2020-07-03 11:00 ICT,2020-07-03 11:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,19,neighbor_severe_Exposure,"Graph, Cluster & Priors (9D)",Upstream severe flag at t-30m,2020-07-03 11:00 ICT,2020-07-03 11:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,20,segment_causal_prior_los,"Graph, Cluster & Priors (9D)",Cumulative mean LOS strictly tau < t,2020-07-03 11:00 ICT,2020-07-03 11:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,21,segment_causal_prior_sev,"Graph, Cluster & Priors (9D)",Cumulative severe rate strictly tau < t,2020-07-03 11:00 ICT,2020-07-03 11:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,22,street_causal_prior_los,"Graph, Cluster & Priors (9D)",Street-level prior strictly tau < t,2020-07-03 11:00 ICT,2020-07-03 11:00 ICT,NO (0 target-window leakage),PASS
+2020-07-03 11:00 ICT,2020-07-03 11:30 ICT,23,cluster_id,"Graph, Cluster & Priors (9D)",Train-only 7D K-Means behavioral archetype,TRAIN Split (< 2020-12-06 UTC),Frozen before inference (Phase A),NO (0 target-window leakage),PASS

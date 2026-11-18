@@ -24,7 +24,7 @@
     "optimized_exchange_stages": 2,
     "broadcast_hash_join_present": true,
     "dataframe_vs_sql_exceptAll_diff": 0,
-    "baseline_plan_excerpt": "== Physical Plan ==\nAdaptiveSparkPlan isFinalPlan=false\n+- Project [street_id#461, segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_level#462, street_type#52, length#463, raw_street_name#471]\n   +- SortMergeJoin [street_id#461], [street_id#470], LeftOuter\n      :- Sort [street_id#461 ASC NULLS FIRST], false, 0\n      :  +- Exchange hashpartitioning(street_id#461, 8), ENSURE_REQUIREMENTS, [plan_id=1437]\n      :     +- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_id#461, street_level#462, street_type#52, length#463]\n      :        +- SortMergeJoin [segment_id#91], [segment_id#460], Inner\n      :           :- Sort [segment_id#91 ASC NULLS FIRST], false, 0\n      :           :  +- Exchange hashpartitioning(segment_id#91, 8), ENSURE_REQUIREMENTS, [plan_id=1429]\n      :           :     +- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, (sum_velocity#143 / cast(ob",
+    "baseline_plan_excerpt": "== Physical Plan ==\nAdaptiveSparkPlan isFinalPlan=false\n+- Project [street_id#461, segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_level#462, street_type#52, length#463, raw_street_name#471]\n   +- SortMergeJoin [street_id#461], [street_id#470], LeftOuter\n      :- Sort [street_id#461 ASC NULLS FIRST], false, 0\n      :  +- Exchange hashpartitioning(street_id#461, 8), ENSURE_REQUIREMENTS, [plan_id=1447]\n      :     +- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_id#461, street_level#462, street_type#52, length#463]\n      :        +- SortMergeJoin [segment_id#91], [segment_id#460], Inner\n      :           :- Sort [segment_id#91 ASC NULLS FIRST], false, 0\n      :           :  +- Exchange hashpartitioning(segment_id#91, 8), ENSURE_REQUIREMENTS, [plan_id=1439]\n      :           :     +- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, (sum_velocity#143 / cast(ob",
     "optimized_plan_excerpt": "== Physical Plan ==\nAdaptiveSparkPlan isFinalPlan=false\n+- Project [street_id#461, segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_level#462, street_type#52, length#463, raw_street_name#471]\n   +- BroadcastHashJoin [street_id#461], [street_id#470], LeftOuter, BuildRight, false\n      :- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_id#461, street_level#462, street_type#52, length#463]\n      :  +- BroadcastHashJoin [segment_id#91], [segment_id#460], Inner, BuildRight, false\n      :     :- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, (sum_velocity#143 / cast(obs_count#141L as double)) AS mean_velocity#158]\n      :     :  +- HashAggregate(keys=[segment_id#91, date#108, period#115], functions=[count(velocity#97), sum(velocity#97), min(velocity#97), max(velocity#97), sum(is_low_speed#123)])\n      :     :     +- Exchange hashpartitioning(segment_id#91, date#1",
     "partitioned_parquet_column": "year_month",
     "partition_count": 10,
@@ -38,8 +38,8 @@
       "unsalted_windows": 33441,
       "stage1_salted_groups": 59828,
       "stage2_reduced_windows": 33441,
-      "unsalted_runtime_ms": 1054.17,
-      "salted_runtime_ms": 1073.37,
+      "unsalted_runtime_ms": 1181.79,
+      "salted_runtime_ms": 1099.71,
       "two_way_exceptAll_diff": 0
     },
     "catalyst_join_spark": {
@@ -49,7 +49,7 @@
       "optimized_broadcast_joins_measured": 4,
       "broadcast_hash_join_present": true,
       "two_way_exceptAll_diff": 0,
-      "baseline_plan_excerpt": "== Physical Plan ==\nAdaptiveSparkPlan isFinalPlan=false\n+- Project [street_id#461, segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_level#462, street_type#52, length#463, raw_street_name#471]\n   +- SortMergeJoin [street_id#461], [street_id#470], LeftOuter\n      :- Sort [street_id#461 ASC NULLS FIRST], false, 0\n      :  +- Exchange hashpartitioning(street_id#461, 8), ENSURE_REQUIREMENTS, [plan_id=1437]\n      :     +- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_id#461, street_level#462, street_type#52, length#463]\n      :        +- SortMergeJoin [segment_id#91], [segment_id#460], Inner\n      :           :- Sort [segment_id#91 ASC NULLS FIRST], false, 0\n      :           :  +- Exchange hashpartitioning(segment_id#91, 8), ENSURE_REQUIREMENTS, [plan_id=1429]\n      :           :     +- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, (sum_velocity#143 / cast(ob",
+      "baseline_plan_excerpt": "== Physical Plan ==\nAdaptiveSparkPlan isFinalPlan=false\n+- Project [street_id#461, segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_level#462, street_type#52, length#463, raw_street_name#471]\n   +- SortMergeJoin [street_id#461], [street_id#470], LeftOuter\n      :- Sort [street_id#461 ASC NULLS FIRST], false, 0\n      :  +- Exchange hashpartitioning(street_id#461, 8), ENSURE_REQUIREMENTS, [plan_id=1447]\n      :     +- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_id#461, street_level#462, street_type#52, length#463]\n      :        +- SortMergeJoin [segment_id#91], [segment_id#460], Inner\n      :           :- Sort [segment_id#91 ASC NULLS FIRST], false, 0\n      :           :  +- Exchange hashpartitioning(segment_id#91, 8), ENSURE_REQUIREMENTS, [plan_id=1439]\n      :           :     +- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, (sum_velocity#143 / cast(ob",
       "optimized_plan_excerpt": "== Physical Plan ==\nAdaptiveSparkPlan isFinalPlan=false\n+- Project [street_id#461, segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_level#462, street_type#52, length#463, raw_street_name#471]\n   +- BroadcastHashJoin [street_id#461], [street_id#470], LeftOuter, BuildRight, false\n      :- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_id#461, street_level#462, street_type#52, length#463]\n      :  +- BroadcastHashJoin [segment_id#91], [segment_id#460], Inner, BuildRight, false\n      :     :- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, (sum_velocity#143 / cast(obs_count#141L as double)) AS mean_velocity#158]\n      :     :  +- HashAggregate(keys=[segment_id#91, date#108, period#115], functions=[count(velocity#97), sum(velocity#97), min(velocity#97), max(velocity#97), sum(is_low_speed#123)])\n      :     :     +- Exchange hashpartitioning(segment_id#91, date#1"
     },
     "parquet_pruning_spark": {
@@ -69,22 +69,22 @@
     "spark_structured_streaming_wal_created": true,
     "spark_sink1_output_path": "outputs/spark_bronze_stream_sink",
     "spark_sink1_last_progress": {
-      "id": "f1c5e56f-53d3-4cfb-8764-2717ac071bf2",
-      "runId": "c8541d4d-0887-47a9-a9e0-ac7c9e6193fe",
+      "id": "11eb8051-68bb-410d-bf45-540ee8694d9c",
+      "runId": "ab2f1dce-1f02-4918-99cd-1345bc93313b",
       "name": null,
-      "timestamp": "2026-11-09T13:25:11.038Z",
+      "timestamp": "2026-11-17T18:25:06.941Z",
       "batchId": 0,
       "numInputRows": 200,
       "inputRowsPerSecond": 0.0,
-      "processedRowsPerSecond": 262.4671916010499,
+      "processedRowsPerSecond": 239.52095808383234,
       "durationMs": {
-        "addBatch": 252,
-        "commitOffsets": 115,
-        "getBatch": 58,
-        "latestOffset": 168,
-        "queryPlanning": 34,
-        "triggerExecution": 762,
-        "walCommit": 114
+        "addBatch": 290,
+        "commitOffsets": 124,
+        "getBatch": 50,
+        "latestOffset": 174,
+        "queryPlanning": 23,
+        "triggerExecution": 834,
+        "walCommit": 151
       },
       "stateOperators": [],
       "sources": [
@@ -97,7 +97,7 @@
           "latestOffset": null,
           "numInputRows": 200,
           "inputRowsPerSecond": 0.0,
-          "processedRowsPerSecond": 262.4671916010499
+          "processedRowsPerSecond": 239.52095808383234
         }
       ],
       "sink": {
@@ -106,22 +106,22 @@
       }
     },
     "spark_sink2_last_progress": {
-      "id": "061a7333-3d69-484f-8424-e01aa65e0ed7",
-      "runId": "c2c41bfe-8eae-49e3-94ff-8d9826d5d425",
+      "id": "0f588edb-40a2-4ee9-b679-a8047e481f07",
+      "runId": "61a20110-a7e4-49e5-912f-5083d4216c19",
       "name": "hcmc_agg_sink2",
-      "timestamp": "2026-11-09T13:25:12.014Z",
+      "timestamp": "2026-11-17T18:25:08.101Z",
       "batchId": 0,
       "numInputRows": 200,
       "inputRowsPerSecond": 0.0,
-      "processedRowsPerSecond": 146.09203798392988,
+      "processedRowsPerSecond": 119.61722488038278,
       "durationMs": {
-        "addBatch": 907,
-        "commitOffsets": 116,
-        "getBatch": 38,
-        "latestOffset": 158,
-        "queryPlanning": 32,
-        "triggerExecution": 1369,
-        "walCommit": 108
+        "addBatch": 1121,
+        "commitOffsets": 135,
+        "getBatch": 39,
+        "latestOffset": 215,
+        "queryPlanning": 26,
+        "triggerExecution": 1672,
+        "walCommit": 123
       },
       "eventTime": {
         "avg": "2020-07-29T10:45:36.000Z",
@@ -134,10 +134,10 @@
           "operatorName": "stateStoreSave",
           "numRowsTotal": 14,
           "numRowsUpdated": 14,
-          "allUpdatesTimeMs": 253,
+          "allUpdatesTimeMs": 260,
           "numRowsRemoved": 0,
-          "allRemovalsTimeMs": 4,
-          "commitTimeMs": 632,
+          "allRemovalsTimeMs": 8,
+          "commitTimeMs": 926,
           "memoryUsedBytes": 10944,
           "numRowsDroppedByWatermark": 0,
           "numShufflePartitions": 8,
@@ -159,7 +159,7 @@
           "latestOffset": null,
           "numInputRows": 200,
           "inputRowsPerSecond": 0.0,
-          "processedRowsPerSecond": 146.09203798392988
+          "processedRowsPerSecond": 119.61722488038278
         }
       ],
       "sink": {

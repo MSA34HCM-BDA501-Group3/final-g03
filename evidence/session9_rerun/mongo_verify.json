@@ -1,0 +1,319 @@
+{
+  "component": "[C16] MongoDB 8.0 Operational Serving Store (bda501.traffic_scores)",
+  "status": "verified",
+  "database": "bda501",
+  "collection": "traffic_scores",
+  "mongo_server_version": "8.0.38",
+  "write_protocol": "repartition(4, 'segment_id') -> foreachPartition 500-doc Bulk UpdateOne(upsert=True)",
+  "write_partitions": 4,
+  "partition_row_counts": [
+    8131,
+    8485,
+    8222,
+    8603
+  ],
+  "partition_write_summaries": [
+    {
+      "partition_id": 0,
+      "batches": 17,
+      "upserted": 8131,
+      "matched": 0,
+      "rows": 8131
+    },
+    {
+      "partition_id": 1,
+      "batches": 17,
+      "upserted": 8485,
+      "matched": 0,
+      "rows": 8485
+    },
+    {
+      "partition_id": 2,
+      "batches": 17,
+      "upserted": 8222,
+      "matched": 0,
+      "rows": 8222
+    },
+    {
+      "partition_id": 3,
+      "batches": 18,
+      "upserted": 8603,
+      "matched": 0,
+      "rows": 8603
+    }
+  ],
+  "total_rows_upserted": 33441,
+  "count_after_idempotent_replay": 33441,
+  "idempotent_replay_verified": true,
+  "bulk_write_batches": 69,
+  "batch_size": 500,
+  "frozen_model_sha256": "97a5a63e4e347092894e270f32aa0cb74b4fe565364657c76cbf3b3b15c7142c",
+  "indexes_created": {
+    "event_id_unique": {
+      "key": [
+        [
+          "event_id",
+          1
+        ]
+      ],
+      "unique": true
+    },
+    "level_prob_segment_idx": {
+      "key": [
+        [
+          "street_level",
+          1
+        ],
+        [
+          "severe_prob",
+          -1
+        ],
+        [
+          "segment_id",
+          1
+        ]
+      ],
+      "unique": false
+    }
+  },
+  "uc2_arterial_query": {
+    "filter": {
+      "street_level": {
+        "$in": [
+          1,
+          2
+        ]
+      },
+      "severe_prob": {
+        "$gte": 0.7
+      }
+    },
+    "sort": [
+      [
+        "severe_prob",
+        -1
+      ],
+      [
+        "segment_id",
+        1
+      ]
+    ],
+    "limit": 25,
+    "total_matching_windows": 1669,
+    "top_5_arterial_alerts": [
+      {
+        "event_id": "bd9a95f8cc78082f19775e7b",
+        "segment_id": 3073,
+        "street_name": "Nguyễn Kiệm",
+        "street_level": 2,
+        "date": "2021-01-05",
+        "period": "period_15_30",
+        "vn_hour": 22.5,
+        "current_los": "F",
+        "pagerank_score": 0.9894324090465811,
+        "cluster_id": 4,
+        "predicted_next_los": "F",
+        "severe_prob": 1.0,
+        "write_partition": 1,
+        "scored_in_online_phase_b": true,
+        "phase_b_status": "STREAM_PROVISIONAL",
+        "lifecycle_status": "BATCH_VERIFIED",
+        "status_version": 2,
+        "model_version": "rf_full_23d_v3"
+      },
+      {
+        "event_id": "31be3e68a3114f16cbba6cd6",
+        "segment_id": 3073,
+        "street_name": "Nguyễn Kiệm",
+        "street_level": 2,
+        "date": "2021-01-05",
+        "period": "period_21_30",
+        "vn_hour": 4.5,
+        "current_los": "F",
+        "pagerank_score": 0.9894324090465811,
+        "cluster_id": 4,
+        "predicted_next_los": "F",
+        "severe_prob": 1.0,
+        "write_partition": 1,
+        "scored_in_online_phase_b": true,
+        "phase_b_status": "STREAM_PROVISIONAL",
+        "lifecycle_status": "BATCH_VERIFIED",
+        "status_version": 2,
+        "model_version": "rf_full_23d_v3"
+      },
+      {
+        "event_id": "3272a783c95f2dcd210a4e59",
+        "segment_id": 3078,
+        "street_name": "Nguyễn Kiệm",
+        "street_level": 2,
+        "date": "2020-12-26",
+        "period": "period_7_30",
+        "vn_hour": 14.5,
+        "current_los": "F",
+        "pagerank_score": 0.997418854666554,
+        "cluster_id": 2,
+        "predicted_next_los": "F",
+        "severe_prob": 1.0,
+        "write_partition": 2,
+        "scored_in_online_phase_b": true,
+        "phase_b_status": "STREAM_PROVISIONAL",
+        "lifecycle_status": "BATCH_VERIFIED",
+        "status_version": 2,
+        "model_version": "rf_full_23d_v3"
+      },
+      {
+        "event_id": "4a1b94efd39d75aea59d0a55",
+        "segment_id": 3078,
+        "street_name": "Nguyễn Kiệm",
+        "street_level": 2,
+        "date": "2020-12-26",
+        "period": "period_8_00",
+        "vn_hour": 15.0,
+        "current_los": "F",
+        "pagerank_score": 0.997418854666554,
+        "cluster_id": 5,
+        "predicted_next_los": "F",
+        "severe_prob": 1.0,
+        "write_partition": 2,
+        "scored_in_online_phase_b": true,
+        "phase_b_status": "STREAM_PROVISIONAL",
+        "lifecycle_status": "BATCH_VERIFIED",
+        "status_version": 2,
+        "model_version": "rf_full_23d_v3"
+      },
+      {
+        "event_id": "c824af1c20da456d0aa43071",
+        "segment_id": 3078,
+        "street_name": "Nguyễn Kiệm",
+        "street_level": 2,
+        "date": "2020-12-26",
+        "period": "period_8_30",
+        "vn_hour": 15.5,
+        "current_los": "F",
+        "pagerank_score": 0.997418854666554,
+        "cluster_id": 5,
+        "predicted_next_los": "F",
+        "severe_prob": 1.0,
+        "write_partition": 2,
+        "scored_in_online_phase_b": true,
+        "phase_b_status": "STREAM_PROVISIONAL",
+        "lifecycle_status": "BATCH_VERIFIED",
+        "status_version": 2,
+        "model_version": "rf_full_23d_v3"
+      }
+    ],
+    "latency_benchmark_ms": {
+      "cold_query_ms": 0.909,
+      "warm_min_ms": 0.302,
+      "warm_median_ms": 0.432,
+      "warm_p95_ms": 0.565,
+      "warm_max_ms": 0.726,
+      "sla_under_10ms_verified": true
+    }
+  },
+  "ixscan_explain_verification": {
+    "status": "verified",
+    "verified_against_mongo_8_0": true,
+    "index_used": "level_prob_segment_idx",
+    "winning_stages": [
+      "LIMIT",
+      "PROJECTION_SIMPLE",
+      "FETCH",
+      "SORT_MERGE",
+      "IXSCAN",
+      "IXSCAN"
+    ],
+    "in_memory_sort": false,
+    "raw_winning_plan": {
+      "isCached": false,
+      "stage": "LIMIT",
+      "limitAmount": 25,
+      "inputStage": {
+        "stage": "PROJECTION_SIMPLE",
+        "transformBy": {
+          "_id": 0
+        },
+        "inputStage": {
+          "stage": "FETCH",
+          "inputStage": {
+            "stage": "SORT_MERGE",
+            "sortPattern": {
+              "severe_prob": -1,
+              "segment_id": 1
+            },
+            "inputStages": [
+              {
+                "stage": "IXSCAN",
+                "keyPattern": {
+                  "street_level": 1,
+                  "severe_prob": -1,
+                  "segment_id": 1
+                },
+                "indexName": "level_prob_segment_idx",
+                "isMultiKey": false,
+                "multiKeyPaths": {
+                  "street_level": [],
+                  "severe_prob": [],
+                  "segment_id": []
+                },
+                "isUnique": false,
+                "isSparse": false,
+                "isPartial": false,
+                "indexVersion": 2,
+                "direction": "forward",
+                "indexBounds": {
+                  "street_level": [
+                    "[1, 1]"
+                  ],
+                  "severe_prob": [
+                    "[inf.0, 0.7]"
+                  ],
+                  "segment_id": [
+                    "[MinKey, MaxKey]"
+                  ]
+                }
+              },
+              {
+                "stage": "IXSCAN",
+                "keyPattern": {
+                  "street_level": 1,
+                  "severe_prob": -1,
+                  "segment_id": 1
+                },
+                "indexName": "level_prob_segment_idx",
+                "isMultiKey": false,
+                "multiKeyPaths": {
+                  "street_level": [],
+                  "severe_prob": [],
+                  "segment_id": []
+                },
+                "isUnique": false,
+                "isSparse": false,
+                "isPartial": false,
+                "indexVersion": 2,
+                "direction": "forward",
+                "indexBounds": {
+                  "street_level": [
+                    "[2, 2]"
+                  ],
+                  "severe_prob": [
+                    "[inf.0, 0.7]"
+                  ],
+                  "segment_id": [
+                    "[MinKey, MaxKey]"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "execution_stats": {
+      "nReturned": 25,
+      "totalKeysExamined": 26,
+      "totalDocsExamined": 25,
+      "executionTimeMillis": 0
+    }
+  }
+}

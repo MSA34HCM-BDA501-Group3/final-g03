@@ -1,0 +1,48 @@
+== Parsed Logical Plan ==
+'Join UsingJoin(Inner, [segment_id])
+:- Filter ((isnotnull(segment_id#26L) AND ((velocity#27 >= cast(0 as double)) AND (velocity#27 <= cast(200 as double)))) AND isnotnull(event_ts#28))
+:  +- Project [_id#17 AS raw_event_id#25, cast(segment_id#19 as bigint) AS segment_id#26L, cast(velocity#20 as double) AS velocity#27, to_timestamp(updated_at#18, None, TimestampType, Some(UTC), false) AS event_ts#28]
+:     +- Relation [_id#17,updated_at#18,segment_id#19,velocity#20] csv
++- ResolvedHint (strategy=broadcast)
+   +- Project [cast(_id#71 as bigint) AS segment_id#93L, street_id#77]
+      +- Relation [_id#71,created_at#72,updated_at#73,s_node_id#74,e_node_id#75,length#76,street_id#77,max_velocity#78,street_level#79,street_name#80,street_type#81] csv
+
+== Analyzed Logical Plan ==
+segment_id: bigint, raw_event_id: string, velocity: double, event_ts: timestamp, street_id: string
+Project [segment_id#26L, raw_event_id#25, velocity#27, event_ts#28, street_id#77]
++- Join Inner, (segment_id#26L = segment_id#93L)
+   :- Filter ((isnotnull(segment_id#26L) AND ((velocity#27 >= cast(0 as double)) AND (velocity#27 <= cast(200 as double)))) AND isnotnull(event_ts#28))
+   :  +- Project [_id#17 AS raw_event_id#25, cast(segment_id#19 as bigint) AS segment_id#26L, cast(velocity#20 as double) AS velocity#27, to_timestamp(updated_at#18, None, TimestampType, Some(UTC), false) AS event_ts#28]
+   :     +- Relation [_id#17,updated_at#18,segment_id#19,velocity#20] csv
+   +- ResolvedHint (strategy=broadcast)
+      +- Project [cast(_id#71 as bigint) AS segment_id#93L, street_id#77]
+         +- Relation [_id#71,created_at#72,updated_at#73,s_node_id#74,e_node_id#75,length#76,street_id#77,max_velocity#78,street_level#79,street_name#80,street_type#81] csv
+
+== Optimized Logical Plan ==
+Project [segment_id#26L, raw_event_id#25, velocity#27, event_ts#28, street_id#77]
++- Join Inner, (segment_id#26L = segment_id#93L), rightHint=(strategy=broadcast)
+   :- Filter isnotnull(segment_id#26L)
+   :  +- InMemoryRelation [raw_event_id#25, segment_id#26L, velocity#27, event_ts#28], StorageLevel(disk, memory, deserialized, 1 replicas)
+   :        +- *(1) Project [_id#17 AS raw_event_id#25, cast(segment_id#19 as bigint) AS segment_id#26L, cast(velocity#20 as double) AS velocity#27, cast(updated_at#18 as timestamp) AS event_ts#28]
+   :           +- *(1) Filter ((((((isnotnull(segment_id#19) AND isnotnull(velocity#20)) AND isnotnull(updated_at#18)) AND isnotnull(cast(segment_id#19 as bigint))) AND (cast(velocity#20 as double) >= 0.0)) AND (cast(velocity#20 as double) <= 200.0)) AND isnotnull(cast(updated_at#18 as timestamp)))
+   :              +- FileScan csv [_id#17,updated_at#18,segment_id#19,velocity#20] Batched: false, DataFilters: [isnotnull(segment_id#19), isnotnull(velocity#20), isnotnull(updated_at#18), isnotnull(cast(segme..., Format: CSV, Location: InMemoryFileIndex(1 paths)[file:/workspace/raw_data/segment_status.csv], PartitionFilters: [], PushedFilters: [IsNotNull(segment_id), IsNotNull(velocity), IsNotNull(updated_at)], ReadSchema: struct<_id:string,updated_at:string,segment_id:string,velocity:string>
+   +- Filter isnotnull(segment_id#93L)
+      +- InMemoryRelation [segment_id#93L, street_id#77], StorageLevel(disk, memory, deserialized, 1 replicas)
+            +- *(1) Project [cast(_id#71 as bigint) AS segment_id#93L, street_id#77]
+               +- FileScan csv [_id#71,street_id#77] Batched: false, DataFilters: [], Format: CSV, Location: InMemoryFileIndex(1 paths)[file:/workspace/raw_data/segments.csv], PartitionFilters: [], PushedFilters: [], ReadSchema: struct<_id:string,street_id:string>
+
+== Physical Plan ==
+*(2) Project [segment_id#26L, raw_event_id#25, velocity#27, event_ts#28, street_id#77]
++- *(2) BroadcastHashJoin [segment_id#26L], [segment_id#93L], Inner, BuildRight, false
+   :- *(2) Filter isnotnull(segment_id#26L)
+   :  +- InMemoryTableScan [raw_event_id#25, segment_id#26L, velocity#27, event_ts#28], [isnotnull(segment_id#26L)]
+   :        +- InMemoryRelation [raw_event_id#25, segment_id#26L, velocity#27, event_ts#28], StorageLevel(disk, memory, deserialized, 1 replicas)
+   :              +- *(1) Project [_id#17 AS raw_event_id#25, cast(segment_id#19 as bigint) AS segment_id#26L, cast(velocity#20 as double) AS velocity#27, cast(updated_at#18 as timestamp) AS event_ts#28]
+   :                 +- *(1) Filter ((((((isnotnull(segment_id#19) AND isnotnull(velocity#20)) AND isnotnull(updated_at#18)) AND isnotnull(cast(segment_id#19 as bigint))) AND (cast(velocity#20 as double) >= 0.0)) AND (cast(velocity#20 as double) <= 200.0)) AND isnotnull(cast(updated_at#18 as timestamp)))
+   :                    +- FileScan csv [_id#17,updated_at#18,segment_id#19,velocity#20] Batched: false, DataFilters: [isnotnull(segment_id#19), isnotnull(velocity#20), isnotnull(updated_at#18), isnotnull(cast(segme..., Format: CSV, Location: InMemoryFileIndex(1 paths)[file:/workspace/raw_data/segment_status.csv], PartitionFilters: [], PushedFilters: [IsNotNull(segment_id), IsNotNull(velocity), IsNotNull(updated_at)], ReadSchema: struct<_id:string,updated_at:string,segment_id:string,velocity:string>
+   +- BroadcastExchange HashedRelationBroadcastMode(List(input[0, bigint, false]),false), [plan_id=1005]
+      +- *(1) Filter isnotnull(segment_id#93L)
+         +- InMemoryTableScan [segment_id#93L, street_id#77], [isnotnull(segment_id#93L)]
+               +- InMemoryRelation [segment_id#93L, street_id#77], StorageLevel(disk, memory, deserialized, 1 replicas)
+                     +- *(1) Project [cast(_id#71 as bigint) AS segment_id#93L, street_id#77]
+                        +- FileScan csv [_id#71,street_id#77] Batched: false, DataFilters: [], Format: CSV, Location: InMemoryFileIndex(1 paths)[file:/workspace/raw_data/segments.csv], PartitionFilters: [], PushedFilters: [], ReadSchema: struct<_id:string,street_id:string>

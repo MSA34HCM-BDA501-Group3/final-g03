@@ -1,0 +1,16 @@
+{
+  "run_id": "raw-c8c7fa7014bd4b54a1e03fe153b8397b",
+  "deliveries": 21,
+  "duplicates": 1,
+  "bloom_false_positives": 0,
+  "exact_segments": 1,
+  "hll_segments": 1.0004885993744506,
+  "memory": {
+    "bloom_array_bytes": 32768,
+    "hll_register_bytes": 1024,
+    "oracle_enabled_for_benchmark": 1
+  },
+  "aggregate_impact": 0,
+  "alert_impact": 0,
+  "reason": "Online decisions always use exact Mongo identities; sketches are evaluator-only on this same stream."
+}

@@ -1,0 +1,4 @@
+﻿"sha256:f9414d8d3e482f5dd097fd2e3ceb0604f3acea7db18c789ced4e8fada3f8851e" ["final-g03-app:latest"] ["final-g03-app@sha256:f9414d8d3e482f5dd097fd2e3ceb0604f3acea7db18c789ced4e8fada3f8851e"]
+"sha256:f1bd9ab8b55c9ed60be4793d999490b3e842b6bb7233ba26ce3a8582def5d8c0" ["final-g03-spark:latest"] ["final-g03-spark@sha256:f1bd9ab8b55c9ed60be4793d999490b3e842b6bb7233ba26ce3a8582def5d8c0"]
+"sha256:bff074a5d0051dbc0bbbcd25b045bb1fe84833ec0d3c7c965d1797dd289ec88f" ["apache/kafka:4.1.0"] ["apache/kafka@sha256:bff074a5d0051dbc0bbbcd25b045bb1fe84833ec0d3c7c965d1797dd289ec88f"]
+"sha256:bdc216e9d5a6ec2cfdac789b5832fdab64cd32055f59885cae918a92de63c361" ["mongo:8.0","mongo:8.0.38"] ["mongo@sha256:bdc216e9d5a6ec2cfdac789b5832fdab64cd32055f59885cae918a92de63c361"]

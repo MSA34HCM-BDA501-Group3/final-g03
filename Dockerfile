@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.13.9-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -6,11 +6,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY requirements.txt ./
+COPY evidence/session9_rerun/environment.txt ./requirements.txt
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 COPY app.py baseline.py pipeline.py producer.py starter_stream.py spark_engine.py spark_batch.py ./
+COPY traffic_online.py ./
 COPY scripts ./scripts
 COPY traffic_data ./traffic_data
 COPY product ./product

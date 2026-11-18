@@ -1372,7 +1372,7 @@ def _ensure_visual_assets() -> tuple[Path, Path, Path, Path, Path, Path]:
     return map_prob, map_cls, trans_chart, flow_img, ui2, ui4
 
 
-def main() -> None:
+def _legacy_main() -> None:
     arch_img = REPO_DIR / "outputs" / "system_architecture.png"
     eda_chart = render_eda_chart(CHART_DIR / "chart_eda_anomalies.png")
     render_spark_chart(CHART_DIR / "chart_spark_skew_catalyst.png")
@@ -1422,6 +1422,17 @@ def main() -> None:
         f"Generated {len(all_slides)} visual slides -> {pptx_path.name} ({pptx_path.stat().st_size:,} B) "
         f"& {pdf_path.name} ({pdf_path.stat().st_size:,} B)"
     )
+
+
+def main() -> None:
+    """Use the evidence-driven Session 9 builder for the current final deck."""
+    import sys
+
+    sys.path.insert(0, str(SCRIPT_DIR.parent))
+    from scripts.session9_build_artifacts import main as build_current
+
+    sys.argv = [sys.argv[0], "--only", "slides"]
+    build_current()
 
 
 if __name__ == "__main__":

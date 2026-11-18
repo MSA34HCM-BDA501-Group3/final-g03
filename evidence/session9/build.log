@@ -1,0 +1,106 @@
+﻿docker :  Image final-g03-spark Building 
+At line:2 char:1
++ docker compose build spark app 2>&1 | Out-File -LiteralPath evidence/ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ( Image final-g03-spark Building :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ Image final-g03-app Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 980B done
+#1 DONE 0.0s
+
+#2 [app internal] load build definition from Dockerfile
+#2 transferring dockerfile: 706B done
+#2 DONE 0.0s
+
+#3 [spark internal] load build definition from Dockerfile.session9
+#3 transferring dockerfile: 425B done
+#3 DONE 0.0s
+
+#4 [spark internal] load metadata for docker.io/library/python:3.13.9-slim-bookworm
+#4 DONE 3.2s
+
+#5 [app internal] load .dockerignore
+#5 transferring context: 123B done
+#5 DONE 0.0s
+
+#6 [spark 1/5] FROM docker.io/library/python:3.13.9-slim-bookworm@sha256:b685a4fa58bb19d1814d78a1ec0f0208f351452724f78b20212c984d6e124a34
+#6 resolve docker.io/library/python:3.13.9-slim-bookworm@sha256:b685a4fa58bb19d1814d78a1ec0f0208f351452724f78b20212c984d6e124a34 0.0s done
+#6 DONE 0.0s
+
+#7 [app internal] load build context
+#7 transferring context: 74.76kB 0.0s done
+#7 DONE 0.0s
+
+#8 [spark internal] load build context
+#8 transferring context: 1.19kB done
+#8 DONE 0.0s
+
+#9 [app  3/10] COPY evidence/session9_rerun/environment.txt ./requirements.txt
+#9 CACHED
+
+#10 [app  2/10] WORKDIR /app
+#10 CACHED
+
+#11 [spark 2/5] RUN apt-get update && apt-get install -y --no-install-recommends openjdk-17-jre-headless && rm -rf /var/lib/apt/lists/*
+#11 CACHED
+
+#12 [spark 3/5] WORKDIR /workspace
+#12 CACHED
+
+#13 [spark 4/5] COPY evidence/session9_rerun/environment.txt /tmp/environment.txt
+#13 CACHED
+
+#14 [app  4/10] RUN pip install --no-cache-dir --upgrade pip &&     pip install --no-cache-dir -r requirements.txt
+#14 CACHED
+
+#15 [spark 5/5] RUN pip install --no-cache-dir -r /tmp/environment.txt
+#15 CACHED
+
+#16 [spark] exporting to image
+#16 exporting layers done
+#16 exporting manifest sha256:792edcd1eef61b2a2775f3332d13dd7957989cd97d8671a0927a726ede935dd7 done
+#16 exporting config sha256:5fdd1a27f6f2063f271b79ed96b44decf2f59ea3040242b91b9069d12d8f7c1a done
+#16 exporting attestation manifest sha256:1ec0bf568e18a9c18406c4d2ac270b7c716914920d215a00bac8249564211405 0.0s done
+#16 exporting manifest list sha256:f1bd9ab8b55c9ed60be4793d999490b3e842b6bb7233ba26ce3a8582def5d8c0 0.0s done
+#16 naming to docker.io/library/final-g03-spark:latest
+#16 naming to docker.io/library/final-g03-spark:latest done
+#16 unpacking to docker.io/library/final-g03-spark:latest done
+#16 DONE 0.1s
+
+#17 [app  5/10] COPY app.py baseline.py pipeline.py producer.py starter_stream.py spark_engine.py spark_batch.py ./
+#17 DONE 0.0s
+
+#18 [app  6/10] COPY traffic_online.py ./
+#18 DONE 0.0s
+
+#19 [app  7/10] COPY scripts ./scripts
+#19 DONE 0.1s
+
+#20 [spark] resolving provenance for metadata file
+#20 DONE 0.0s
+
+#21 [app  8/10] COPY traffic_data ./traffic_data
+#21 DONE 0.0s
+
+#22 [app  9/10] COPY product ./product
+#22 DONE 0.0s
+
+#23 [app 10/10] RUN mkdir -p /app/raw_data /app/data /app/outputs
+#23 DONE 0.2s
+
+#24 [app] exporting to image
+#24 exporting layers 0.2s done
+#24 exporting manifest sha256:16ba7ee2d28434b187ee3c44159f2f0de04da9596c93cffd517ecbf69dbdba6d done
+#24 exporting config sha256:6110371efe924d98c2e3061c3b34f100872aa0ddde01569a74fdf98a947aeff8 0.0s done
+#24 exporting attestation manifest sha256:61c07ac817c6362215d835caf1974d696953eea8bbdd9e038c4552cc079d1e53 0.0s done
+#24 exporting manifest list sha256:f9414d8d3e482f5dd097fd2e3ceb0604f3acea7db18c789ced4e8fada3f8851e done
+#24 naming to docker.io/library/final-g03-app:latest done
+#24 unpacking to docker.io/library/final-g03-app:latest 0.1s done
+#24 DONE 0.3s
+
+#25 [app] resolving provenance for metadata file
+#25 DONE 0.0s
+ Image final-g03-spark Built 
+ Image final-g03-app Built 
