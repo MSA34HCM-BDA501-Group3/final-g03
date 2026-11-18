@@ -1,0 +1,21 @@
+services:
+  batch:
+    build:
+      context: .
+      dockerfile: Dockerfile.spark
+    hostname: localhost
+    environment:
+      SPARK_LOCAL_IP: 127.0.0.1
+    volumes:
+      - ./raw_data:/workspace/raw_data:ro
+      - ./data:/workspace/data
+    mem_limit: 6g
+    cpus: 4
+    command:
+      - --raw-dir
+      - raw_data
+      - --output-root
+      - data/quyen_spark_run
+      - --train-end
+      - ${TRAFFIC_FIT_CUTOFF:-2020-12-12T07:30:00Z}
+      - --overwrite

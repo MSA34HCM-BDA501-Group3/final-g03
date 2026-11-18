@@ -1,0 +1,36 @@
+# Python & Tooling Caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.crc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+env/
+toc_frontend/node_modules/
+.DS_Store
+Thumbs.db
+
+# Sensitive Data & Credentials (Guardrail Compliance)
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.crt
+*secret*
+*credentials*
+
+# Large Raw Datasets & Regenerable Lakehouse Tables (generated via `python pipeline.py`)
+# Note: lightweight `data/demo_sample/` is intentionally whitelisted for clean-checkout Kafka & B1/B2/B3 demos
+raw_data/
+/data/*
+!/data/demo_sample/
+outputs/live_reset_signal.json
+outputs/checkpoints/
+outputs/stream_sink1_bronze/
+outputs/live_bronze_wal.jsonl
+outputs/spark_bronze_stream_sink/
+outputs/stream_landing_json/

@@ -1,0 +1,40 @@
+{
+  "component": "[C1] GPS Probe Fleet & Replay Producer -> [C4] Kafka 4.1.0 KRaft",
+  "replay_mode": "window_aggregated_30m",
+  "denominator_note": "G02 Contract: Window-level replay operates on 33,441 aggregated 30m windows (1% = 334 duplicates, 3.5% = 1,170 late in-WM, 1.5% = 501 late out-of-WM). Raw ping replay operates on 90,938 raw segment_status pings.",
+  "seed": 42,
+  "topic": "hcmc-traffic-events",
+  "num_partitions": 3,
+  "partition_key": "segment_id",
+  "partition_distribution": {
+    "0": 11064,
+    "1": 11207,
+    "2": 11504
+  },
+  "total_events_emitted": 33775,
+  "valid_unique_events": 33441,
+  "injected_duplicate_events": 334,
+  "injected_late_in_watermark_events": 1170,
+  "injected_late_out_of_watermark_events": 501,
+  "affected_late_windows": 219,
+  "affected_late_segment_windows": 501,
+  "data_source_mode": "full_project_data",
+  "kafka_broker_delivery": {
+    "status": "verified",
+    "broker_connected": true,
+    "bootstrap_servers": "kafka:29092",
+    "topic": "hcmc-traffic-events",
+    "num_partitions": 3,
+    "messages_sent": 200,
+    "partition_messages_sent": {
+      "0": 78,
+      "1": 60,
+      "2": 62
+    },
+    "partition_end_offsets": {
+      "2": 443,
+      "1": 420,
+      "0": 574
+    }
+  }
+}

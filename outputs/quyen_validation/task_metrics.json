@@ -1,0 +1,277 @@
+{
+  "source": "SparkListenerTaskEnd",
+  "stages": [
+    {
+      "stage": 56,
+      "job_group": "monoid_unsalted",
+      "successful_tasks": 4,
+      "median_duration_ms": 40.5,
+      "max_duration_ms": 57,
+      "max_to_median_duration": 1.4074074074074074,
+      "shuffle_read_bytes": 0,
+      "shuffle_write_bytes": 936322
+    },
+    {
+      "stage": 57,
+      "job_group": "monoid_unsalted",
+      "successful_tasks": 4,
+      "median_duration_ms": 24.5,
+      "max_duration_ms": 29,
+      "max_to_median_duration": 1.183673469387755,
+      "shuffle_read_bytes": 936322,
+      "shuffle_write_bytes": 0
+    },
+    {
+      "stage": 61,
+      "job_group": "monoid_salted",
+      "successful_tasks": 4,
+      "median_duration_ms": 42.5,
+      "max_duration_ms": 59,
+      "max_to_median_duration": 1.388235294117647,
+      "shuffle_read_bytes": 0,
+      "shuffle_write_bytes": 1572682
+    },
+    {
+      "stage": 62,
+      "job_group": "monoid_salted",
+      "successful_tasks": 4,
+      "median_duration_ms": 53.5,
+      "max_duration_ms": 79,
+      "max_to_median_duration": 1.4766355140186915,
+      "shuffle_read_bytes": 1572682,
+      "shuffle_write_bytes": 952677
+    },
+    {
+      "stage": 63,
+      "job_group": "monoid_salted",
+      "successful_tasks": 4,
+      "median_duration_ms": 25.5,
+      "max_duration_ms": 32,
+      "max_to_median_duration": 1.2549019607843137,
+      "shuffle_read_bytes": 952677,
+      "shuffle_write_bytes": 0
+    }
+  ],
+  "tasks": [
+    {
+      "stage": 56,
+      "partition": 0,
+      "duration_ms": 57,
+      "executor_run_ms": 50,
+      "shuffle_read_bytes": 0,
+      "shuffle_write_bytes": 233729,
+      "shuffle_records_read": 0,
+      "successful": true,
+      "job_group": "monoid_unsalted"
+    },
+    {
+      "stage": 56,
+      "partition": 1,
+      "duration_ms": 56,
+      "executor_run_ms": 50,
+      "shuffle_read_bytes": 0,
+      "shuffle_write_bytes": 232830,
+      "shuffle_records_read": 0,
+      "successful": true,
+      "job_group": "monoid_unsalted"
+    },
+    {
+      "stage": 56,
+      "partition": 2,
+      "duration_ms": 25,
+      "executor_run_ms": 19,
+      "shuffle_read_bytes": 0,
+      "shuffle_write_bytes": 233966,
+      "shuffle_records_read": 0,
+      "successful": true,
+      "job_group": "monoid_unsalted"
+    },
+    {
+      "stage": 56,
+      "partition": 3,
+      "duration_ms": 24,
+      "executor_run_ms": 20,
+      "shuffle_read_bytes": 0,
+      "shuffle_write_bytes": 235797,
+      "shuffle_records_read": 0,
+      "successful": true,
+      "job_group": "monoid_unsalted"
+    },
+    {
+      "stage": 57,
+      "partition": 0,
+      "duration_ms": 28,
+      "executor_run_ms": 22,
+      "shuffle_read_bytes": 239212,
+      "shuffle_write_bytes": 0,
+      "shuffle_records_read": 12995,
+      "successful": true,
+      "job_group": "monoid_unsalted"
+    },
+    {
+      "stage": 57,
+      "partition": 1,
+      "duration_ms": 29,
+      "executor_run_ms": 22,
+      "shuffle_read_bytes": 230664,
+      "shuffle_write_bytes": 0,
+      "shuffle_records_read": 12473,
+      "successful": true,
+      "job_group": "monoid_unsalted"
+    },
+    {
+      "stage": 57,
+      "partition": 3,
+      "duration_ms": 20,
+      "executor_run_ms": 15,
+      "shuffle_read_bytes": 234426,
+      "shuffle_write_bytes": 0,
+      "shuffle_records_read": 12763,
+      "successful": true,
+      "job_group": "monoid_unsalted"
+    },
+    {
+      "stage": 57,
+      "partition": 2,
+      "duration_ms": 21,
+      "executor_run_ms": 16,
+      "shuffle_read_bytes": 232020,
+      "shuffle_write_bytes": 0,
+      "shuffle_records_read": 12574,
+      "successful": true,
+      "job_group": "monoid_unsalted"
+    },
+    {
+      "stage": 61,
+      "partition": 0,
+      "duration_ms": 59,
+      "executor_run_ms": 52,
+      "shuffle_read_bytes": 0,
+      "shuffle_write_bytes": 394539,
+      "shuffle_records_read": 0,
+      "successful": true,
+      "job_group": "monoid_salted"
+    },
+    {
+      "stage": 61,
+      "partition": 1,
+      "duration_ms": 59,
+      "executor_run_ms": 53,
+      "shuffle_read_bytes": 0,
+      "shuffle_write_bytes": 390269,
+      "shuffle_records_read": 0,
+      "successful": true,
+      "job_group": "monoid_salted"
+    },
+    {
+      "stage": 61,
+      "partition": 2,
+      "duration_ms": 26,
+      "executor_run_ms": 20,
+      "shuffle_read_bytes": 0,
+      "shuffle_write_bytes": 393330,
+      "shuffle_records_read": 0,
+      "successful": true,
+      "job_group": "monoid_salted"
+    },
+    {
+      "stage": 61,
+      "partition": 3,
+      "duration_ms": 25,
+      "executor_run_ms": 21,
+      "shuffle_read_bytes": 0,
+      "shuffle_write_bytes": 394544,
+      "shuffle_records_read": 0,
+      "successful": true,
+      "job_group": "monoid_salted"
+    },
+    {
+      "stage": 62,
+      "partition": 1,
+      "duration_ms": 78,
+      "executor_run_ms": 72,
+      "shuffle_read_bytes": 390778,
+      "shuffle_write_bytes": 235523,
+      "shuffle_records_read": 18109,
+      "successful": true,
+      "job_group": "monoid_salted"
+    },
+    {
+      "stage": 62,
+      "partition": 0,
+      "duration_ms": 79,
+      "executor_run_ms": 73,
+      "shuffle_read_bytes": 401560,
+      "shuffle_write_bytes": 242570,
+      "shuffle_records_read": 18662,
+      "successful": true,
+      "job_group": "monoid_salted"
+    },
+    {
+      "stage": 62,
+      "partition": 3,
+      "duration_ms": 29,
+      "executor_run_ms": 23,
+      "shuffle_read_bytes": 391929,
+      "shuffle_write_bytes": 238389,
+      "shuffle_records_read": 18276,
+      "successful": true,
+      "job_group": "monoid_salted"
+    },
+    {
+      "stage": 62,
+      "partition": 2,
+      "duration_ms": 29,
+      "executor_run_ms": 24,
+      "shuffle_read_bytes": 388415,
+      "shuffle_write_bytes": 236195,
+      "shuffle_records_read": 17975,
+      "successful": true,
+      "job_group": "monoid_salted"
+    },
+    {
+      "stage": 63,
+      "partition": 1,
+      "duration_ms": 31,
+      "executor_run_ms": 25,
+      "shuffle_read_bytes": 234907,
+      "shuffle_write_bytes": 0,
+      "shuffle_records_read": 11767,
+      "successful": true,
+      "job_group": "monoid_salted"
+    },
+    {
+      "stage": 63,
+      "partition": 0,
+      "duration_ms": 32,
+      "executor_run_ms": 24,
+      "shuffle_read_bytes": 243850,
+      "shuffle_write_bytes": 0,
+      "shuffle_records_read": 12208,
+      "successful": true,
+      "job_group": "monoid_salted"
+    },
+    {
+      "stage": 63,
+      "partition": 2,
+      "duration_ms": 20,
+      "executor_run_ms": 9,
+      "shuffle_read_bytes": 235119,
+      "shuffle_write_bytes": 0,
+      "shuffle_records_read": 11778,
+      "successful": true,
+      "job_group": "monoid_salted"
+    },
+    {
+      "stage": 63,
+      "partition": 3,
+      "duration_ms": 20,
+      "executor_run_ms": 9,
+      "shuffle_read_bytes": 238801,
+      "shuffle_write_bytes": 0,
+      "shuffle_records_read": 12018,
+      "successful": true,
+      "job_group": "monoid_salted"
+    }
+  ]
+}

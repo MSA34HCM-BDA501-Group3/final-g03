@@ -1,0 +1,560 @@
+{
+  "nosql_serving_audit_saved": {
+    "component": "[C16] MongoDB 8.0 Operational Serving Store (bda501.traffic_scores)",
+    "status": "verified",
+    "database": "bda501",
+    "collection": "traffic_scores",
+    "mongo_server_version": "8.0.34",
+    "write_protocol": "PyMongo 4-partitioned 500-doc Bulk UpdateOne with atomic $status_version pipeline guard",
+    "write_partitions": 4,
+    "partition_row_counts": [
+      8119,
+      8472,
+      8209,
+      8594
+    ],
+    "partition_write_summaries": [
+      {
+        "partition_id": 0,
+        "batches": 17,
+        "upserted": 8119,
+        "matched": 0,
+        "modified": 0,
+        "rows": 8119
+      },
+      {
+        "partition_id": 1,
+        "batches": 17,
+        "upserted": 8472,
+        "matched": 0,
+        "modified": 0,
+        "rows": 8472
+      },
+      {
+        "partition_id": 2,
+        "batches": 17,
+        "upserted": 8209,
+        "matched": 0,
+        "modified": 0,
+        "rows": 8209
+      },
+      {
+        "partition_id": 3,
+        "batches": 18,
+        "upserted": 8594,
+        "matched": 0,
+        "modified": 0,
+        "rows": 8594
+      }
+    ],
+    "total_rows_upserted": 33394,
+    "count_after_idempotent_replay": 33394,
+    "idempotent_replay_verified": true,
+    "stale_v1_rejected_by_mongo": 25,
+    "mongo_version_guard_verified": true,
+    "bulk_write_batches": 69,
+    "batch_size": 500,
+    "frozen_model_sha256": "a2e12b7c032acff65b2285d50499cc8a142cbfa1d4549c4f888ce473aac264de",
+    "indexes_created": {
+      "event_id_unique": {
+        "key": [
+          [
+            "event_id",
+            1
+          ]
+        ],
+        "unique": true
+      },
+      "level_prob_segment_idx": {
+        "key": [
+          [
+            "street_level",
+            1
+          ],
+          [
+            "severe_prob",
+            -1
+          ],
+          [
+            "segment_id",
+            1
+          ]
+        ],
+        "unique": false
+      }
+    },
+    "uc2_arterial_query": {
+      "filter": {
+        "street_level": {
+          "$in": [
+            1,
+            2
+          ]
+        },
+        "severe_prob": {
+          "$gte": 0.7
+        }
+      },
+      "sort": [
+        [
+          "severe_prob",
+          -1
+        ],
+        [
+          "segment_id",
+          1
+        ]
+      ],
+      "limit": 25,
+      "total_matching_windows": 1202,
+      "top_5_arterial_alerts": [
+        {
+          "event_id": "60039335b8c4efe618fa0db8",
+          "segment_id": 11572,
+          "street_name": "Quang Trung",
+          "street_level": 2,
+          "date": "2020-11-14",
+          "period": "period_13_00",
+          "vn_hour": 20.0,
+          "current_los": "F",
+          "pagerank_score": 1.3924843108490028,
+          "cluster_id": 2,
+          "predicted_next_los": "E",
+          "severe_prob": 1.0,
+          "write_partition": 0,
+          "scored_in_online_phase_b": false,
+          "evaluation_split": "TRAIN",
+          "phase_b_status": "STREAM_PROVISIONAL",
+          "lifecycle_status": "BATCH_VERIFIED",
+          "status_version": 2,
+          "model_version": "rf_full_23d_v3"
+        },
+        {
+          "event_id": "f77b0b8373bbda40df86c8d8",
+          "segment_id": 19467,
+          "street_name": "\u0110inh Ti\u00ean Ho\u00e0ng",
+          "street_level": 2,
+          "date": "2021-01-04",
+          "period": "period_1_00",
+          "vn_hour": 8.0,
+          "current_los": "F",
+          "pagerank_score": 1.3472340739823156,
+          "cluster_id": 5,
+          "predicted_next_los": "F",
+          "severe_prob": 1.0,
+          "write_partition": 3,
+          "scored_in_online_phase_b": true,
+          "evaluation_split": "TEST",
+          "phase_b_status": "STREAM_PROVISIONAL",
+          "lifecycle_status": "BATCH_VERIFIED",
+          "status_version": 2,
+          "model_version": "rf_full_23d_v3"
+        },
+        {
+          "event_id": "d9212dd1ad14cb9cb24a5f4a",
+          "segment_id": 19807,
+          "street_name": "Quang Trung",
+          "street_level": 2,
+          "date": "2020-11-14",
+          "period": "period_12_00",
+          "vn_hour": 19.0,
+          "current_los": "F",
+          "pagerank_score": 1.084113031897082,
+          "cluster_id": 2,
+          "predicted_next_los": "F",
+          "severe_prob": 1.0,
+          "write_partition": 3,
+          "scored_in_online_phase_b": false,
+          "evaluation_split": "TRAIN",
+          "phase_b_status": "STREAM_PROVISIONAL",
+          "lifecycle_status": "BATCH_VERIFIED",
+          "status_version": 2,
+          "model_version": "rf_full_23d_v3"
+        },
+        {
+          "event_id": "43218c2df52e7c8aa7a3a8c7",
+          "segment_id": 29135,
+          "street_name": "V\u00f5 V\u0103n Ki\u1ec7t",
+          "street_level": 2,
+          "date": "2020-11-27",
+          "period": "period_11_30",
+          "vn_hour": 18.5,
+          "current_los": "F",
+          "pagerank_score": 1.2314224238568048,
+          "cluster_id": 2,
+          "predicted_next_los": "F",
+          "severe_prob": 1.0,
+          "write_partition": 3,
+          "scored_in_online_phase_b": false,
+          "evaluation_split": "TRAIN",
+          "phase_b_status": "STREAM_PROVISIONAL",
+          "lifecycle_status": "BATCH_VERIFIED",
+          "status_version": 2,
+          "model_version": "rf_full_23d_v3"
+        },
+        {
+          "event_id": "a30d71c634dfff5e190d8a23",
+          "segment_id": 29135,
+          "street_name": "V\u00f5 V\u0103n Ki\u1ec7t",
+          "street_level": 2,
+          "date": "2020-11-27",
+          "period": "period_12_30",
+          "vn_hour": 19.5,
+          "current_los": "F",
+          "pagerank_score": 1.2314224238568048,
+          "cluster_id": 2,
+          "predicted_next_los": "F",
+          "severe_prob": 1.0,
+          "write_partition": 3,
+          "scored_in_online_phase_b": false,
+          "evaluation_split": "TRAIN",
+          "phase_b_status": "STREAM_PROVISIONAL",
+          "lifecycle_status": "BATCH_VERIFIED",
+          "status_version": 2,
+          "model_version": "rf_full_23d_v3"
+        }
+      ],
+      "latency_benchmark_ms": {
+        "cold_query_ms": 0.964,
+        "warm_min_ms": 0.252,
+        "warm_median_ms": 0.389,
+        "warm_p95_ms": 0.692,
+        "warm_max_ms": 1.1,
+        "sla_under_10ms_verified": true,
+        "collscan_warm_median_ms": 9.161,
+        "collscan_warm_p95_ms": 9.906,
+        "ixscan_vs_collscan_speedup_x": 23.55
+      }
+    },
+    "ixscan_explain_verification": {
+      "status": "verified",
+      "verified_against_mongo_8_0": true,
+      "index_used": "level_prob_segment_idx",
+      "winning_stages": [
+        "LIMIT",
+        "PROJECTION_SIMPLE",
+        "FETCH",
+        "SORT_MERGE",
+        "IXSCAN",
+        "IXSCAN"
+      ],
+      "in_memory_sort": false,
+      "raw_winning_plan": {
+        "isCached": false,
+        "stage": "LIMIT",
+        "limitAmount": 25,
+        "inputStage": {
+          "stage": "PROJECTION_SIMPLE",
+          "transformBy": {
+            "_id": 0
+          },
+          "inputStage": {
+            "stage": "FETCH",
+            "inputStage": {
+              "stage": "SORT_MERGE",
+              "sortPattern": {
+                "severe_prob": -1,
+                "segment_id": 1
+              },
+              "inputStages": [
+                {
+                  "stage": "IXSCAN",
+                  "keyPattern": {
+                    "street_level": 1,
+                    "severe_prob": -1,
+                    "segment_id": 1
+                  },
+                  "indexName": "level_prob_segment_idx",
+                  "isMultiKey": false,
+                  "multiKeyPaths": {
+                    "street_level": [],
+                    "severe_prob": [],
+                    "segment_id": []
+                  },
+                  "isUnique": false,
+                  "isSparse": false,
+                  "isPartial": false,
+                  "indexVersion": 2,
+                  "direction": "forward",
+                  "indexBounds": {
+                    "street_level": [
+                      "[1, 1]"
+                    ],
+                    "severe_prob": [
+                      "[inf.0, 0.7]"
+                    ],
+                    "segment_id": [
+                      "[MinKey, MaxKey]"
+                    ]
+                  }
+                },
+                {
+                  "stage": "IXSCAN",
+                  "keyPattern": {
+                    "street_level": 1,
+                    "severe_prob": -1,
+                    "segment_id": 1
+                  },
+                  "indexName": "level_prob_segment_idx",
+                  "isMultiKey": false,
+                  "multiKeyPaths": {
+                    "street_level": [],
+                    "severe_prob": [],
+                    "segment_id": []
+                  },
+                  "isUnique": false,
+                  "isSparse": false,
+                  "isPartial": false,
+                  "indexVersion": 2,
+                  "direction": "forward",
+                  "indexBounds": {
+                    "street_level": [
+                      "[2, 2]"
+                    ],
+                    "severe_prob": [
+                      "[inf.0, 0.7]"
+                    ],
+                    "segment_id": [
+                      "[MinKey, MaxKey]"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "execution_stats": {
+        "nReturned": 25,
+        "totalKeysExamined": 26,
+        "totalDocsExamined": 25,
+        "executionTimeMillis": 0
+      }
+    }
+  },
+  "nosql_serving_live_interleaved": {
+    "status": "verified",
+    "mongo_version": "8.0.34",
+    "doc_count": 33394,
+    "warmup_runs": 5,
+    "measured_runs": 25,
+    "interleaved": true,
+    "ixscan": {
+      "min_ms": 0.77,
+      "median_ms": 0.87,
+      "p95_ms": 1.23,
+      "iqr_ms": 0.14,
+      "max_ms": 1.55
+    },
+    "collscan": {
+      "min_ms": 9.21,
+      "median_ms": 9.5,
+      "p95_ms": 10.31,
+      "iqr_ms": 0.5,
+      "max_ms": 10.58
+    },
+    "speedup_x": 10.92,
+    "index_used": "level_prob_segment_idx",
+    "in_memory_sort": false,
+    "winning_stages": [
+      "LIMIT",
+      "PROJECTION_SIMPLE",
+      "FETCH",
+      "SORT_MERGE",
+      "IXSCAN",
+      "IXSCAN"
+    ],
+    "nReturned": 25,
+    "totalKeysExamined": 26,
+    "totalDocsExamined": 25,
+    "container": "groupexe-knowledgetest-mongo-1"
+  },
+  "streaming_audit_saved": {
+    "component": "[C1] GPS Probe Fleet & Replay Producer -> [C4] Kafka 4.1.0 KRaft",
+    "replay_mode": "window_aggregated_30m",
+    "denominator_note": "G02 Contract: Window-level replay operates on 33,441 aggregated 30m windows (1% = 334 duplicates, 3.5% = 1,170 late in-WM, 1.5% = 501 late out-of-WM). Raw ping replay operates on 90,938 raw segment_status pings.",
+    "seed": 42,
+    "topic": "hcmc-traffic-events",
+    "num_partitions": 3,
+    "partition_key": "segment_id",
+    "partition_distribution": {
+      "0": 11050,
+      "1": 11189,
+      "2": 11488
+    },
+    "total_events_emitted": 33727,
+    "valid_unique_events": 33394,
+    "injected_duplicate_events": 333,
+    "injected_late_in_watermark_events": 1168,
+    "injected_late_out_of_watermark_events": 500,
+    "affected_late_windows": 226,
+    "affected_late_segment_windows": 500,
+    "raw_ping_replay_summary": {
+      "replay_mode": "raw_gps_pings",
+      "seed": 42,
+      "late_every": 20,
+      "watermark_seconds": 1800,
+      "total_raw_events_emitted": 91694,
+      "valid_unique_raw_pings": 90787,
+      "unique_valid_events": 90787,
+      "injected_duplicate_raw_pings": 907,
+      "injected_late_in_watermark_raw_pings": 3177,
+      "injected_late_out_of_watermark_raw_pings": 1361,
+      "affected_segment_windows_by_late_pings": 1193,
+      "affected_time_slots_by_late_pings": 384,
+      "partition_distribution": {
+        "0": 29475,
+        "1": 34262,
+        "2": 27957
+      }
+    },
+    "kafka_broker_delivery": {
+      "status": "verified",
+      "broker_connected": true,
+      "bootstrap_servers": "localhost:9092",
+      "topic": "hcmc-traffic-events",
+      "num_partitions": 3,
+      "messages_sent": 3000,
+      "partition_messages_sent": {
+        "0": 1017,
+        "1": 1007,
+        "2": 976
+      },
+      "partition_end_offsets": {
+        "2": 1952,
+        "1": 2014,
+        "0": 2034
+      }
+    }
+  },
+  "streaming_query_progress": {
+    "stream_query": "hcmc_traffic_dual_sink_v3",
+    "watermark_delay": "30 minutes",
+    "trigger_interval": "5 seconds",
+    "microbatches_total": 4,
+    "simulated_kill_after_batch": 1,
+    "replayed_batch_skipped_by_wal": true,
+    "restart_recovery_verified": true,
+    "duplicate_side_effects_on_restart": 0,
+    "pre_kill_sink2_in_wm_events": 45364,
+    "post_restart_sink2_in_wm_events": 90741,
+    "post_restart_dropped_by_watermark": 0,
+    "dropped_by_event_time_watermark": 0,
+    "bloom_false_positives_eval": 0,
+    "total_bronze_sink1_events_landed": 90787,
+    "sink1_bronze_parquet_dir": "outputs\\stream_sink1_bronze",
+    "wal_state_bytes": 73713,
+    "quarantined_malformed_events": 0,
+    "bloom_memory_bytes": 32768,
+    "hll_memory_bytes": 1024,
+    "hll_estimated_segments": 9620.23,
+    "active_decay_segments_in_ram": 77,
+    "committed_offsets": {
+      "0": 90787,
+      "1": 0,
+      "2": 0
+    },
+    "frozen_registry_integrity": {
+      "verified": true,
+      "model_version": "rf_full_23d_v3",
+      "model_sha256": "a2e12b7c032acff65b2285d50499cc8a142cbfa1d4549c4f888ce473aac264de",
+      "vmax_lookup_sha256": "41577e2ecb960133c1836da323e3e1a7c8e8e3939bf06315e4f388e90404257f",
+      "static_feature_store_sha256": "71a5565e272f0b5cd71440f752ab7a80d1240c43838c315a95d3cb6535de3ac2",
+      "static_store_mode": "full",
+      "manifest_sha256": "cc5c5c0a3950eb63663b00e293c7b997df8c23f28aa1bf178367945c8fb63e22",
+      "read_only_enforced": true,
+      "pre_post_sha256_identical": true,
+      "probe_classes_count": 6
+    },
+    "version_guard_audit": {
+      "phase_b_initial_upserts": 25,
+      "phase_c_upgrades": 25,
+      "phase_c_late_inserts": 0,
+      "stale_provisional_retries_rejected": 25
+    },
+    "progress_history": [
+      {
+        "phase": "PRE_KILL",
+        "batch_id": 0,
+        "status": "COMMITTED",
+        "accepted_rows": 22697,
+        "quarantined_rows": 0,
+        "current_watermark_utc": "2020-08-02T23:44:29.452000+00:00",
+        "sink1_bronze_total": 22697,
+        "sink2_in_wm_total": 22684
+      },
+      {
+        "phase": "PRE_KILL",
+        "batch_id": 1,
+        "status": "COMMITTED",
+        "accepted_rows": 22697,
+        "quarantined_rows": 0,
+        "current_watermark_utc": "2020-11-29T12:45:40.231000+00:00",
+        "sink1_bronze_total": 45394,
+        "sink2_in_wm_total": 45364
+      },
+      {
+        "phase": "POST_RESTART_REPLAY_CHECK",
+        "batch_id": 1,
+        "status": "SKIPPED_ALREADY_COMMITTED_IN_WAL"
+      },
+      {
+        "phase": "POST_RESTART",
+        "batch_id": 2,
+        "status": "COMMITTED",
+        "accepted_rows": 22697,
+        "quarantined_rows": 0,
+        "current_watermark_utc": "2020-12-23T14:17:50.999000+00:00",
+        "sink1_bronze_total": 68091,
+        "sink2_in_wm_total": 68052
+      },
+      {
+        "phase": "POST_RESTART",
+        "batch_id": 3,
+        "status": "COMMITTED",
+        "accepted_rows": 22696,
+        "quarantined_rows": 0,
+        "current_watermark_utc": "2021-04-22T06:23:27.300000+00:00",
+        "sink1_bronze_total": 90787,
+        "sink2_in_wm_total": 90741
+      }
+    ],
+    "Phase_B_provisional_scored": 32894,
+    "Phase_B_in_flight_provisional_retained": 489,
+    "Phase_C_reconciled_backfilled": 500,
+    "healed_downstream_rescored_windows": 384,
+    "rescore_prob_changed_windows_count": 185,
+    "total_serving_documents": 33394,
+    "post_train_online_windows_scored": 13988
+  },
+  "live_kafka_telemetry": {
+    "status": "STREAMING_LIVE",
+    "topic": "hcmc-traffic-events",
+    "batches_processed": 443,
+    "messages_consumed": 6200,
+    "partition_counts": {
+      "0": 2112,
+      "1": 2074,
+      "2": 2014
+    },
+    "quarantined_count": 0,
+    "sink1_bronze_total": 6200,
+    "duplicates_caught_bloom": 3064,
+    "late_dropped_for_tier2": 4,
+    "sink2_scored_v1": 3132,
+    "severe_alerts_v1_count": 1258,
+    "v2_guard_protected_count": 3132,
+    "bloom_memory_kb": 32.0,
+    "hll_memory_kb": 1.0,
+    "hll_estimated_segments": 3038.5,
+    "exact_distinct_segments": 2903,
+    "story_cursor": null,
+    "mongo_connected": true,
+    "last_updated_ict": "03:06:18"
+  },
+  "spark_structured_streaming_sink2": {
+    "watermark": "2020-12-01T12:30:00.000Z",
+    "watermark_advanced": true,
+    "batches_committed": 3
+  }
+}
