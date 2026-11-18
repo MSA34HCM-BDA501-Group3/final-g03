@@ -246,7 +246,7 @@ def _summarize_stage_metrics(measured: list[dict]) -> list[dict]:
     return summaries
 
 
-def write_task_metrics(log_dir: Path, destination: Path):
+def write_task_metrics(log_dir: Path, destination: Path, include_all_groups: bool = False):
     """Extract measured task durations/records/shuffle from uncompressed Spark 3.5/4.2 event logs."""
     groups: dict[int, str | None] = {}
     tasks: list[dict] = []
@@ -255,7 +255,9 @@ def write_task_metrics(log_dir: Path, destination: Path):
             _parse_event_log_file(path, groups, tasks)
     for task in tasks:
         task["job_group"] = groups.get(task["stage"])
-    measured = [t for t in tasks if t["job_group"] in {"monoid_salted", "monoid_unsalted"}]
+    measured = (
+        tasks if include_all_groups else [t for t in tasks if t["job_group"] in {"monoid_salted", "monoid_unsalted"}]
+    )
     summaries = _summarize_stage_metrics(measured)
     destination.write_text(
         json.dumps({"source": "SparkListenerTaskEnd", "stages": summaries, "tasks": measured}, indent=2),

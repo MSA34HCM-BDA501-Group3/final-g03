@@ -40,7 +40,7 @@
   "kafka_broker_delivery": {
     "status": "verified",
     "broker_connected": true,
-    "bootstrap_servers": "localhost:9092",
+    "bootstrap_servers": "kafka:29092",
     "topic": "hcmc-traffic-events",
     "num_partitions": 3,
     "messages_sent": 3000,
@@ -50,9 +50,9 @@
       "2": 980
     },
     "partition_end_offsets": {
-      "2": 5909,
-      "1": 6070,
-      "0": 6321
+      "2": 1960,
+      "1": 2008,
+      "0": 2032
     }
   }
 }

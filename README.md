@@ -1,87 +1,100 @@
-# Hệ Thống Giám Sát Hiện Trạng & Dự Báo Ùn Tắc Giao Thông Đô Thị TP.HCM
+# HCMC Smart Traffic · BDA501
 
-> **Bộ tài liệu chính thức của đồ án (`BDA501 — Big Data Analytics`):**
-> - **Báo cáo Tổng kết Đồ án & Đặc tả Kỹ thuật Chi tiết:** [`HCMC_Smart_Traffic_Final_Report.pdf`](./HCMC_Smart_Traffic_Final_Report.pdf) / [`HCMC_Smart_Traffic_Final_Project_Proposal.pdf`](./HCMC_Smart_Traffic_Final_Project_Proposal.pdf) & [`product/00-proposal/project-proposal.md`](./product/00-proposal/project-proposal.md)
-> - **Bộ Slide Thuyết trình Trực quan (`16 Slides`):** [`HCMC_Smart_Traffic_Final_Presentation.pptx`](./HCMC_Smart_Traffic_Final_Presentation.pptx) / [`HCMC_Smart_Traffic_Proposal_Presentation.pptx`](./HCMC_Smart_Traffic_Proposal_Presentation.pptx) & [`HCMC_Smart_Traffic_Final_Slides.pdf`](./HCMC_Smart_Traffic_Final_Slides.pdf)
-> - **Kịch bản Thuyết trình, Live Demo & Cẩm nang Phản biện Q&A:** [`PRESENTATION_SCRIPT.md`](./PRESENTATION_SCRIPT.md)
-> - **Đặc tả Toán học & Kết quả Kiểm chứng Chuyên sâu:** [`TECHNICAL_NOTE.md`](./TECHNICAL_NOTE.md)
+Historical GPS replay PoC: raw pings → Kafka → Python consumer → cutoff-bounded
+features/frozen scoring → MongoDB history/latest → run-scoped Streamlit UI.
+Spark handles batch ETL and analytics. This is not a live city feed.
 
-## 1. Bức Tranh Tổng Thể Trong 4 Bước Nối Tiếp Nhau
+Nhóm: **Nguyễn Tạ Minh Quyền (25MS23280)** — dữ liệu/Spark;
+**Nguyễn Thành Đạt (25MS23306)** — graph/ML;
+**Phạm Công Minh (25MS23310)** — Kafka/Mongo/UI.
+Giảng viên: **Đặng Trần Khánh**, FSB · FPT University · BDA501, Fall 2026.
 
-Mục tiêu của hệ thống là **giám sát hiện trạng và dự báo trước `30 phút` nguy cơ kẹt xe trên toàn mạng lưới `84,633` đoạn đường một chiều tại TP.HCM** từ dữ liệu hành trình GPS của xe cộ (ví dụ: lúc `07:08` sáng trên đoạn đường Lý Thường Kiệt số `47407` tại Quận 10, một chiếc xe gửi về tín hiệu báo vận tốc đang nhích ở mức `4 km/h`). Hệ thống chuẩn hóa trạng thái đường phố theo **6 mức phục vụ giao thông (`LOS A–F`)**: `LOS A–B` (`≥ 65%` tốc độ tối đa: thông thoáng), `LOS C–D` (`35%–65%`: đông đúc) và `LOS E–F` (`< 35%`: kẹt cứng).
+## Tài liệu bàn giao hiện hành
 
-Để vượt qua 3 rào cản lớn của dữ liệu thực tế (**`88.15%` đoạn đường nhánh không có GPS & thiếu tốc độ tối đa**, **tín hiệu gửi đứt quãng**, và **bản tin trùng/trễ mạng**), toàn bộ hệ thống vận hành qua **4 bước nhân quả khép kín**:
-1. **Bước 1 — Chuẩn hóa bức tranh hiện trạng (`Spark Batch ETL`):** Làm sạch `90,938` bản tin GPS thô, tự động ước lượng tốc độ tối đa cho từng loại đường (chỉ học trên tập `TRAIN`), và gom song song thành `33,441` cửa sổ 30 phút bằng bộ gộp 5 đại lượng kết hợp chia `8` giỏ khóa chống lệch tải (`687.43x → 1.023x`) trên **`Apache Spark 3.5.7 (Java 17)`** (khớp `100%` [`baseline.py`](./baseline.py)).
-2. **Bước 2 — Lấp đầy "vùng mù" bằng cấu trúc bản đồ (`PageRank` & `K-Means`):** Lọc bỏ `90.93%` điểm uốn cong trung gian trên bản đồ, xếp hạng nút cổ chai giao lộ bằng **`PageRank`** (`84,633` đoạn đường), tìm các cặp đường hay kẹt cùng lúc (`Spark FPGrowth` & `2-Pass SON`), và gom nhóm các đoạn đường có đặc điểm giống nhau bằng **`K-Means` ($k=6$)** phủ kín **`74,606` đoạn đường thiếu GPS (`88.15%`)** — vừa phục vụ Sở GTVT, vừa truyền làm biến đầu vào cho Bước 3.
-3. **Bước 3 — Dự báo trước `30 phút` (`Random Forest` 23 biến):** Ghép cặp quan sát cách nhau đúng `30 phút` (`7,898` cặp) kèm cắt sạch mẫu biên thời gian, kết hợp tốc độ hiện tại, khung giờ Việt Nam và đặc trưng bản đồ ở Bước 2 để huấn luyện mô hình duy nhất **`Random Forest (23 biến)`** đạt **`ROC-AUC = 0.9882`**, **`PR-AUC = 0.9471`**, phát hiện sớm tín hiệu đổi trạng thái (`ROC-AUC = 0.7664`) và chấm điểm đủ `100%` mạng lưới thành phố.
-4. **Bước 4 — Cảnh báo trực tuyến & Tự động bù dữ liệu trễ (`Kafka Streaming`, `MongoDB` & `Dashboard`):** Tiếp nhận luồng qua **`Apache Kafka 4.1.0 KRaft`**, lọc trùng và theo dõi điểm nóng kẹt dai dẳng hiện tại (`EWMA`) chỉ trong **`33.0 KiB` bộ nhớ cố định** (`32.0 KiB Bloom` + `1.0 KiB HyperLogLog++`), phản hồi cảnh báo dưới `1 ms` (**`0.636 ms`**) trên **`MongoDB 8.0.34`** & **`Streamlit 5-Tab UI`** (`:8501`), đồng thời cuối ngày tự động bù đủ `501` cửa sổ đến trễ để cập nhật lịch sử chính xác **`100%`**.
+- [Manual Session 9](BDA501_Session9_Lab_Manual_G03.docx): 12 trang, đủ 10 mục,
+  Card B, checklist 16 items và 9 red flags có liên kết evidence.
+- [Báo cáo PDF](HCMC_Smart_Traffic_Final_Report.pdf): 16 trang, 7 chương;
+  [nguồn Markdown](product/00-proposal/project-proposal.md).
+- [PowerPoint](HCMC_Smart_Traffic_Final_Presentation.pptx) và
+  [Slides PDF](HCMC_Smart_Traffic_Final_Slides.pdf): 16 slides; slide 16 là
+  **Session 9 Technical Readiness Summary**.
+- [PRESENTATION_SCRIPT.md](PRESENTATION_SCRIPT.md): kịch bản, Live Demo và Q&A;
+  [TECHNICAL_NOTE.md](TECHNICAL_NOTE.md): số liệu và phạm vi cùng nguồn báo cáo.
+- [Evidence A–I](evidence/session9/README.md),
+  [gate matrix](evidence/session9/I_readiness.md),
+  [artifact review](evidence/session9/artifact_review.json),
+  [manifest](evidence/session9/manifest.json).
 
----
+Bản trước sửa nằm trong `evidence/session9/g7_archive/`. Hai bundle
+`session9_original` và `session9_rerun` giữ nguyên. Bản PreExperiment vẫn là tài liệu
+trước thí nghiệm; không trộn với kết quả đo hiện hành.
 
-## 2. Nhóm Thực hiện, Giảng viên Hướng dẫn & Phân công Chuyên trách
+## Phạm vi kết quả
 
-- **Đơn vị & Học phần:** `FSB · FPT University | MSE AI | BDA501 – Big Data Analytics` (`Fall 2026`)
-- **Giảng viên hướng dẫn (Instructor):** **Đặng Trần Khánh**
+Năm CSV có hash khớp rerun. Toàn nguồn 90,938 pings → 33,441 windows; motor-road
+path 90,787 → 33,394 có filter khác. Benchmark mới xác nhận salted/unsalted và
+SMJ/BHJ parity trước khi đo 2 warmups + 5 lượt xen kẽ, cùng input/settings/action.
+Đây là đo warm local[2], không phải cluster scaling.
 
-| Thành viên | MSSV | Mảng Chuyên trách trong Dây chuyền 4 Bước | Mã nguồn Cốt lõi |
-|---|---|---|---|
-| **Nguyễn Tạ Minh Quyền** | `25MS23280` | Bước 1: Làm sạch dữ liệu, ước lượng tốc độ tối đa & xử lý phân tán Spark | `spark_batch.py`, `traffic_data/spark_etl.py`, `baseline.py`, `compose.quyen.yml` |
-| **Nguyễn Thành Đạt** | `25MS23306` | Bước 2 & Bước 3: Đồ thị `PageRank`, luật `SON`, phân nhóm `K-Means` & dự báo `+30 phút` | `pipeline.py`, `spark_engine.py`, `tests/` |
-| **Phạm Công Minh** | `25MS23310` | Bước 4: Luồng `Kafka`, bộ đếm `33 KiB`, đối soát tin trễ, `MongoDB 8.0` & giao diện `Streamlit` | `producer.py`, `starter_stream.py`, `app.py`, `docker-compose.yml`, `scripts/` |
+Metric batch RF: accuracy 0.9450, weighted F1 0.9439, severe F1 0.9409,
+ROC-AUC 0.9882, severe PR-AUC 0.9471. Persistence accuracy 0.9484. Các metric này
+không đánh giá accuracy cho feature policy online mới. Card B1 có 46 dòng cho
+2 replay origins × 23 features; availability vận hành lịch sử vẫn **UNVERIFIED**.
 
----
+Đường online dùng at-least-once và idempotent durable processing. Simulation labels
+không quyết định dedup/late; exact Mongo identity quyết định. Năm vị trí process kill,
+stale/concurrent latest writes, startup Mongo/Kafka outages và 20 GPS thực có evidence.
+Test logs là nguồn chính thức cho passed/failed/skipped; không bỏ qua integration.
 
-## 3. Năm Bảng Dữ liệu Nguồn (`raw_data/`) & Vai trò Mẫu Chuẩn `Proof-of-Scale`
+Proof-of-Scale là mục đích đối chiếu thuật toán, chưa chứng minh city throughput.
+Không suy giảm task skew từ 687.43x/1.023x khác population; warm query latency không
+phải end-to-end latency; slot +30m không bảo đảm 30 phút báo trước target start;
+cold-start coverage không chứng minh accuracy. Cross-partition crash parity, full online
+throughput, HA và scaling vẫn chưa được xác minh.
 
-> **Vai trò mẫu chuẩn kiểm chứng quy mô (`Proof-of-Scale`):** Bộ dữ liệu công khai 5 bảng (`~38.50 MB`) đóng vai trò mẫu chuẩn để đối chứng sai số toán học bằng `0.0` trước khi mở rộng ngang ra luồng GPS toàn TP.HCM (`> 1` triệu xe phát tín hiệu mỗi `5–10` giây $\approx$ `8–17` tỷ bản tin/ngày, `1.5–3.0 TB/ngày`).
+## Chạy và kiểm thử
 
-| Tệp nguồn | Số bản ghi | Số cột | Dung lượng | Vai trò trong Hệ thống |
-|---|---:|---:|---:|---|
-| `nodes.csv` | 577,967 | 3 | 19.44 MB | Tọa độ `(long, lat)`; lọc bỏ `525,542` điểm uốn cong trung gian (`90.93%`), giữ `52,425` giao lộ thực tế |
-| `streets.csv` | 5,553 | 5 | 0.20 MB | Danh mục tuyến đường (`name`, `level` 1–4, `type`, `max_velocity`) dùng cho `BroadcastHashJoin` |
-| `segments.csv` | 84,633 | 11 | 10.29 MB | Mạng lưới `84,633` đoạn đường một chiều (`151,929` hướng rẽ hợp lệ, `48` đoạn đường cụt) |
-| `segment_status.csv` | 90,938 | 4 | 3.58 MB | Bản tin vận tốc GPS thực tế dùng để gom `33,441` cửa sổ 30 phút (`33,394` đường cơ giới) & phát luồng |
-| `train.csv` | 33,441 | 18 | 4.99 MB | Bảng đối chứng độc lập dùng để kiểm tra độ khớp `100.0%` khóa cửa sổ `(segment_id, date, period)` |
-
----
-
-## 4. Hướng dẫn Khởi chạy & Kiểm thử Tự động
-
-### 4.1. Khởi chạy Cụm Dịch vụ Docker (`10.5 / 16.0 GB RAM`)
 ```powershell
-docker compose up -d kafka mongo spark app
-
-# Chạy tác vụ Spark Batch độc lập từ dữ liệu thô trên Apache Spark 3.5.7 (Java 17):
-$env:TRAFFIC_FIT_CUTOFF = '2020-08-01T00:00:00Z'
-docker compose -f compose.quyen.yml run --build --rm batch
+docker compose build spark app
+docker compose up -d --wait kafka mongo
+python -m scripts.session9_validate
+docker compose run --rm -e KAFKA_BOOTSTRAP_SERVERS=kafka:29092 spark python -m scripts.session9_replay_smoke
+python -m scripts.session9_outages
 ```
 
-### 4.2. Chạy Trọn vẹn Dây chuyền 4 Bước, Kiểm chứng Hồi phục `WAL` & Kiểm thử Tự động
+Consumer: `traffic_online.py --help`. Cấu hình brokers, URI, database/run, topic,
+registry và checkpoint bằng environment/CLI. Dùng namespace `session9_` riêng;
+một worker/run trên cùng volume checkpoint. Không xóa checkpoints để restart.
+Đổi artifact/code/runtime thì dùng run ID mới.
+
 ```powershell
-python -m pip install -r requirements.txt
-python pipeline.py
-python baseline.py
-python producer.py --mode both --bootstrap-servers localhost:9092
-python starter_stream.py --kill-after-batch 1
-pytest -v
+$env:TRAFFIC_RUN_ID = 'demo-20261118'
+docker compose --profile stream up -d stream app
+```
+
+Để xem raw smoke, dùng run trong `evidence/session9/raw_smoke.json` và cùng database
+`session9_online`. Bảng vận hành Tab 2 hiển thị revision, issued_at, target và freshness;
+các tab/ví dụ batch còn lại là snapshot lịch sử. F_ui.png là fallback replay có nhãn.
+
+## Dựng và kiểm tra G7
+
+Presentation skill đã bundled. Runtime riêng không có sẵn; người dùng đã cho phép
+dùng bộ dựng Python của repo với LibreOffice/Poppler. Môi trường bổ sung tách biệt
+trong Docker, được mô tả tại [g7_tooling.json](evidence/session9/g7_tooling.json).
+
+```powershell
+docker build -f Dockerfile.artifacts -t final-g03-artifacts .
+docker run --rm --mount "type=bind,source=$PWD,target=/workspace" final-g03-artifacts python -m scripts.session9_build_artifacts
+python -m scripts.session9_g7_validate
+```
+
+Sau rebuild, cần rà hình từng trang/slide và cập nhật artifact_review/manifest.
+G7 được chốt theo review và hash của chính file xuất, không tự PASS chỉ vì build xong.
+`session9_g7_validate` tự tìm renderer trong phiên bản skill đang cài; không hardcode
+đường dẫn plugin cũ. PDF slide được xuất từ PPTX thật bằng LibreOffice.
+
+Lint theo cấu hình repo:
+
+```powershell
 ruff check . --select E,F,W,C901 --config "lint.mccabe.max-complexity=14" --config "line-length=120"
-streamlit run app.py
 ```
-
-Sau khi khởi chạy, mở trình duyệt tại <http://localhost:8501> để sử dụng giao diện điều hành 5 tab.
-
----
-
-## 5. Danh mục Tệp Kết quả Chính (`data/` & `outputs/`)
-
-| Tệp kết quả | Mô-đun | Nội dung |
-|---|---|---|
-| `data/dataset.csv` | `[C14]` Hồ dữ liệu | Bảng dữ liệu chuẩn hóa (`33,441` dòng × `59` cột) kèm `PageRank`, `K-Means`, biến quá khứ và nhãn `target_t30m_*` |
-| `data/lakehouse/curated_gold/year_month=*` | `[C14]` Phân vùng tháng | `10` phân vùng `Parquet` theo tháng (`2020-07` đến `2021-04`, tháng `2020-08` có `7,294` dòng) |
-| `data/lakehouse/segment_static_features.parquet` | `[C13b]` Đặc trưng bản đồ | Kho đặc trưng bản đồ tĩnh phủ kín `84,633` đoạn đường (`10,027` có GPS + `74,606` đoạn thiếu GPS) |
-| `data/lakehouse/quarantine_events.parquet` | `[C15]` Cách ly lỗi | Bản ghi vi phạm quy tắc chất lượng kèm mã lỗi đầu tiên `first_failing_rule` |
-| `outputs/model.joblib` & `model_registry_manifest.json` | `[C13a]` Kho mô hình | Mô hình `Random Forest (23 biến)` khóa cố định từ `Pha A` kèm chữ ký `SHA-256` |
-| `outputs/ablation_results.csv` & `transition_evaluation.csv` | `[C11]` Học máy `+30p` | Bảng thử nghiệm 7 cấu hình và đối chứng trực diện khi giao thông đổi trạng thái |
-| `outputs/spark_runtime_evidence.json` & `quyen_validation/*` | `[C9]` Spark 3.5.7 | Bằng chứng `BroadcastHashJoin`, `exceptAll == 0`, cắt tỉa `Parquet`, `FPGrowth` & `KMeans` |
-| `outputs/mongo_verify.json` | `[C16]` MongoDB 8.0 | Bằng chứng ghi cập nhật 69 lô và truy vấn chỉ mục `IXSCAN` (`warm_p95 = 0.636 ms`) |
-| `outputs/slide_charts/*` | Biểu đồ & Bản đồ | Bản đồ TP.HCM có sông Sài Gòn & tên quận, biểu đồ đối chứng trực diện & ảnh cận cảnh giao diện |

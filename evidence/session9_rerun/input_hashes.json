@@ -1,0 +1,22 @@
+﻿[
+    {
+        "Path":  "C:\\Users\\P16S G4\\Documents\\final-g03\\raw_data\\nodes.csv",
+        "Hash":  "F405138088328C60208A484F9215E224610525347B46BB5BDEA9A82FDE6D326D"
+    },
+    {
+        "Path":  "C:\\Users\\P16S G4\\Documents\\final-g03\\raw_data\\segments.csv",
+        "Hash":  "FFCA2198455225BAED8DD59E9CA6123779E16D9D55F50453BBA3579BA67C03AA"
+    },
+    {
+        "Path":  "C:\\Users\\P16S G4\\Documents\\final-g03\\raw_data\\segment_status.csv",
+        "Hash":  "C7338DA7648D43628044A2D1458D2639411FFF5EB85EC599B0BBC2B2554AF678"
+    },
+    {
+        "Path":  "C:\\Users\\P16S G4\\Documents\\final-g03\\raw_data\\streets.csv",
+        "Hash":  "A4C565F89E16AE3CD3C801AA00FDC537CEE0454BD22506CDA732D4AD6D794664"
+    },
+    {
+        "Path":  "C:\\Users\\P16S G4\\Documents\\final-g03\\raw_data\\train.csv",
+        "Hash":  "C42BC62D368ACC047537BFDEE1F8B9BB22F24500DCDCAFFB7D2B0C69E06482B1"
+    }
+]

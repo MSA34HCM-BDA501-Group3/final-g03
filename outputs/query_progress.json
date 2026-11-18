@@ -24,18 +24,18 @@
   "frozen_registry_integrity": {
     "verified": true,
     "model_version": "rf_full_23d_v3",
-    "model_sha256": "86195ec9e1a882f10946b35d0ea9eb74c06f6856fba8740e19d3f601c0c2410d",
-    "vmax_lookup_sha256": "d00c68e39a3cbe78d2cba8d2c26fcf1de5523f5d396c8298a7bced97501ab94e",
+    "model_sha256": "97a5a63e4e347092894e270f32aa0cb74b4fe565364657c76cbf3b3b15c7142c",
+    "vmax_lookup_sha256": "b4c29c687368d64aa5015b7865f66bfd634cf1cf9154bbf93a4d58296379f3a4",
     "static_feature_store_sha256": "2877a4dd11022e353c6d7277e6e7e87a049e6e585c33a0ece7d2d430308b0251",
-    "manifest_sha256": "2692abb8b5ad1f5d2464bb769ac5547a3a63e915d22c4478879ee7da0647de7d",
+    "manifest_sha256": "b16f307c3fcf1fa02e65bfcbcdbcafd3cfe7d6cd9d130e5bd7fe6ddf9fbd6826",
     "read_only_enforced": true,
     "pre_post_sha256_identical": true,
     "probe_classes_count": 6
   },
   "version_guard_audit": {
-    "phase_b_initial_upserts": 25,
-    "phase_c_upgrades": 25,
-    "phase_c_late_inserts": 0,
+    "phase_b_initial_upserts": 32940,
+    "phase_c_upgrades": 32452,
+    "phase_c_late_inserts": 501,
     "stale_provisional_retries_rejected": 25
   },
   "progress_history": [
@@ -85,8 +85,11 @@
       "sink2_in_wm_total": 32940
     }
   ],
+  "Phase_B_provisional_scored": 32940,
+  "Phase_B_in_flight_provisional_retained": 488,
+  "Phase_C_reconciled_backfilled": 501,
   "healed_downstream_rescored_windows": 377,
   "rescore_prob_changed_windows_count": 100,
-  "Phase_B_in_flight_provisional_retained": 488,
-  "Phase_C_reconciled_backfilled": 501
+  "total_serving_documents": 33441,
+  "post_train_online_windows_scored": 14008
 }

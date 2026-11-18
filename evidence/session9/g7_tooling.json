@@ -1,0 +1,13 @@
+{
+  "presentation_skill": "bundled and already installed",
+  "private_artifact_runtime": "@oai/artifact-tool unavailable; npm registry returned 404",
+  "user_authorization": "User explicitly approved using existing repository Python scripts with LibreOffice/Poppler instead of the private skill runtime on 2026-11-18.",
+  "toolchain_definition": "Dockerfile.artifacts",
+  "authoring": ["python-pptx 1.0.2", "python-docx 1.2.0", "reportlab 4.4.5"],
+  "rendering": ["LibreOffice Impress actual PPTX export", "bundled documents/render_docx.py", "PyMuPDF 1.26.6 page rasterization", "Poppler via pdf2image 1.17.0"],
+  "build_command": "docker build -f Dockerfile.artifacts -t final-g03-artifacts .",
+  "author_command": "python -m scripts.session9_build_artifacts",
+  "render_command": "python -m scripts.session9_render_artifacts",
+  "prior_sources": "g7_archive/archive_hashes.json",
+  "scope": "Document handoff only; historical availability, online feature-policy accuracy, full throughput, cross-partition crash parity and HA limits remain explicit."
+}

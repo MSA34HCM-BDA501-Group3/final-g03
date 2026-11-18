@@ -1,0 +1,65 @@
+[
+  {
+    "command": [
+      "docker",
+      "run",
+      "--rm",
+      "--mount",
+      "type=bind,source=C:\\Users\\P16S G4\\Documents\\final-g03,target=/workspace",
+      "--mount",
+      "type=bind,source=C:\\Users\\P16S G4\\.codex\\plugins\\cache\\openai-primary-runtime\\documents\\26.1117.11355\\skills\\documents,target=/skills/documents,readonly",
+      "--mount",
+      "type=bind,source=C:\\Users\\P16S G4\\.codex\\plugins\\cache\\openai-primary-runtime\\presentations\\26.1117.11355\\skills\\presentations,target=/skills/presentations,readonly",
+      "--mount",
+      "type=bind,source=C:\\Windows\\Fonts,target=/usr/local/share/fonts/windows,readonly",
+      "final-g03-artifacts",
+      "python",
+      "/skills/documents/render_docx.py",
+      "BDA501_Session9_Lab_Manual_G03.docx",
+      "--output_dir",
+      "tmp/g7/manual",
+      "--emit_pdf"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "docker",
+      "run",
+      "--rm",
+      "--mount",
+      "type=bind,source=C:\\Users\\P16S G4\\Documents\\final-g03,target=/workspace",
+      "--mount",
+      "type=bind,source=C:\\Users\\P16S G4\\.codex\\plugins\\cache\\openai-primary-runtime\\documents\\26.1117.11355\\skills\\documents,target=/skills/documents,readonly",
+      "--mount",
+      "type=bind,source=C:\\Users\\P16S G4\\.codex\\plugins\\cache\\openai-primary-runtime\\presentations\\26.1117.11355\\skills\\presentations,target=/skills/presentations,readonly",
+      "--mount",
+      "type=bind,source=C:\\Windows\\Fonts,target=/usr/local/share/fonts/windows,readonly",
+      "final-g03-artifacts",
+      "python",
+      "-m",
+      "scripts.session9_render_artifacts"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "docker",
+      "run",
+      "--rm",
+      "--mount",
+      "type=bind,source=C:\\Users\\P16S G4\\Documents\\final-g03,target=/workspace",
+      "--mount",
+      "type=bind,source=C:\\Users\\P16S G4\\.codex\\plugins\\cache\\openai-primary-runtime\\documents\\26.1117.11355\\skills\\documents,target=/skills/documents,readonly",
+      "--mount",
+      "type=bind,source=C:\\Users\\P16S G4\\.codex\\plugins\\cache\\openai-primary-runtime\\presentations\\26.1117.11355\\skills\\presentations,target=/skills/presentations,readonly",
+      "--mount",
+      "type=bind,source=C:\\Windows\\Fonts,target=/usr/local/share/fonts/windows,readonly",
+      "final-g03-artifacts",
+      "python",
+      "-m",
+      "scripts.session9_artifact_checks"
+    ],
+    "exit_code": 0
+  }
+]

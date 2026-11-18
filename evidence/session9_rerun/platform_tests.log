@@ -1,0 +1,271 @@
+..F...........F....                                                      [100%]
+=================================== FAILURES ===================================
+______________ test_p1_ec8_monoid_salting_and_medallion_lakehouse ______________
+
+    def test_p1_ec8_monoid_salting_and_medallion_lakehouse() -> None:
+        """[Q06, Q07, Q08, Q09, Q10] Verify Monoid baseline, unequal partition associativity, salting & Parquet."""
+        monoid_verify = json.loads((OUTPUTS_DIR / "monoid_baseline_verification.json").read_text(encoding="utf-8"))
+        assert monoid_verify["raw_distinct_utc_windows"] == 33441
+        assert monoid_verify["medallion_matched_windows"] == 33441
+        assert monoid_verify["missing_keys_in_dataset"] == 0
+        assert monoid_verify["extra_keys_in_dataset"] == 0
+        assert monoid_verify["utc_window_join_match_pct"] == 100.0
+        assert monoid_verify["obs_count_discrepancies"] == 0
+        assert monoid_verify["min_velocity_discrepancies"] == 0
+        assert monoid_verify["max_velocity_discrepancies"] == 0
+        assert monoid_verify["severe_ping_discrepancies"] == 0
+        assert monoid_verify["mean_velocity_discrepancies"] == 0
+        assert monoid_verify["total_severe_pings_accumulated"] == 42170
+        assert monoid_verify["monoid_associativity_verified"] is True
+    
+        assoc = verify_unequal_partition_associativity()
+        assert assoc["monoid_tuple_exact_match"] is True
+        assert assoc["average_of_averages_trap_demonstrated"] is True
+    
+        # Q09 Failure Injection: Mutating min_velocity or mean_velocity must fail audit_records_against_monoid
+        m_state = {(10, "2020-08-02", "period_7_00"): monoid_combine(monoid_lift(20.0), monoid_lift(40.0))}
+        good_records = [
+            {
+                "segment_id": 10,
+                "date": "2020-08-02",
+                "period": "period_7_00",
+                "obs_count": 2,
+                "sum_velocity": 60.0,
+                "min_velocity": 20.0,
+                "max_velocity_obs": 40.0,
+                "severe_ping_count": 0,
+                "mean_velocity": 30.0,
+            }
+        ]
+        assert audit_records_against_monoid(m_state, good_records)["monoid_associativity_verified"] is True
+        bad_records = [{**good_records[0], "min_velocity": 25.0}]
+        bad_audit = audit_records_against_monoid(m_state, bad_records)
+        assert bad_audit["min_velocity_discrepancies"] == 1
+        assert bad_audit["monoid_associativity_verified"] is False
+    
+        join_plan = json.loads((OUTPUTS_DIR / "join_plan_evidence.json").read_text(encoding="utf-8"))
+        salting = join_plan["pillar_i1_monoid_and_salting"]
+        assert salting["exact_monoid_equivalence"] is True
+        assert salting["raw_input_pings"] == 90938
+        assert salting["stage1_partial_salted_groups"] == 59895
+        assert salting["stage2_reduced_windows"] == 33441
+        assert salting["salt_bucket_cv"] < 0.02
+        assert 1.0 <= salting["salted_partition_skew_ratio"] <= 1.05
+        assert join_plan["pillar_i2_catalyst_join_optimization"]["partition_count"] == 10
+        spark_rt_file = json.loads((OUTPUTS_DIR / "spark_runtime_evidence.json").read_text(encoding="utf-8"))
+        spark_rt = join_plan.get("spark_runtime_verification", spark_rt_file)
+        assert spark_rt_file["status"] == "verified"
+>       assert spark_rt["status"] == "verified"
+E       AssertionError: assert 'not_verified' == 'verified'
+E         
+E         - verified
+E         + not_verified
+E         ? ++++
+
+tests/test_platform_v3.py:261: AssertionError
+_____________ test_proposal_pdf_and_pptx_deliverables_synchronized _____________
+
+    def test_proposal_pdf_and_pptx_deliverables_synchronized() -> None:
+        """Verify Final Report PDF, concise 16-slide visual PDF/PPTX, HCMC maps, UI screenshots & Markdown reports."""
+        proposal_pdf = ROOT / "HCMC_Smart_Traffic_Final_Report.pdf"
+        slides_pdf = ROOT / "HCMC_Smart_Traffic_Final_Slides.pdf"
+        slides_pptx = ROOT / "HCMC_Smart_Traffic_Final_Presentation.pptx"
+        arch_png = OUTPUTS_DIR / "system_architecture.png"
+        grid_png = OUTPUTS_DIR / "slides_overview_grid.png"
+        chart_dir = OUTPUTS_DIR / "slide_charts"
+        assert proposal_pdf.is_file() and proposal_pdf.stat().st_size > 500_000
+        assert slides_pdf.is_file() and slides_pdf.stat().st_size > 500_000
+        assert slides_pptx.is_file() and slides_pptx.stat().st_size > 400_000
+        assert arch_png.is_file() and arch_png.stat().st_size > 200_000
+        assert grid_png.is_file() and grid_png.stat().st_size > 500_000
+        for visual_asset in (
+            "arch_detailed_reference.png",
+            "map_hcmc_problem_context.png",
+            "map_hcmc_hotspots_coldstart.png",
+            "map_hcmc_clusters_7d.png",
+            "visual_methods_imputation_monoid.png",
+            "visual_methods_graph_coldstart_sketches.png",
+            "flow_batch_components.png",
+            "flow_stream_components.png",
+            "chart_transition_analysis.png",
+            "chart_ablation_t30m.png",
+            "chart_eda_anomalies.png",
+            "chart_spark_skew_catalyst.png",
+            "chart_streaming_serving.png",
+            "ui_tab1_overview_hotspots.png",
+            "ui_tab2_live_forecast_mongo.png",
+            "ui_tab4_kmeans_coldstart.png",
+            "eq_vmax_los.png",
+            "eq_monoid.png",
+            "eq_pagerank.png",
+            "eq_prior.png",
+            "eq_sketches.png",
+        ):
+            assert (chart_dir / visual_asset).is_file(), f"Missing visual asset: {visual_asset}"
+        _assert_synced_deliverable_copies(proposal_pdf, slides_pptx, slides_pdf)
+        _assert_pptx_single_line_titles_fit(slides_pptx)
+        _assert_pptx_card_shapes_and_nav_dots(slides_pptx)
+        _assert_pptx_concise_slide_word_budget(slides_pptx)
+    
+        prop_pages, prop_text = _extract_pdf_pages_and_text(proposal_pdf)
+        slides_pages, slides_text = _extract_pdf_pages_and_text(slides_pdf)
+        pptx_slides, pptx_text_nodes, pptx_text = _extract_pptx_slides_text(slides_pptx)
+        assert prop_pages >= 15
+        assert slides_pages == 16
+        assert pptx_slides == 16
+        assert pptx_text_nodes >= 280
+    
+        manifest = json.loads((ROOT / "outputs" / "model_registry_manifest.json").read_text(encoding="utf-8"))
+        sha_prefixes = (
+            manifest["sha256_digest"][:12],
+            manifest["static_feature_store_sha256"][:12],
+            manifest["vmax_lookup_sha256"][:12],
+        )
+        report_metrics = (
+            "33,441",
+            "7,898",
+            "5,494",
+            "1,167",
+            "1,182",
+            "2020-12-12T08:00:00Z",
+            "2020-12-25T03:30:00Z",
+            "0.9450",
+            "0.5543",
+            "0.9409",
+            "0.9882",
+            "0.9471",
+            "0.9362",
+            "0.9514",
+            "7,294",
+            "32.0 KiB",
+            "501",
+            "3,953",
+            "377",
+            "0.636 ms",
+            "Proof-of-Scale",
+            "9.35x",
+            "25MS23280",
+            "25MS23306",
+            "25MS23310",
+        ) + sha_prefixes
+        slide_metrics = (
+            "84,633",
+            "33,441",
+            "7,898",
+            "5,494",
+            "1,167",
+            "1,182",
+            "0.9450",
+            "0.9882",
+            "0.9471",
+            "7,294",
+            "32.0 KiB",
+            "501",
+            "3,953",
+            "377",
+            "0.636 ms",
+            "Proof-of-Scale",
+            "9.35x",
+            "25MS23280",
+            "25MS23306",
+            "25MS23310",
+            "Đặng Trần Khánh",
+        )
+        chapters_and_sections = tuple(f"Chương {idx}." for idx in range(1, 8)) + (
+            "1.4.",
+            "2.4.",
+            "3.4.",
+            "5.4.",
+            "7.2.",
+            "7.3.",
+            "7.4.",
+            "Hình 1.1",
+            "Hình 1.2",
+            "Hình 2.1",
+            "Hình 3.1",
+            "Hình 3.2",
+            "Hình 3.3",
+            "Hình 4.1",
+            "Bảng 5.4",
+            "Bảng 5.5",
+            "Hình 5.1",
+            "Hình 5.2",
+            "Hình 6.1",
+            "Hình 6.2",
+            "Hình 6.3",
+            "Hình 6.4",
+        )
+        forbidden_report_slang = FORBIDDEN_STALE_AND_INTERNAL_TOKENS + (
+            "Báo Cáo Đề Xuất",
+            "Project Proposal",
+            "win trễ",
+            "377 win",
+            "3,953 lag1",
+            "p ≥ 0.03",
+        )
+        forbidden_raw_pdf_math = (
+            "sum_{s=1}",
+            "m1 (+) m2",
+            "+inf",
+            "prior_s(t)",
+        )
+        forbidden_slide_dumps = (
+            FORBIDDEN_STALE_AND_INTERNAL_TOKENS
+            + sha_prefixes
+            + (
+                "Báo Cáo Đề Xuất",
+                "Project Proposal",
+                "ruff check",
+                "docker compose",
+                "spark_engine.py",
+                "compose.quyen.yml",
+                "[C1]->",
+                "IXSCAN, 0 SORT",
+                "win trễ",
+                "377 win",
+                "v_max",
+                "LIVE_MONGODB_8.0",
+            )
+        )
+    
+        artifact = joblib.load(OUTPUTS_DIR / "model.joblib")
+        rf_imp = dict(zip(artifact["full_features"], artifact["rf_multiclass"].feature_importances_))
+        exact_imp_tokens = (
+            f"{rf_imp['current_los_ordinal']:.4f}",
+            f"{rf_imp['street_causal_prior_sev']:.4f}",
+            f"{rf_imp['neighbor_los_ordinal']:.4f}",
+            f"{rf_imp['lag2_los_ordinal']:.4f}",
+        )
+    
+        proposal_md = (PRODUCT_DIR / "00-proposal" / "project-proposal.md").read_text(encoding="utf-8")
+        tech_note_md = (ROOT / "TECHNICAL_NOTE.md").read_text(encoding="utf-8")
+        readme_md = (ROOT / "README.md").read_text(encoding="utf-8")
+        app_py_txt = (ROOT / "app.py").read_text(encoding="utf-8")
+>       _assert_deliverable_tokens(
+            "project-proposal.md",
+            proposal_md,
+            report_metrics + chapters_and_sections + exact_imp_tokens,
+            forbidden_report_slang,
+        )
+
+tests/test_platform_v3.py:1232: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+name = 'project-proposal.md'
+text = '# Báo Cáo Tổng Kết Đồ Án & Đặc Tả Kỹ Thuật Chi Tiết\n\n- **Tên đề tài:** Hệ thống Giám sát Hiện trạng & Dự báo Ùn tắc...B/ngày` toàn đô thị cần chuyển sang kiến trúc `Kubernetes Multi-Node` và phân mảnh (`Sharding`) kho `MongoDB 8.0`.\n\n'
+required = ('33,441', '7,898', '5,494', '1,167', '1,182', '2020-12-12T08:00:00Z', ...)
+forbidden = ('stage_b1_ingestion', '2021-03-21', '0.6670', '0.7568', '0.8458', '7,549', ...)
+
+    def _assert_deliverable_tokens(name: str, text: str, required: tuple[str, ...], forbidden: tuple[str, ...]) -> None:
+        import re
+    
+        for req in required:
+>           assert req in text, f"Missing required token {req!r} in {name}"
+E           AssertionError: Missing required token '03a8c4fdf31f' in project-proposal.md
+E           assert '03a8c4fdf31f' in '# Báo Cáo Tổng Kết Đồ Án & Đặc Tả Kỹ Thuật Chi Tiết\n\n- **Tên đề tài:** Hệ thống Giám sát Hiện trạng & Dự báo Ùn tắc...B/ngày` toàn đô thị cần chuyển sang kiến trúc `Kubernetes Multi-Node` và phân mảnh (`Sharding`) kho `MongoDB 8.0`.\n\n'
+
+tests/test_platform_v3.py:862: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_platform_v3.py::test_p1_ec8_monoid_salting_and_medallion_lakehouse
+FAILED tests/test_platform_v3.py::test_proposal_pdf_and_pptx_deliverables_synchronized
+2 failed, 17 passed in 19.78s

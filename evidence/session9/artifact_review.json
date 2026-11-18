@@ -1,0 +1,187 @@
+{
+  "status": "pass",
+  "gate": "G7",
+  "scope": "Document handoff within explicitly documented historical-replay limitations",
+  "reviewed_at_utc": "2026-11-18T06:55:33.138333+00:00",
+  "all_project_gates_ready": false,
+  "files": {
+    "BDA501_Session9_Lab_Manual_G03.docx": {
+      "sha256": "f24b459b6e0b8ba516067dca28c273ae7a375fdd0dc1595c09d393524a441ce6",
+      "pages_or_slides": 12
+    },
+    "HCMC_Smart_Traffic_Final_Report.pdf": {
+      "sha256": "65a0dc8292c90a27ab95248b6617770576fc3d9f98504e99ab512774bd47e149",
+      "pages_or_slides": 16
+    },
+    "HCMC_Smart_Traffic_Final_Presentation.pptx": {
+      "sha256": "63164df699095407c9f730f4eb439102557866e300eaa6d1b2b89d32bcfbcb80",
+      "pages_or_slides": 16
+    },
+    "HCMC_Smart_Traffic_Final_Slides.pdf": {
+      "sha256": "e8f76708a8699b4c8fdaf93985d6292387f0a30456d2056ac63b121e6eb3624d",
+      "pages_or_slides": 16
+    }
+  },
+  "visual_review": [
+    {
+      "reviewer": "independent reviewer agent",
+      "items": "manual pages1-12 and report pages1-16",
+      "method": "Every page opened at full size after final metric corrections; no clipping, overlap, missing glyphs or header/table defects",
+      "status": "pass"
+    },
+    {
+      "reviewer": "primary implementation agent",
+      "items": "slides1-16",
+      "method": "Every slide PNG from actual LibreOffice PPTX export opened at full size; navigation, typography, evidence chart labels and UI crop checked",
+      "status": "pass"
+    }
+  ],
+  "rendered_page_sha256": {
+    "tmp/g7/manual/page-1.png": "b2188f474682299b128513273187f1a763b74bf2fff060012ae97b2f00225bbb",
+    "tmp/g7/manual/page-10.png": "6b94840d732da28e2ba478f065a798387bca52fd799b3ba3046e36912f6ba3c9",
+    "tmp/g7/manual/page-11.png": "5a0cab79ad11383cd98b0fa6db3512eaf25639d366befd59d8aa61351e3192b5",
+    "tmp/g7/manual/page-12.png": "ca991e8dce92c7bd83ce763985aa445a4a7490d758aba04cf9d6c5326fc323a5",
+    "tmp/g7/manual/page-2.png": "31c7675c112dc4245b523b3ef9fdf6c904ed5f97b9a42b48c430a1c6c4927bc6",
+    "tmp/g7/manual/page-3.png": "340e695f1c6907679b2bf8ac06230d934a310f294a3b4cdfc65365e42cff1211",
+    "tmp/g7/manual/page-4.png": "a99debba89a2ea840a55167be912b6ccb7f49ca3d57fa5bc7dfadee8418832b8",
+    "tmp/g7/manual/page-5.png": "20f40c7d8c00c02d78d24f948c75effbfe4751370e71956312842089159d44ef",
+    "tmp/g7/manual/page-6.png": "78b5bb2ff8b193a06c496f02d359b2cefef7b9d1e367cc6da2fb91a4dd15d0be",
+    "tmp/g7/manual/page-7.png": "b825a17289238885610e5b8f60a6d6ed98b9a37d4ea5ca5138960bb07ffed51d",
+    "tmp/g7/manual/page-8.png": "3749d2f83e71c14b542fbd6b084fe277643ef6800fc13db5ca1a5ea08a39ec4f",
+    "tmp/g7/manual/page-9.png": "e7294f78381abe257e2fabd549d658d02d24becf6a58e2f643b8df57bd6a6e21",
+    "tmp/g7/report/page-1.png": "d6b2b8c856ea6bcd8667d14412eaeb6e1a325d1aa9dba37674c62b0b634234ba",
+    "tmp/g7/report/page-10.png": "a0f9023f515ebab6484fd5ab3e5f6a6fb2710c63e80c4c706e7f431aca8df016",
+    "tmp/g7/report/page-11.png": "2b2e942c9f535ba9548a6b0065b0a9624ffe32160275bb0f66c8d1e17a23df42",
+    "tmp/g7/report/page-12.png": "c55bb57d65633c7db609d010d14d3db30be2c4101f6623d88cc514a5ff20f1db",
+    "tmp/g7/report/page-13.png": "7a8e03a11ad61c7946d69340c4410d8660c346ea070480a5c23fe457ffa8a616",
+    "tmp/g7/report/page-14.png": "2b212fc4d43ecd3f6a95231b5b79424051cd41cf016e1de2c0277b08f93a4cf7",
+    "tmp/g7/report/page-15.png": "fcee227704ceaf040b8acb952a325d920d7240fc4db799c25af5d414d51d0e28",
+    "tmp/g7/report/page-16.png": "7b341a62226af6ed56058aef378e689def322aa0c4702a488fa45b253b6ddab5",
+    "tmp/g7/report/page-2.png": "ec6be2a9cc8728a64edd378e082a744714555babd43ac948d34830304d92c70a",
+    "tmp/g7/report/page-3.png": "f208583b3c2bcee41fc57333a1d394e9aa4e78b9011d52e71b2f80defaa6c6ba",
+    "tmp/g7/report/page-4.png": "d9ccbddd5d8d326428d5086c240289b569067649de4c72a3853458fa83df36a3",
+    "tmp/g7/report/page-5.png": "037c8fbd10827ddcef8d95731b4a15e9f33f5b51fc3688d026e8ad502816e09c",
+    "tmp/g7/report/page-6.png": "1bc4e213abb742b9484188430055155e93fde711e8aa668cab9aba4a3b9ca615",
+    "tmp/g7/report/page-7.png": "ac1f955070c29437561e88d4a081d750e9f85b73bfe78645b59e632412c4f4f5",
+    "tmp/g7/report/page-8.png": "be1cb0089fd9a75c3ccb2bf8659bfda257d0c3f35c5f9971230e2433fa500571",
+    "tmp/g7/report/page-9.png": "74947cc04740e0f47642116abdffae71912374786b9308a908c125d32da2e15a",
+    "tmp/g7/slides/page-1.png": "5ea75c39f828a48dd5f691193609d70046221c2de11f708aaca780cd9f0b63f3",
+    "tmp/g7/slides/page-10.png": "86d3e18cef6edc5207a5103008b3a04fbff08a4ab2da6a043bdecf1618c0276b",
+    "tmp/g7/slides/page-11.png": "f9accd071c322e00397a11d22e667400ab7370a8b297c36105e3147e78d957ce",
+    "tmp/g7/slides/page-12.png": "32f26a349c897d89a94a30c6c18f1e11b99041fca864ae699b1fc23f2adcbbf2",
+    "tmp/g7/slides/page-13.png": "894dd6dc491562a7c32956c18d5acb8666a442406ccd20d7605d968511dbcf1e",
+    "tmp/g7/slides/page-14.png": "9144d4a4000db7b9fbcb61ece49c536f078af14c00c889bbb940fe33ada84a8e",
+    "tmp/g7/slides/page-15.png": "7f7f77fc0b073bc72f3d02209eae2f7220b368af5add05a99a81e50b44b2394b",
+    "tmp/g7/slides/page-16.png": "80177274142a4324f63ec2007481e702c41d408d145608b0092e27ee90cab891",
+    "tmp/g7/slides/page-2.png": "17b2f30dfb2a7b4195fbcb81e03ae9a2e3ffa3bed5b4dea74c6acad5e7ae64ed",
+    "tmp/g7/slides/page-3.png": "14f938087a4280d220fd25d247d95750ec6d0316231f0a7fedadf1fe83a7a0bb",
+    "tmp/g7/slides/page-4.png": "d2cd3a31199483539f2abe3910ceb55aa2a8cd6e7754b57791b34176f2e8d20a",
+    "tmp/g7/slides/page-5.png": "16ca3cb7f439a8bb0056397b445aeb0504d6edfa904df32fb13bc92e384c9176",
+    "tmp/g7/slides/page-6.png": "d24e03404b635a6e3ba53d4b5851a09bedb60435d71a20cb5fb46d64f59a7c2f",
+    "tmp/g7/slides/page-7.png": "e90a6f384934c9971eae61612e8c5a9abd12420b6dacef38a92201b3b290359b",
+    "tmp/g7/slides/page-8.png": "d3bb70493095d6c421ccedc62016fef930c93fbe417af6e6b503b871e1352f54",
+    "tmp/g7/slides/page-9.png": "b3c6a4b8851c74e41bc0cba4360647e2e1ef693f0d1e9deaf31ef80b0be23b86"
+  },
+  "checks": {
+    "status": "pass",
+    "report_pages": 16,
+    "slides": 16,
+    "manual_pages": 12,
+    "checklist_items": 16,
+    "red_flags": 9,
+    "manual_hyperlinks": 25,
+    "unique_manual_destinations": 13,
+    "missing_links": [],
+    "pptx_outside_shapes": [],
+    "package_integrity": {
+      "chart_count": 0,
+      "claim_boundary": "Structural package checks only; no slide text, notes, formulas, chart values, or native PowerPoint execution were inspected.",
+      "finding_count": 0,
+      "findings": [],
+      "notes_parts_skipped": 16,
+      "relationship_part_count": 47,
+      "slide_count": 16,
+      "status": "pass"
+    },
+    "content_checks": "RF/DT metrics match owning CSV; candidate-window denominator explicit; limits preserved",
+    "limitation": "Structural/content checks supplement visual review and do not establish PowerPoint native execution."
+  },
+  "validation": {
+    "lint": {
+      "command": [
+        "docker",
+        "compose",
+        "run",
+        "--rm",
+        "--no-deps",
+        "-e",
+        "KAFKA_BOOTSTRAP_SERVERS=kafka:29092",
+        "spark",
+        "python",
+        "-m",
+        "ruff",
+        "check",
+        "--select",
+        "E,F,W,C901",
+        "--config",
+        "lint.mccabe.max-complexity=14",
+        "--config",
+        "line-length=120",
+        "app.py",
+        "baseline.py",
+        "pipeline.py",
+        "producer.py",
+        "starter_stream.py",
+        "spark_engine.py",
+        "spark_batch.py",
+        "traffic_online.py",
+        "traffic_data",
+        "tests",
+        "scripts/build_proposal_pdf.py",
+        "scripts/build_slides.py",
+        "scripts/session9_artifact_checks.py",
+        "scripts/session9_benchmark.py",
+        "scripts/session9_build_artifacts.py",
+        "scripts/session9_g7_validate.py",
+        "scripts/session9_handoff.py",
+        "scripts/session9_outages.py",
+        "scripts/session9_render_artifacts.py",
+        "scripts/session9_replay_smoke.py",
+        "scripts/session9_sync_text.py",
+        "scripts/session9_ui_check.py",
+        "scripts/session9_validate.py"
+      ],
+      "exit_code": 0
+    },
+    "full_suite": {
+      "command": [
+        "docker",
+        "compose",
+        "run",
+        "--rm",
+        "--no-deps",
+        "-e",
+        "KAFKA_BOOTSTRAP_SERVERS=kafka:29092",
+        "spark",
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ],
+      "exit_code": 0
+    }
+  },
+  "prior_sources_preserved": true,
+  "corrected_labels": [
+    "RF weighted F1=.9439, severe F1=.9409",
+    "DT23D severe PR-AUC=.9327",
+    "Historical3953 refers to downstream candidate windows, not feature cells or verified changed features"
+  ],
+  "remaining_limits": [
+    "Historical operational availability UNVERIFIED",
+    "Online feature-policy accuracy unmeasured",
+    "Single-partition crash fixtures; cross-partition parity unverified",
+    "No full online throughput/cluster scaling/HA claim",
+    "LibreOffice rendering reviewed; native PowerPoint execution not asserted"
+  ]
+}

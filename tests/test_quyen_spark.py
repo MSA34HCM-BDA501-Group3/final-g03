@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -31,7 +32,7 @@ try:
 except ModuleNotFoundError:
     HAS_PYSPARK = False
 
-SPARK_CONTAINER = "song-recommender-spark-master-1"
+SPARK_CONTAINER = os.environ.get("TRAFFIC_SPARK_TEST_CONTAINER", "final-g03-spark-1")
 CONTAINER_WORKDIR = "/tmp/quyen_test"
 CONTAINER_PYTHONPATH = "/opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip:/tmp/quyen_test"
 

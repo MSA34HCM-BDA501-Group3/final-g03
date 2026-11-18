@@ -1,0 +1,152 @@
+Setting default log level to "WARN".
+To adjust logging level use sc.setLogLevel(newLevel). For SparkR, use setLogLevel(newLevel).
+26/11/17 18:21:41 WARN NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
+[Stage 14:>                 (0 + 2) / 2][Stage 15:>                 (0 + 0) / 1]                                                                                [Stage 25:>                                                         (0 + 1) / 1]                                                                                [Stage 28:>                 (0 + 1) / 1][Stage 29:>                 (0 + 1) / 1][Stage 31:===================================================>      (8 + 1) / 9]                                                                                26/11/17 18:22:03 WARN SparkStringUtils: Truncated the string representation of a plan since it was too large. This behavior can be adjusted by setting 'spark.sql.debug.maxToStringFields'.
+[Stage 195:>                                                        (0 + 2) / 8][Stage 195:==============>                                          (2 + 2) / 8][Stage 195:=====================>                                   (3 + 2) / 8][Stage 195:============================>                            (4 + 2) / 8][Stage 195:==========================================>              (6 + 2) / 8][Stage 195:=================================================>       (7 + 1) / 8]                                                                                {
+  "spark_version": "3.5.7",
+  "train_end_exclusive_utc": "2020-08-01T00:00:00Z",
+  "input_events": 90938,
+  "accepted_unique_events": 90787,
+  "rejected_events": 151,
+  "rejected_by_rule": {
+    "E4_UNKNOWN_SEGMENT": 151
+  },
+  "duplicate_deliveries_removed": 0,
+  "quarantined_segments": 580,
+  "active_nodes": 52181,
+  "windows": 33394,
+  "monoid_difference": {
+    "left_only": 0,
+    "right_only": 0
+  },
+  "independent_baseline": {
+    "expected_windows": 33394,
+    "actual_windows": 33394,
+    "missing_keys": 0,
+    "extra_keys": 0,
+    "duplicate_keys": 0,
+    "field_mismatches": {
+      "obs_count": 0,
+      "sum_velocity": 0,
+      "min_velocity": 0,
+      "max_velocity_obs": 0,
+      "severe_ping_count": 0,
+      "mean_velocity": 0
+    },
+    "equivalent": true
+  },
+  "join_difference": {
+    "left_only": 0,
+    "right_only": 0
+  },
+  "join_seconds": {
+    "sort_merge": 0.8330790420000085,
+    "broadcast": 0.7099908819999996
+  },
+  "aggregate_seconds": {
+    "monoid_unsalted": 0.38213332100002617,
+    "monoid_salted": 0.505352581000011
+  },
+  "physical_node_names": {
+    "sort_merge": [
+      "WholeStageCodegen (12)",
+      "Project",
+      "Project",
+      "Project",
+      "SortMergeJoin",
+      "InputAdapter",
+      "WholeStageCodegen (9)",
+      "Sort",
+      "InputAdapter",
+      "Exchange",
+      "WholeStageCodegen (8)",
+      "Project",
+      "SortMergeJoin",
+      "InputAdapter",
+      "WholeStageCodegen (2)",
+      "Sort",
+      "InputAdapter",
+      "Exchange",
+      "WholeStageCodegen (1)",
+      "Filter",
+      "InputAdapter",
+      "InMemoryTableScan",
+      "InputAdapter",
+      "WholeStageCodegen (7)",
+      "Project",
+      "SortMergeJoin",
+      "InputAdapter",
+      "WholeStageCodegen (4)",
+      "Sort",
+      "InputAdapter",
+      "Exchange",
+      "WholeStageCodegen (3)",
+      "Filter",
+      "InputAdapter",
+      "InMemoryTableScan",
+      "InputAdapter",
+      "WholeStageCodegen (6)",
+      "Sort",
+      "InputAdapter",
+      "Exchange",
+      "WholeStageCodegen (5)",
+      "Filter",
+      "InputAdapter",
+      "InMemoryTableScan",
+      "InputAdapter",
+      "WholeStageCodegen (11)",
+      "Sort",
+      "InputAdapter",
+      "Exchange",
+      "WholeStageCodegen (10)",
+      "Project",
+      "Filter",
+      "InputAdapter",
+      "Scan csv "
+    ],
+    "broadcast": [
+      "WholeStageCodegen (4)",
+      "Project",
+      "Project",
+      "Project",
+      "BroadcastHashJoin",
+      "Project",
+      "BroadcastHashJoin",
+      "Filter",
+      "InputAdapter",
+      "InMemoryTableScan",
+      "InputAdapter",
+      "BroadcastExchange",
+      "WholeStageCodegen (2)",
+      "Project",
+      "BroadcastHashJoin",
+      "Filter",
+      "InputAdapter",
+      "InMemoryTableScan",
+      "InputAdapter",
+      "BroadcastExchange",
+      "WholeStageCodegen (1)",
+      "Filter",
+      "InputAdapter",
+      "InMemoryTableScan",
+      "InputAdapter",
+      "BroadcastExchange",
+      "WholeStageCodegen (3)",
+      "Project",
+      "Filter",
+      "InputAdapter",
+      "Scan csv "
+    ]
+  },
+  "exchange_counts": {
+    "sort_merge": 5,
+    "broadcast": 3
+  },
+  "benchmark_limitations": "single ordered local run, not a claim of speedup; task metrics in task_metrics.json",
+  "inputs_sha256": {
+    "nodes.csv": "f405138088328c60208a484f9215e224610525347b46bb5bdea9a82fde6d326d",
+    "streets.csv": "a4c565f89e16ae3cd3c801aa00fdc537cee0454bd22506cda732d4ad6d794664",
+    "segments.csv": "ffca2198455225baed8dd59e9ca6123779e16d9d55f50453bba3579ba67c03aa",
+    "segment_status.csv": "c7338da7648d43628044a2d1458d2639411fff5eb85ec599b0bbc2b2554af678"
+  }
+}

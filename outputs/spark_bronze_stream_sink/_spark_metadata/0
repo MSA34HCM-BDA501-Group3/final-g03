@@ -1,2 +1,2 @@
 v1
-{"path":"file:///workspace/outputs/spark_bronze_stream_sink/part-00000-b92b9b80-f11b-4c80-9027-45efc0f0e5fa-c000.snappy.parquet","size":8271,"isDir":false,"modificationTime":1794230711545,"blockReplication":1,"blockSize":33554432,"action":"add"}
+{"path":"file:///workspace/outputs/spark_bronze_stream_sink/part-00000-e40f7c1a-f1dd-4837-8c4a-5ba9e6fef985-c000.snappy.parquet","size":8271,"isDir":false,"modificationTime":1794939907499,"blockReplication":1,"blockSize":33554432,"action":"add"}

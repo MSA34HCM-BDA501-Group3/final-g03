@@ -1,0 +1,24 @@
+{
+  "run_id": "outage-kafka-9a5271f29eea4ab88b64ecbccac2b308",
+  "topic": "session9-outage-kafka-9a5271f29eea4ab88b64ecbccac2b308",
+  "expected_raw": 4,
+  "delivery": {
+    "status": "verified",
+    "broker_connected": true,
+    "bootstrap_servers": "kafka:29092",
+    "topic": "session9-outage-kafka-9a5271f29eea4ab88b64ecbccac2b308",
+    "num_partitions": 3,
+    "messages_sent": 5,
+    "control_messages_sent": 1,
+    "partition_messages_sent": {
+      "0": 5,
+      "1": 0,
+      "2": 0
+    },
+    "partition_end_offsets": {
+      "0": 6,
+      "1": 0,
+      "2": 0
+    }
+  }
+}

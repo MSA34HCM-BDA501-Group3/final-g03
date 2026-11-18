@@ -1,0 +1,24 @@
+{
+  "status": "pass",
+  "report_pages": 16,
+  "slides": 16,
+  "manual_pages": 12,
+  "checklist_items": 16,
+  "red_flags": 9,
+  "manual_hyperlinks": 25,
+  "unique_manual_destinations": 13,
+  "missing_links": [],
+  "pptx_outside_shapes": [],
+  "package_integrity": {
+    "chart_count": 0,
+    "claim_boundary": "Structural package checks only; no slide text, notes, formulas, chart values, or native PowerPoint execution were inspected.",
+    "finding_count": 0,
+    "findings": [],
+    "notes_parts_skipped": 16,
+    "relationship_part_count": 47,
+    "slide_count": 16,
+    "status": "pass"
+  },
+  "content_checks": "RF/DT metrics match owning CSV; candidate-window denominator explicit; limits preserved",
+  "limitation": "Structural/content checks supplement visual review and do not establish PowerPoint native execution."
+}

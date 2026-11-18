@@ -32,7 +32,7 @@ services:
       - bda501-net
 
   mongo:
-    image: mongo:8.0
+    image: mongo:8.0.38
     command: ["mongod", "--wiredTigerCacheSizeGB", "1.0", "--bind_ip_all"]
     ports:
       - "27017:27017"
@@ -52,10 +52,12 @@ services:
       - bda501-net
 
   spark:
-    image: song-recommender-spark:3.5.7
+    build:
+      context: .
+      dockerfile: Dockerfile.session9
     working_dir: /workspace
     environment:
-      PYTHONPATH: /opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip
+      TRAFFIC_LOCAL_VERIFIER: "1"
       SPARK_DRIVER_MEMORY: 4g
       MONGO_URI: mongodb://mongo:27017
     volumes:
@@ -76,6 +78,8 @@ services:
     environment:
       MONGO_URI: mongodb://mongo:27017
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      TRAFFIC_DATABASE: ${TRAFFIC_DATABASE:-session9_online}
+      TRAFFIC_RUN_ID: ${TRAFFIC_RUN_ID:-replay-v1}
     ports:
       - "8501:8501"
     volumes:
@@ -118,7 +122,15 @@ services:
     environment:
       MONGO_URI: mongodb://mongo:27017
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-    command: ["python", "starter_stream.py", "--kill-after-batch", "1"]
+      TRAFFIC_DATABASE: ${TRAFFIC_DATABASE:-session9_online}
+      TRAFFIC_RUN_ID: ${TRAFFIC_RUN_ID:-replay-v1}
+    command: ["python", "traffic_online.py"]
+    restart: on-failure
+    depends_on:
+      mongo:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     volumes:
       - ./raw_data:/app/raw_data
       - ./data:/app/data

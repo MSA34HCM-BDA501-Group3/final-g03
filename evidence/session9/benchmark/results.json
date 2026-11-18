@@ -1,0 +1,358 @@
+{
+  "settings": {
+    "master": "local[2]",
+    "partitions": 8,
+    "aqe": false,
+    "cache": "inputs only",
+    "action": "collect",
+    "warmups": 2,
+    "measurements": 5
+  },
+  "parity": {
+    "join": {
+      "left_only": 0,
+      "right_only": 0
+    },
+    "aggregate": {
+      "left_only": 0,
+      "right_only": 0
+    }
+  },
+  "timings": [
+    {
+      "variant": "smj",
+      "iteration": 0,
+      "warmup": true,
+      "seconds": 0.42393196600005467,
+      "rows": 90938,
+      "job_group": "smj_0"
+    },
+    {
+      "variant": "bhj",
+      "iteration": 0,
+      "warmup": true,
+      "seconds": 0.3609139889999824,
+      "rows": 90938,
+      "job_group": "bhj_0"
+    },
+    {
+      "variant": "bhj",
+      "iteration": 1,
+      "warmup": true,
+      "seconds": 0.26468549200001235,
+      "rows": 90938,
+      "job_group": "bhj_1"
+    },
+    {
+      "variant": "smj",
+      "iteration": 1,
+      "warmup": true,
+      "seconds": 0.27210320199992566,
+      "rows": 90938,
+      "job_group": "smj_1"
+    },
+    {
+      "variant": "smj",
+      "iteration": 2,
+      "warmup": false,
+      "seconds": 0.24736631600001147,
+      "rows": 90938,
+      "job_group": "smj_2"
+    },
+    {
+      "variant": "bhj",
+      "iteration": 2,
+      "warmup": false,
+      "seconds": 0.2619037380000009,
+      "rows": 90938,
+      "job_group": "bhj_2"
+    },
+    {
+      "variant": "bhj",
+      "iteration": 3,
+      "warmup": false,
+      "seconds": 0.27152126299995416,
+      "rows": 90938,
+      "job_group": "bhj_3"
+    },
+    {
+      "variant": "smj",
+      "iteration": 3,
+      "warmup": false,
+      "seconds": 0.2779343170000175,
+      "rows": 90938,
+      "job_group": "smj_3"
+    },
+    {
+      "variant": "smj",
+      "iteration": 4,
+      "warmup": false,
+      "seconds": 0.3105141219999723,
+      "rows": 90938,
+      "job_group": "smj_4"
+    },
+    {
+      "variant": "bhj",
+      "iteration": 4,
+      "warmup": false,
+      "seconds": 0.24749316100007945,
+      "rows": 90938,
+      "job_group": "bhj_4"
+    },
+    {
+      "variant": "bhj",
+      "iteration": 5,
+      "warmup": false,
+      "seconds": 0.27012982000007923,
+      "rows": 90938,
+      "job_group": "bhj_5"
+    },
+    {
+      "variant": "smj",
+      "iteration": 5,
+      "warmup": false,
+      "seconds": 0.3127795859999196,
+      "rows": 90938,
+      "job_group": "smj_5"
+    },
+    {
+      "variant": "smj",
+      "iteration": 6,
+      "warmup": false,
+      "seconds": 0.31053346600003806,
+      "rows": 90938,
+      "job_group": "smj_6"
+    },
+    {
+      "variant": "bhj",
+      "iteration": 6,
+      "warmup": false,
+      "seconds": 0.22160919599991757,
+      "rows": 90938,
+      "job_group": "bhj_6"
+    },
+    {
+      "variant": "unsalted",
+      "iteration": 0,
+      "warmup": true,
+      "seconds": 0.212824904999934,
+      "rows": 33441,
+      "job_group": "unsalted_0"
+    },
+    {
+      "variant": "salted",
+      "iteration": 0,
+      "warmup": true,
+      "seconds": 0.28280849600002966,
+      "rows": 33441,
+      "job_group": "salted_0"
+    },
+    {
+      "variant": "salted",
+      "iteration": 1,
+      "warmup": true,
+      "seconds": 0.11857796100002815,
+      "rows": 33441,
+      "job_group": "salted_1"
+    },
+    {
+      "variant": "unsalted",
+      "iteration": 1,
+      "warmup": true,
+      "seconds": 0.11224684900003012,
+      "rows": 33441,
+      "job_group": "unsalted_1"
+    },
+    {
+      "variant": "unsalted",
+      "iteration": 2,
+      "warmup": false,
+      "seconds": 0.1519508720000431,
+      "rows": 33441,
+      "job_group": "unsalted_2"
+    },
+    {
+      "variant": "salted",
+      "iteration": 2,
+      "warmup": false,
+      "seconds": 0.12787571399996978,
+      "rows": 33441,
+      "job_group": "salted_2"
+    },
+    {
+      "variant": "salted",
+      "iteration": 3,
+      "warmup": false,
+      "seconds": 0.1214825549999432,
+      "rows": 33441,
+      "job_group": "salted_3"
+    },
+    {
+      "variant": "unsalted",
+      "iteration": 3,
+      "warmup": false,
+      "seconds": 0.10971650299995872,
+      "rows": 33441,
+      "job_group": "unsalted_3"
+    },
+    {
+      "variant": "unsalted",
+      "iteration": 4,
+      "warmup": false,
+      "seconds": 0.12099162399999841,
+      "rows": 33441,
+      "job_group": "unsalted_4"
+    },
+    {
+      "variant": "salted",
+      "iteration": 4,
+      "warmup": false,
+      "seconds": 0.11650166399999762,
+      "rows": 33441,
+      "job_group": "salted_4"
+    },
+    {
+      "variant": "salted",
+      "iteration": 5,
+      "warmup": false,
+      "seconds": 0.11425413200004186,
+      "rows": 33441,
+      "job_group": "salted_5"
+    },
+    {
+      "variant": "unsalted",
+      "iteration": 5,
+      "warmup": false,
+      "seconds": 0.12425486699999055,
+      "rows": 33441,
+      "job_group": "unsalted_5"
+    },
+    {
+      "variant": "unsalted",
+      "iteration": 6,
+      "warmup": false,
+      "seconds": 0.1283090939999738,
+      "rows": 33441,
+      "job_group": "unsalted_6"
+    },
+    {
+      "variant": "salted",
+      "iteration": 6,
+      "warmup": false,
+      "seconds": 0.1114679160000378,
+      "rows": 33441,
+      "job_group": "salted_6"
+    }
+  ],
+  "median_seconds": {
+    "smj": 0.3105141219999723,
+    "bhj": 0.2619037380000009,
+    "unsalted": 0.12425486699999055,
+    "salted": 0.11650166399999762
+  },
+  "queries": [
+    {
+      "name": "street_summary",
+      "text": "SELECT street_id, count(*) AS pings, avg(velocity) AS mean_velocity FROM gps JOIN segments USING(segment_id) GROUP BY street_id ORDER BY pings DESC LIMIT 10",
+      "sample": [
+        {
+          "street_id": "304359231",
+          "pings": 4198,
+          "mean_velocity": 3.345878989995236
+        },
+        {
+          "street_id": "408212916",
+          "pings": 2539,
+          "mean_velocity": 9.033871602993305
+        },
+        {
+          "street_id": "564160409",
+          "pings": 2150,
+          "mean_velocity": 2.2437209302325583
+        },
+        {
+          "street_id": "32928925",
+          "pings": 1971,
+          "mean_velocity": 21.30796549974632
+        },
+        {
+          "street_id": "32587814",
+          "pings": 1798,
+          "mean_velocity": 15.442714126807564
+        },
+        {
+          "street_id": "405258419",
+          "pings": 1778,
+          "mean_velocity": 3.088863892013498
+        },
+        {
+          "street_id": "211408582",
+          "pings": 1656,
+          "mean_velocity": 1.1751207729468598
+        },
+        {
+          "street_id": "227738147",
+          "pings": 1369,
+          "mean_velocity": 9.566837107377648
+        },
+        {
+          "street_id": "35114023",
+          "pings": 1338,
+          "mean_velocity": 1.7316890881913303
+        },
+        {
+          "street_id": "330035862",
+          "pings": 1157,
+          "mean_velocity": 48.47450302506482
+        }
+      ]
+    },
+    {
+      "name": "projected_scan",
+      "text": "curated_gold.filter(year_month == '2020-12').select(segment_id, mean_velocity)",
+      "sample": [
+        {
+          "segment_id": 58235,
+          "mean_velocity": 5.0
+        },
+        {
+          "segment_id": 23766,
+          "mean_velocity": 15.0
+        },
+        {
+          "segment_id": 23770,
+          "mean_velocity": 32.0
+        },
+        {
+          "segment_id": 23776,
+          "mean_velocity": 32.0
+        },
+        {
+          "segment_id": 23780,
+          "mean_velocity": 21.0
+        },
+        {
+          "segment_id": 39025,
+          "mean_velocity": 15.0
+        },
+        {
+          "segment_id": 39027,
+          "mean_velocity": 30.0
+        },
+        {
+          "segment_id": 39033,
+          "mean_velocity": 18.0
+        },
+        {
+          "segment_id": 39036,
+          "mean_velocity": 4.0
+        },
+        {
+          "segment_id": 46875,
+          "mean_velocity": 15.0
+        }
+      ]
+    }
+  ],
+  "limitation": "Single host. Task stages differ for salted aggregation; no partition-skew reduction or cluster-scaling claim."
+}

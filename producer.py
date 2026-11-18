@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -302,6 +303,7 @@ def publish_to_kafka_broker(
     topic: str = DEFAULT_TOPIC,
     max_messages: int = 5000,
     replay_speed: float = 0.0,
+    run_id: str = "replay-v1",
 ) -> dict[str, Any]:
     """Attempt live delivery to Kafka broker when bootstrap_servers is provided (M02)."""
     if not bootstrap_servers:
@@ -323,16 +325,35 @@ def publish_to_kafka_broker(
             value_serializer=lambda v: json.dumps(v, ensure_ascii=False, default=str).encode("utf-8"),
             request_timeout_ms=5000,
         )
+        replay_df = replay_df.sort_values(["ingest_ts", "event_ts", "raw_event_id"], kind="stable")
         subset = replay_df.head(max_messages) if max_messages > 0 else replay_df
         sent = 0
         part_sent: dict[str, int] = {"0": 0, "1": 0, "2": 0}
         for record in subset.to_dict(orient="records"):
+            record.update(schema_version=1, run_id=run_id, simulated_arrival_ts=record["ingest_ts"])
             part = int(record.get("kafka_partition", 0)) % NUM_KAFKA_PARTITIONS
-            producer.send(topic, key=record["segment_id"], value=record, partition=part)
+            producer.send(topic, key=record["segment_id"], value=record, partition=part).get(timeout=10)
             part_sent[str(part)] = part_sent.get(str(part), 0) + 1
             sent += 1
             if replay_speed > 0.0:
                 time.sleep(min(0.01 / max(replay_speed, 1e-3), 0.05))
+        # Explicit replay-clock control closes the final observed slot, even on a finite replay.
+        if not subset.empty:
+            end_clock = max(
+                pd.to_datetime(subset["event_ts"], utc=True).max().ceil("30min"),
+                pd.to_datetime(subset["ingest_ts"], utc=True).max(),
+            ) + pd.Timedelta(minutes=30)
+            producer.send(
+                topic,
+                key="replay-clock",
+                partition=0,
+                value={
+                    "schema_version": 1,
+                    "run_id": run_id,
+                    "event_type": "replay_clock",
+                    "simulated_arrival_ts": end_clock.isoformat(),
+                },
+            ).get(timeout=10)
         producer.flush(timeout=10)
         producer.close()
         end_offsets = _read_broker_partition_offsets(brokers, topic)
@@ -343,6 +364,7 @@ def publish_to_kafka_broker(
             "topic": topic,
             "num_partitions": len(end_offsets),
             "messages_sent": sent,
+            "control_messages_sent": int(not subset.empty),
             "partition_messages_sent": part_sent,
             "partition_end_offsets": end_offsets,
         }
@@ -366,7 +388,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--late-every", type=int, default=20)
     parser.add_argument("--late-seconds", type=int, default=WATERMARK_SECONDS)
-    parser.add_argument("--bootstrap-servers", type=str, default="")
+    parser.add_argument("--bootstrap-servers", type=str, default=os.getenv("KAFKA_BOOTSTRAP_SERVERS", ""))
+    parser.add_argument("--run-id", default=os.getenv("TRAFFIC_RUN_ID", "replay-v1"))
     parser.add_argument("--topic", type=str, default=DEFAULT_TOPIC)
     parser.add_argument("--max-messages", type=int, default=5000)
     parser.add_argument("--replay-speed", type=float, default=0.0)
@@ -416,6 +439,7 @@ def main() -> None:
         topic=args.topic,
         max_messages=args.max_messages,
         replay_speed=args.replay_speed,
+        run_id=args.run_id,
     )
     args.output_summary.parent.mkdir(parents=True, exist_ok=True)
     args.output_summary.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")

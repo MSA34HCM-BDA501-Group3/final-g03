@@ -106,6 +106,8 @@ def _predict_single_window(row: pd.Series, artifact: dict[str, Any]) -> dict[str
 def _format_lifecycle_summary(breakdown: dict[str, int]) -> str:
     if not breakdown:
         return "Đang đồng bộ"
+    if "PROVISIONAL" in breakdown or "RECONCILED" in breakdown:
+        return ", ".join(f"{key}: {count}" for key, count in sorted(breakdown.items()))
     verified = breakdown.get("BATCH_VERIFIED", 0)
     reconciled = breakdown.get("BATCH_RECONCILED", 0)
     provisional = breakdown.get("STREAM_PROVISIONAL", 0)
@@ -133,6 +135,10 @@ def _format_hotspots_display(df: pd.DataFrame) -> pd.DataFrame:
 def _format_alerts_display(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty or "segment_id" not in df.columns:
         return df
+    if "feature_version" in df.columns:
+        return df[
+            [c for c in ("segment_id", "street_name", "street_level", "predicted_next_los", "severe_prob") if c in df]
+        ]
     vn_times = df["vn_hour"].map(_format_vn_time) if "vn_hour" in df.columns else df.get("period", "")
     return pd.DataFrame(
         {
@@ -262,12 +268,15 @@ def _try_query_live_mongo(mongo_uri: str, limit: int) -> tuple[pd.DataFrame, dic
         import pymongo  # type: ignore[import-not-found]
 
         client = pymongo.MongoClient(mongo_uri, serverSelectionTimeoutMS=800)
-        coll = client["bda501"]["traffic_scores"]
-        total_docs = int(coll.count_documents({}))
+        database = os.getenv("TRAFFIC_DATABASE", "bda501")
+        coll = client[database]["traffic_scores"]
+        run_id = os.getenv("TRAFFIC_RUN_ID", "").strip()
+        scope = {"run_id": run_id} if run_id else {}
+        total_docs = int(coll.count_documents(scope))
         if total_docs > 0:
             cursor = (
                 coll.find(
-                    {"street_level": {"$in": [1, 2]}, "severe_prob": {"$gte": 0.70}},
+                    {**scope, "street_level": {"$in": [1, 2]}, "severe_prob": {"$gte": 0.70}},
                     {"_id": 0},
                 )
                 .sort([("severe_prob", -1), ("segment_id", 1)])
@@ -276,14 +285,34 @@ def _try_query_live_mongo(mongo_uri: str, limit: int) -> tuple[pd.DataFrame, dic
             docs = list(cursor)
             status_counts = {
                 str(r["_id"]): int(r["cnt"])
-                for r in coll.aggregate([{"$group": {"_id": "$lifecycle_status", "cnt": {"$sum": 1}}}])
+                for r in coll.aggregate(
+                    [{"$match": scope}, {"$group": {"_id": "$lifecycle_status", "cnt": {"$sum": 1}}}]
+                )
             }
+            recent = coll.find_one(
+                scope,
+                {
+                    "_id": 0,
+                    "event_id": 1,
+                    "run_id": 1,
+                    "revision": 1,
+                    "issued_at": 1,
+                    "target_start": 1,
+                    "target_end": 1,
+                    "completeness": 1,
+                },
+                sort=[("issued_at", -1)],
+            )
             client.close()
             return pd.DataFrame(docs), {
                 "serving_mode": "LIVE_MONGODB_8.0",
                 "mongo_uri": mongo_uri,
                 "total_serving_docs": total_docs,
                 "lifecycle_breakdown": status_counts,
+                "database": database,
+                "run_id": run_id or "legacy snapshot",
+                "source": "historical replay in live MongoDB",
+                "latest_replay_score": recent,
             }
         client.close()
     except Exception:
@@ -300,6 +329,15 @@ def query_operational_serving_store(limit: int = 25) -> tuple[pd.DataFrame, dict
         if live_res is not None:
             return live_res
     fallback_uri = candidate_uris[0]
+    requested_run = os.getenv("TRAFFIC_RUN_ID", "").strip()
+    if requested_run:
+        return pd.DataFrame(), {
+            "serving_mode": "REQUESTED_REPLAY_RUN_UNAVAILABLE",
+            "run_id": requested_run,
+            "mongo_uri": fallback_uri,
+            "total_serving_docs": 0,
+            "lifecycle_breakdown": {},
+        }
 
     if SERVING_PARQUET_PATH.is_file():
         s_df = pd.read_parquet(SERVING_PARQUET_PATH)
@@ -375,7 +413,7 @@ def render_overview_tab(data: pd.DataFrame, metrics: dict[str, Any]) -> None:
 
 def render_forecast_tab(data: pd.DataFrame, artifact: dict[str, Any], metrics: dict[str, Any]) -> None:
     """Tab 2: Live Congestion Forecast (t+30m), MongoDB 8.0 Alerts & State-Change Evaluation."""
-    st.subheader("1. Dự báo Trạng thái Giao thông Trước 30 Phút (t + 30 phút)")
+    st.subheader("1. Dự báo Trạng thái Ở Cửa sổ Kế tiếp (snapshot batch)")
     streets = ["Tất cả tuyến đường"] + sorted(data["street_name"].dropna().astype(str).unique().tolist())
     f1, f2 = st.columns([2, 2])
     street_choice = f1.selectbox("Lọc theo Tuyến đường", streets)
@@ -421,9 +459,9 @@ def render_forecast_tab(data: pd.DataFrame, artifact: dict[str, Any], metrics: d
         f"**PageRank:** {row['pagerank_score']:.3f} · **Nhóm hành vi:** #{int(row['cluster_id'])}"
     )
 
-    st.subheader("2. Cảnh báo Trục chính Nguy cơ Kẹt cao < 1 ms (MongoDB 8.0)")
+    st.subheader("2. Cảnh báo Trục chính Nguy cơ Kẹt cao (MongoDB)")
     r_col1, r_col2 = st.columns([1, 3])
-    if r_col1.button("🔄 Làm mới dữ liệu trực tuyến (5s)"):
+    if r_col1.button("🔄 Làm mới dữ liệu"):
         st.rerun()
     alerts_df, serving_meta = query_operational_serving_store(limit=25)
     lifecycle_txt = _format_lifecycle_summary(serving_meta.get("lifecycle_breakdown", {}))
@@ -432,7 +470,36 @@ def render_forecast_tab(data: pd.DataFrame, artifact: dict[str, Any], metrics: d
         f"**Tổng bản ghi:** `{serving_meta['total_serving_docs']:,}` · "
         f"**Trạng thái đối soát:** {lifecycle_txt}"
     )
+    st.caption(
+        f"Run: {serving_meta.get('run_id', 'snapshot')} · "
+        "Target là cửa sổ kế tiếp; thời gian báo trước phụ thuộc issued_at thực tế."
+    )
+    recent = serving_meta.get("latest_replay_score")
+    if recent and recent.get("run_id"):
+        _render_dataframe(pd.DataFrame([recent]))
+        age = (pd.Timestamp.now(tz="UTC") - pd.to_datetime(recent["issued_at"], utc=True)).total_seconds()
+        st.caption(f"Freshness của score mới nhất: {age:.1f}s (historical replay)")
     if not alerts_df.empty:
+        online_cols = [
+            c
+            for c in (
+                "event_id",
+                "run_id",
+                "revision",
+                "issued_at",
+                "input_cutoff",
+                "target_start",
+                "target_end",
+                "completeness",
+                "model_version",
+            )
+            if c in alerts_df
+        ]
+        if online_cols:
+            _render_dataframe(alerts_df[online_cols].head(10))
+        if "issued_at" in alerts_df:
+            newest = pd.to_datetime(alerts_df["issued_at"], utc=True).max()
+            st.caption(f"Freshness từ lần phát gần nhất: {(pd.Timestamp.now(tz='UTC') - newest).total_seconds():.1f}s")
         _render_dataframe(_format_alerts_display(alerts_df.head(10)))
 
     st.subheader("3. Bảng Thực nghiệm Mô hình & Kiểm định Khi Giao thông Đổi Trạng Thái")
@@ -607,7 +674,11 @@ def main() -> None:
         "Luồng 4 bước khép kín: Làm sạch GPS & gom khung 30 phút (Spark 3.5.7) · "
         "Lấp vùng mù 88.15% thiếu GPS (PageRank & K-Means) · "
         "Dự báo trước 30 phút (Random Forest 23 biến) · "
-        "Cảnh báo trực tuyến < 1 ms & tự động bù tin trễ (Kafka 4.1 · MongoDB 8.0)"
+        "Historical replay qua Kafka và MongoDB; thời gian báo trước phụ thuộc lúc phát dự báo"
+    )
+    st.info(
+        "Số liệu mô hình, bản đồ và ví dụ batch là snapshot lịch sử. Bảng vận hành trong Tab 2 "
+        "đọc đúng replay run được chọn từ MongoDB. Slot kế tiếp không bảo đảm 30 phút cảnh báo trước."
     )
 
     if not all(path.is_file() for path in (DATASET_PATH, METRICS_PATH, MODEL_PATH)):
@@ -638,7 +709,7 @@ def main() -> None:
             "🚦 Tab 2: Dự báo +30 Phút & MongoDB",
             "🕸️ Tab 3: Nút cổ chai & Cặp đường hay kẹt",
             "🧭 Tab 4: 6 Nhóm Đường & Vùng thiếu GPS",
-            "⚡ Tab 5: Luồng 33 KiB & Đối soát tin trễ",
+            "⚡ Tab 5: Sketch 33 KiB & Replay lịch sử",
         ]
     )
     with tabs[0]:

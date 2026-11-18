@@ -1,0 +1,95 @@
+{
+  "stream_query": "hcmc_traffic_dual_sink_v3",
+  "watermark_delay": "30 minutes",
+  "trigger_interval": "5 seconds",
+  "microbatches_total": 4,
+  "simulated_kill_after_batch": 1,
+  "replayed_batch_skipped_by_wal": true,
+  "restart_recovery_verified": true,
+  "duplicate_side_effects_on_restart": 0,
+  "pre_kill_sink2_in_wm_events": 16648,
+  "post_restart_sink2_in_wm_events": 32940,
+  "post_restart_dropped_by_watermark": 501,
+  "total_bronze_sink1_events_landed": 33775,
+  "quarantined_malformed_events": 0,
+  "bloom_memory_bytes": 32768,
+  "hll_memory_bytes": 1024,
+  "hll_estimated_segments": 9551.82,
+  "active_decay_segments_in_ram": 4556,
+  "committed_offsets": {
+    "0": 11064,
+    "1": 11207,
+    "2": 11504
+  },
+  "frozen_registry_integrity": {
+    "verified": true,
+    "model_version": "rf_full_23d_v3",
+    "model_sha256": "97a5a63e4e347092894e270f32aa0cb74b4fe565364657c76cbf3b3b15c7142c",
+    "vmax_lookup_sha256": "b4c29c687368d64aa5015b7865f66bfd634cf1cf9154bbf93a4d58296379f3a4",
+    "static_feature_store_sha256": "2877a4dd11022e353c6d7277e6e7e87a049e6e585c33a0ece7d2d430308b0251",
+    "manifest_sha256": "b16f307c3fcf1fa02e65bfcbcdbcafd3cfe7d6cd9d130e5bd7fe6ddf9fbd6826",
+    "read_only_enforced": true,
+    "pre_post_sha256_identical": true,
+    "probe_classes_count": 6
+  },
+  "version_guard_audit": {
+    "phase_b_initial_upserts": 32940,
+    "phase_c_upgrades": 32452,
+    "phase_c_late_inserts": 501,
+    "stale_provisional_retries_rejected": 25
+  },
+  "progress_history": [
+    {
+      "phase": "PRE_KILL",
+      "batch_id": 0,
+      "status": "COMMITTED",
+      "accepted_rows": 8444,
+      "quarantined_rows": 0,
+      "current_watermark_utc": "2020-11-18T11:00:00+00:00",
+      "sink1_bronze_total": 8444,
+      "sink2_in_wm_total": 8317
+    },
+    {
+      "phase": "PRE_KILL",
+      "batch_id": 1,
+      "status": "COMMITTED",
+      "accepted_rows": 8444,
+      "quarantined_rows": 0,
+      "current_watermark_utc": "2020-12-07T13:30:00+00:00",
+      "sink1_bronze_total": 16888,
+      "sink2_in_wm_total": 16648
+    },
+    {
+      "phase": "POST_RESTART_REPLAY_CHECK",
+      "batch_id": 1,
+      "status": "SKIPPED_ALREADY_COMMITTED_IN_WAL"
+    },
+    {
+      "phase": "POST_RESTART",
+      "batch_id": 2,
+      "status": "COMMITTED",
+      "accepted_rows": 8444,
+      "quarantined_rows": 0,
+      "current_watermark_utc": "2020-12-26T09:00:00+00:00",
+      "sink1_bronze_total": 8444,
+      "sink2_in_wm_total": 24958
+    },
+    {
+      "phase": "POST_RESTART",
+      "batch_id": 3,
+      "status": "COMMITTED",
+      "accepted_rows": 8443,
+      "quarantined_rows": 0,
+      "current_watermark_utc": "2021-04-22T06:00:00+00:00",
+      "sink1_bronze_total": 16887,
+      "sink2_in_wm_total": 32940
+    }
+  ],
+  "Phase_B_provisional_scored": 32940,
+  "Phase_B_in_flight_provisional_retained": 488,
+  "Phase_C_reconciled_backfilled": 501,
+  "healed_downstream_rescored_windows": 377,
+  "rescore_prob_changed_windows_count": 100,
+  "total_serving_documents": 33441,
+  "post_train_online_windows_scored": 14008
+}

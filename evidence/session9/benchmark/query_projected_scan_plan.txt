@@ -1,0 +1,20 @@
+== Parsed Logical Plan ==
+'Project ['segment_id, 'mean_velocity]
++- Filter (year_month#2410 = 2020-12)
+   +- Relation [segment_id#2374L,date#2375,period#2376,mean_velocity#2377,median_velocity#2378,obs_count#2379L,sum_velocity#2380L,min_velocity#2381L,max_velocity_obs#2382L,severe_ping_count#2383L,created_at#2384,updated_at#2385,s_node_id#2386L,e_node_id#2387L,length#2388L,street_id#2389L,max_velocity#2390,street_level#2391L,street_name#2392,street_type#2393,long_snode#2394,lat_snode#2395,long_enode#2396,lat_enode#2397,... 58 more fields] parquet
+
+== Analyzed Logical Plan ==
+segment_id: bigint, mean_velocity: double
+Project [segment_id#2374L, mean_velocity#2377]
++- Filter (year_month#2410 = 2020-12)
+   +- Relation [segment_id#2374L,date#2375,period#2376,mean_velocity#2377,median_velocity#2378,obs_count#2379L,sum_velocity#2380L,min_velocity#2381L,max_velocity_obs#2382L,severe_ping_count#2383L,created_at#2384,updated_at#2385,s_node_id#2386L,e_node_id#2387L,length#2388L,street_id#2389L,max_velocity#2390,street_level#2391L,street_name#2392,street_type#2393,long_snode#2394,lat_snode#2395,long_enode#2396,lat_enode#2397,... 58 more fields] parquet
+
+== Optimized Logical Plan ==
+Project [segment_id#2374L, mean_velocity#2377]
++- Filter (isnotnull(year_month#2410) AND (year_month#2410 = 2020-12))
+   +- Relation [segment_id#2374L,date#2375,period#2376,mean_velocity#2377,median_velocity#2378,obs_count#2379L,sum_velocity#2380L,min_velocity#2381L,max_velocity_obs#2382L,severe_ping_count#2383L,created_at#2384,updated_at#2385,s_node_id#2386L,e_node_id#2387L,length#2388L,street_id#2389L,max_velocity#2390,street_level#2391L,street_name#2392,street_type#2393,long_snode#2394,lat_snode#2395,long_enode#2396,lat_enode#2397,... 58 more fields] parquet
+
+== Physical Plan ==
+*(1) Project [segment_id#2374L, mean_velocity#2377]
++- *(1) ColumnarToRow
+   +- FileScan parquet [segment_id#2374L,mean_velocity#2377,year_month#2410] Batched: true, DataFilters: [], Format: Parquet, Location: InMemoryFileIndex(1 paths)[file:/workspace/data/lakehouse/curated_gold], PartitionFilters: [isnotnull(year_month#2410), (year_month#2410 = 2020-12)], PushedFilters: [], ReadSchema: struct<segment_id:bigint,mean_velocity:double>

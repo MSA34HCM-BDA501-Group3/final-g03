@@ -1,0 +1,4 @@
+run,configuration,input_size_partitions,runtime_ms,exchange_shuffle_stages,peak_to_median_partition_skew,two_way_exceptAll_diff,observation
+Baseline,SortMergeJoin (autoBroadcastJoinThreshold=-1) + Unsalted GroupBy,"90,938 GPS pings -> 33,441 windows | 8 shuffle partitions",1418.6,10,687.43,0,4 SortMergeJoins + 10 Exchange stages; severe hot-key skew (687.43x) on peak arterial slots.
+Variant 1,"BroadcastHashJoin (F.broadcast(segments, streets)) + Unsalted 5-Tuple Monoid","90,938 GPS pings -> 33,441 windows | 8 shuffle partitions",1054.17,2,687.43,0,"Eliminates all join shuffles (10 -> 2 Exchange stages, -25.7% runtime), but groupBy skew remains 687.43x."
+Variant 2,BroadcastHashJoin + 2-Stage 8-Bucket Key Salting + 5-Tuple Monoid,"90,938 pings -> 59,828 Stage-1 salted groups -> 33,441 Stage-2 windows | 8 buckets",1073.37,2,1.023,0,Collapses peak partition skew from 687.43x to 1.023x (CV=0.0057) with 0.0 mathematical error (+19.2 ms 2-stage overhead).
