@@ -10,7 +10,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-COPY app.py baseline.py pipeline.py producer.py starter_stream.py spark_engine.py spark_batch.py ./
+COPY app.py baseline.py pipeline.py producer.py starter_stream.py live_kafka_stream.py spark_engine.py spark_batch.py ./
 COPY scripts ./scripts
 COPY traffic_data ./traffic_data
 COPY product ./product

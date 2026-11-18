@@ -1,0 +1,33 @@
+# Deliverable I — Session 9 Readiness Self-Assessment & Session 10 Handoff (`I_readiness`)
+
+## 1. Session 10 Readiness Self-Assessment Rubric (`95 / 100`)
+| Criterion | Weight | Self-Score | Evidence & Action Completed in Session 9 |
+|---|---:|---:|---|
+| **Accuracy & Correctness** | 25 | **24 / 25** | `22/22` platform tests + `5/5` Spark tests (`27/27` total) re-run & passed (`2026-11-18`); `exceptAll diff = 0`; `Future-Shuffle diff = 0.0`; Card B (`B1, B2, B3`) cross-checked across `raw_data/` <-> `data/`. |
+| **Creativity & Problem-Solving** | 15 | **14 / 15** | `2-Stage 8-Bucket Salted 5-Tuple Monoid` (`687.43x -> 1.023x` skew), `Train-Only 3-Tier Vmax`, `33.0 KiB` bounded stream sketches, `Two-Tier Reconciliation`. |
+| **Completeness of Product** | 25 | **24 / 25** | End-to-end `Zones A–F` + live Kafka -> Consumer -> MongoDB -> Streamlit `:8501` (`Live Kafka Stream Monitor`) + standalone `ui-demo.html` + `data/demo_sample/` + full `evidence/session9/` pack. |
+| **Presentation & Expression** | 10 | **9 / 10** | `[I]` vs `[P]` badges added; renamed `'Causal ML'` -> `'Predictive ML (Past-Only Priors tau < t)'` & `'Spatial Zones'` -> `'7D Behavioral Clusters'`; separated saved historical runs vs `2026-11-18` reruns. |
+| **Application of Theory** | 20 | **19 / 20** | Connects commutative monoids, Spark Catalyst `BroadcastHashJoin` (`10 -> 2 Exchanges`), Parquet pruning, MongoDB `ESR IXSCAN` (`0.636 ms`), and `30m Watermark`. |
+| **Timeliness & Requirements** | 5 | **5 / 5** | All Session 9 & Session 10 deliverables, scripts, PDFs, 17-slide PPTX deck, and `evidence/session9/` completed and synchronized. |
+| **Total Self-Assessed Readiness** | **100** | **95 / 100** | Ready for Session 10 Final Assessment (40%). |
+
+## 2. Explicit Evidence Provenance: Saved Historical Outputs (`2026-11-09..11`) vs Fresh Re-Executions (`2026-11-18`)
+| Evidence Scope | Provenance Classification | Artifact Source & Timestamp | Key Verified Numbers |
+|---|---|---|---|
+| **Full `38.50 MB` Batch, 7-Model Ablation & Spark Benchmark** | **Saved Historical Run (`2026-11-09..11`)** + Reload Parity Re-Verified (`2026-11-18`) | `outputs/metrics.json`, `outputs/spark_runtime_evidence.json`, `outputs/ablation_results.csv` | `90,938` pings -> `33,441` windows; `BHJ` `10 -> 2` Exchanges (`1,418.6 -> 1,054.2 ms`); `RF 23D` `ROC-AUC = 0.9882`, `PR-AUC = 0.9471`. |
+| **MongoDB 8.0 Full Serving Benchmark (`33,441` docs)** | **Saved Historical Run (`2026-11-10`)** | `outputs/mongo_verify.json` | `33,441` docs across `69` bulk batches; `ESR IXSCAN` `warm_p50 = 0.530 ms`, `warm_p95 = 0.636 ms` (`0` in-memory `SORT`). |
+| **End-to-End Live Kafka -> Consumer -> MongoDB -> Streamlit UI** | **Fresh Live Docker Execution (`2026-11-18`)** | `outputs/live_kafka_telemetry.json`, `outputs/live_producer_summary.json`, `live_kafka_stream.py` | `200` messages published (`P0=78, P1=60, P2=62`) -> `200` consumed -> `4` Bloom dups caught, `4` `>30m` late held, `192` `STREAM_PROVISIONAL (v1)` docs scored into `MongoDB 8.0` (`HLL++ = 169.2` vs `165` exact). |
+| **Card B (`B1, B2, B3`) `raw_data/` <-> `data/` Cross-Audit** | **Fresh Re-Execution (`2026-11-18`)** | `evidence/session9/H_B1_*.csv`, `H_B2_*.csv`, `H_B3_*.csv` (+ `data/demo_sample/` fallback) | Direct cross-check on `raw_data/segments.csv` (`84,633`), `raw_data/segment_status.csv` (`90,938` pings, `10,027` distinct segs) <-> `data/dataset.csv` & `segment_static_features.parquet`. |
+| **Automated Test & Lint Gate (`pytest` + `Spark` + `Ruff`)** | **Fresh Re-Execution (`2026-11-18`)** | `tests/test_platform_v3.py` (`22/22`) + `tests/test_quyen_spark.py` (`5/5` in live Spark 3.5.7 container) | **`27/27` tests passed (`100%`)**; **`0` Ruff errors** (`max-complexity <= 14`, `line-length <= 120`). |
+
+## 3. Top Three Corrections Completed During Session 9 Audit
+1. **Priority 1 (Architecture Truth & Live End-to-End Stream — `[I]` vs `[P]`):** Added explicit `[I] Implemented` vs `[P] Proposed/Design-only` badges (`evidence/session9/A_architecture.png`), fixed Spark/MongoDB Docker network config (`bda501-net`, `mongodb://mongo:27017`), and connected `producer.py -> Kafka 4.1 -> live-consumer (33 KiB Sketches + RF 23D) -> MongoDB 8.0 -> Streamlit :8501`. *(Owner: Nguyễn Tạ Minh Quyền & Phạm Công Minh — `[x] Done`)*
+2. **Priority 2 (Card B Terminology, `raw_data <-> data` Cross-Audit & Clean-Checkout Sample — `B1 & B2`):** Clarified `'Causal ML'` as **`Predictive ML with Strictly Past-Only Priors (\tau < t)`**, verified `#21969 Nguyễn Kiệm` (`45.41 km/h LOS A`, `PR=2.7313`) and `#47407 Lý Thường Kiệt` / `#21260 Nguyễn Bỉnh Khiêm` across `raw_data/` <-> `data/`, and committed `data/demo_sample/` (`238 KB`) + `docs/DATA_SETUP.md` so clean checkouts never fail. *(Owner: Nguyễn Thành Đạt — `[x] Done`)*
+3. **Priority 3 (Card B Sketch Error Impact, Historical vs Rerun Separation & Rare Onset Transparency — `B3`):** Quantified `HLL++` error (`3.98%`, `9,627.9 vs 10,027` full; `169.2 vs 165` live Kafka rerun) and `Bloom` FPR (`0.616%`), separated saved historical outputs from `2026-11-18` reruns, and reported rare `E->F` onset trade-offs (`8` onset cases in `TEST`, `0.8136` Onset ROC-AUC, `9.35x` risk lift). *(Owner: Phạm Công Minh — `[x] Done`)*
+
+## 4. Five Required Lines on the "Session 9 Technical Readiness Summary" Slide (`Slide 17` & `HCMC_Smart_Traffic_Session9_Readiness_Slide.pptx`)
+1. **Architecture truth:** Clearly separated `[I] Implemented` (`Kafka -> Spark Batch/Speed -> Parquet/MongoDB -> Streamlit :8501`) from `[P] Proposed` (city-wide `8–17B` live probes, cloud K8s, `SCATS` actuation) and refined `'Predictive ML (Past-Only Priors)'` & `'7D Behavioral Clusters'`.
+2. **Performance:** Controlled Spark `3.5.7` experiment: `BroadcastHashJoin` cuts `Exchange` stages `10 -> 2` (`-25.7%` runtime: `1,418.6 -> 1,054.2 ms`); `8-Bucket Salted Monoid` collapses skew `687.43x -> 1.023x` (`+19.2 ms` overhead, `0.0` error).
+3. **Validation:** Data conservation `90,938` pings (`0 Silent Drops`, `exceptAll = 0`); ML `Future-Shuffle diff = 0.0` (`B1`), `RF 23D` beats `Persistence` on state transitions (`39.34% vs 0.00%` conditional new-state accuracy, `Detect ROC-AUC = 0.7664`, `9.35x` onset lift).
+4. **Operations:** Live end-to-end Kafka -> Consumer -> MongoDB -> Streamlit replay (`200` msgs -> `192` `v1` upserts, `30m Watermark` + `Dual-Sink`), `WAL` crash recovery (`0` duplicates), `Tier-2 Reconciliation` (`100%` completeness), `MongoDB 8.0 ESR IXSCAN` (`p50 = 0.530 ms`, `p95 = 0.636 ms`).
+5. **Limitation:** `88.15%` (`74,606` segments) have `0` GPS pings (relying on `7D Behavioral Cluster` priors, badged `[COLD-START]` on UI) and rare `E->F` sudden onset sample size (`8` cases in `TEST`).

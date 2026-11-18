@@ -1028,7 +1028,7 @@ def _assert_pptx_card_shapes_and_nav_dots(pptx_path: Path) -> None:
                 min_dim_in = min(shp.width, shp.height) / 914400.0
                 snip_in = shp.adjustments[0] * min_dim_in
                 assert snip_in <= 0.25, f"Slide {s_idx} card corner snip too wide ({snip_in:.2f}in > 0.25in)"
-    assert oval_dots == 15, f"Expected 15 active navbar indicator dots across Slides 02..16, got {oval_dots}"
+    assert oval_dots == 16, f"Expected 16 active navbar indicator dots across Slides 02..17, got {oval_dots}"
 
 
 def _assert_pptx_concise_slide_word_budget(pptx_path: Path) -> None:
@@ -1099,8 +1099,8 @@ def test_proposal_pdf_and_pptx_deliverables_synchronized() -> None:
     slides_pages, slides_text = _extract_pdf_pages_and_text(slides_pdf)
     pptx_slides, pptx_text_nodes, pptx_text = _extract_pptx_slides_text(slides_pptx)
     assert prop_pages >= 15
-    assert slides_pages == 16
-    assert pptx_slides == 16
+    assert slides_pages == 17
+    assert pptx_slides == 17
     assert pptx_text_nodes >= 280
 
     manifest = json.loads((ROOT / "outputs" / "model_registry_manifest.json").read_text(encoding="utf-8"))
@@ -1273,7 +1273,7 @@ def test_presentation_script_completeness_and_sync() -> None:
     if ws_script_path.parent.exists() and ws_script_path.is_file():
         assert ws_script_path.read_text(encoding="utf-8") == script_text
 
-    slide_markers = tuple(f"#### Slide {idx:02d}:" for idx in range(1, 17))
+    slide_markers = tuple(f"#### Slide {idx:02d}:" for idx in range(1, 18))
     qa_markers = tuple(f"### Câu {idx}:" for idx in range(1, 11))
     speaker_and_demo_tokens = (
         "Nguyễn Tạ Minh Quyền",
@@ -1512,3 +1512,119 @@ def test_pre_experiment_presentation_script_completeness_and_sync() -> None:
         block = pre_script_txt.split(f"#### Slide {idx:02d}:", 1)[1].split("\n---", 1)[0]
         assert f"- **Người trình bày:** **{speaker}**" in block, f"Wrong speaker on Pre-Exp Slide {idx:02d}"
         assert f"- **Lời thoại thuyết trình ({short_name}):**" in block, f"Missing monologue header on Slide {idx:02d}"
+
+
+def test_spark_container_verification_uses_compose_network_and_mongo_service() -> None:
+    """Regression test for Spark 3.5.7 / MongoDB 8.0 / Live-Consumer Docker integration config."""
+    compose_txt = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    pipeline_txt = (ROOT / "pipeline.py").read_text(encoding="utf-8")
+    spark_eng_txt = (ROOT / "spark_engine.py").read_text(encoding="utf-8")
+    assert (ROOT / "Dockerfile.spark35").is_file()
+    assert (ROOT / "requirements-spark-runtime.txt").is_file()
+    for tok in ("Dockerfile.spark35", "bda501-net", "127.0.0.1:9092:9092", "live-consumer", "--from-kafka"):
+        assert tok in compose_txt, f"Missing '{tok}' in docker-compose.yml"
+    assert "bda501-net" in pipeline_txt and "mongodb://mongo:27017" in pipeline_txt
+    assert "mongodb://mongo:27017" in spark_eng_txt
+
+
+def test_live_kafka_stream_processor_and_demo_sample_fallback(tmp_path: Path) -> None:
+    """Verify data/demo_sample/, producer subset selection, and live_kafka_stream batch scoring."""
+    import app as dashboard_app
+    from live_kafka_stream import (
+        init_live_state,
+        load_readonly_scorer_context,
+        process_kafka_records_batch,
+    )
+    from producer import _select_broker_demo_subset, generate_replay_Batch
+
+    sample_dir = ROOT / "data" / "demo_sample"
+    for fname in (
+        "sample_raw_status.csv",
+        "sample_segments.csv",
+        "sample_static_features.parquet",
+        "sample_windows_23d.csv",
+        "README.md",
+    ):
+        assert (sample_dir / fname).is_file(), f"Missing committed demo sample file: {fname}"
+
+    sample_win_df = pd.read_csv(sample_dir / "sample_windows_23d.csv")
+    assert len(sample_win_df) >= 200
+    replay_df, _ = generate_replay_Batch(sample_win_df, seed=42)
+    subset_df = _select_broker_demo_subset(replay_df, max_messages=60)
+    assert len(subset_df) == 60
+    assert int(subset_df["is_duplicate"].sum()) >= 2
+
+    scorer_ctx = load_readonly_scorer_context()
+    state = init_live_state()
+    tel_file = tmp_path / "live_tel.json"
+    scores_file = tmp_path / "live_scores.json"
+    recs = subset_df.tail(25).to_dict(orient="records")
+    batch_pairs = [(idx % 3, rec) for idx, rec in enumerate(recs)]
+    scored_docs = process_kafka_records_batch(
+        batch_pairs,
+        state,
+        scorer_ctx,
+        mongo_client=None,
+        telemetry_path=tel_file,
+        scores_json_path=scores_file,
+    )
+    tel = json.loads(tel_file.read_text(encoding="utf-8"))
+    assert tel["messages_consumed"] == 25
+    assert tel["sink1_bronze_total"] == 25
+    assert len(scored_docs) == tel["sink2_scored_v1"]
+    assert tel["sink2_scored_v1"] + tel["duplicates_caught_bloom"] + tel["late_dropped_for_tier2"] == 25
+    assert tel["hll_estimated_segments"] > 0.0
+
+    mon_tel, mon_df = dashboard_app.query_live_kafka_stream_monitor(limit=10)
+    assert isinstance(mon_tel, dict) and isinstance(mon_df, pd.DataFrame)
+
+
+def test_session9_evidence_and_card_b_raw_vs_data_audit() -> None:
+    """Verify standalone ui-demo.html, DATA_SETUP.md, and Session 9 A-I + Card B1/B2/B3 evidence."""
+    assert (ROOT / "ui-demo.html").is_file() and (ROOT / "ui-demo.html").stat().st_size > 10_000
+    assert (ROOT / "docs" / "DATA_SETUP.md").is_file()
+    ev_dir = ROOT / "evidence" / "session9"
+    required_ev = (
+        "README.md",
+        "A_architecture.png",
+        "A_architecture.md",
+        "B_benchmark.csv",
+        "B_benchmark.png",
+        "B_benchmark.md",
+        "C_query_plan.txt",
+        "C_query_plan.md",
+        "D_data_validation.csv",
+        "D_data_validation.md",
+        "E_model_validation.csv",
+        "E_model_validation.md",
+        "F_serving_stream.json",
+        "F_serving_stream.md",
+        "G_deployment.md",
+        "H_project_card.csv",
+        "H_project_card.png",
+        "H_project_card.md",
+        "H_B1_point_in_time_matrix.csv",
+        "H_B2_graph_zone_falsification.csv",
+        "H_B3_missingness_sketches.csv",
+        "I_readiness.md",
+        "I_session9_summary_slide.png",
+    )
+    for fname in required_ev:
+        assert (ev_dir / fname).is_file(), f"Missing Session 9 evidence file: {fname}"
+
+    for csv_name in (
+        "H_B1_point_in_time_matrix.csv",
+        "H_B2_graph_zone_falsification.csv",
+        "H_B3_missingness_sketches.csv",
+    ):
+        df_check = pd.read_csv(ev_dir / csv_name)
+        assert "raw_vs_data_crosscheck" in df_check.columns
+        assert df_check["raw_vs_data_crosscheck"].str.contains("VERIFIED").all()
+
+    d_md = (ev_dir / "D_data_validation.md").read_text(encoding="utf-8")
+    i_md = (ev_dir / "I_readiness.md").read_text(encoding="utf-8")
+    ui_html = (ROOT / "ui-demo.html").read_text(encoding="utf-8")
+    assert "47487" not in d_md and "47407" in d_md and "21260" in d_md
+    assert "Saved Historical Run" in i_md and "2026-11-18" in i_md
+    assert "<td>21969</td><td>#5</td><td><span class=\"badge\">Có quan sát (24 khung · LOS A)</span>" in ui_html
+    assert "<td>61781</td><td>#5</td><td><span class=\"badge warn\">Cold-Start (PR #1)</span>" in ui_html

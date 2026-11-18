@@ -1,0 +1,13 @@
+# Deliverable F — NoSQL Serving & Streaming Audit (`F_serving_stream`)
+
+## 5.1 MongoDB 8.0 Serving Store (`bda501.traffic_scores` & `bda501.live_stream_scores`)
+- **Exact Document Written:** `33,441` JSON documents (`event_id`, `segment_id`, `street_name`, `street_level`, `date`, `period`, `current_los`, `predicted_next_los`, `severe_prob`, `pagerank_score`, `cluster_id`, `lifecycle_status`, `status_version`, `model_version`).
+- **Primary Read-Back Query:** Top-K arterial early-warning lookup for `TOC` dashboard:
+  `db.traffic_scores.find({"street_level": {"$in": [1, 2]}, "severe_prob": {"$gte": 0.70}}).sort([("severe_prob", -1), ("segment_id", 1)]).limit(25)`
+- **Key & Index Design:** Unique key `event_id` + ESR Compound Index `{"street_level": 1, "severe_prob": -1, "segment_id": 1}`.
+- **Measured Read/Write Proof (`outputs/mongo_verify.json`):** `33,441` docs upserted across `4` Spark partitions (`69` bulk batches of `500` docs); idempotent replay count = `33,441` (`0` duplicates). `explain("executionStats")` confirms **`IXSCAN` (`warm_median = 0.530 ms`, `warm_p95 = 0.636 ms`, `in_memory_sort = false`, `nReturned = 25`, `totalKeysExamined = 26`)**.
+
+## 5.2 Streaming & Live End-to-End Kafka -> Consumer -> MongoDB -> UI Verification (`2026-11-18`)
+- **Nature of Source (Honest Classification):** Historical HCMC GPS telemetry (`90,938` raw pings / `33,441` 30m windows) replayed deterministically (`seed=42`) through **`Apache Kafka 4.1.0 KRaft`** (`topic = hcmc-traffic-events`, `3` partitions keyed by `segment_id`) — explicitly presented as **historical event-time replay**, NOT a live telco feed.
+- **Fresh End-to-End Live Verification (`outputs/live_kafka_telemetry.json`, rerun `2026-11-18`):** `producer.py` published **`200`** messages across 3 Kafka partitions -> `starter_stream.py --from-kafka` (`live-consumer`) consumed **`200`** messages (`Sink 1 Bronze = 200`), caught **`4`** duplicate retries via `32.0 KiB` Bloom Filter, held **`4`** out-of-watermark (`>30m`) late events for Tier-2 Reconciliation, and scored **`192`** `STREAM_PROVISIONAL (v1)` predictions via Read-Only `Random Forest (23D)` directly into `MongoDB 8.0` (`bda501.live_stream_scores`) & Streamlit `:8501` (`Live Kafka Stream Monitor`).
+- **Full-Dataset Two-Tier Reconciliation & WAL Crash Recovery (`outputs/replay_stream_summary.json` & `outputs/query_progress.json`):** `501` out-of-watermark late windows (`1.5%`) are recovered by Batch **Tier-2 Reconciliation** from `Sink 1` (`98.50% -> 100.0%` completeness across `33,441` windows); simulated container kill & WAL restart (`starter_stream.py --kill-after-batch 1`) recovers with **`0` duplicate side effects**.

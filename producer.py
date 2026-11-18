@@ -186,6 +186,32 @@ def generate_replay_Batch(
         late_seconds=late_seconds,
     )
 
+    extra_cols = (
+        "street_level",
+        "max_velocity",
+        "LOS",
+        "vn_hour",
+        "current_los_ordinal",
+        "lag1_los_ordinal",
+        "lag2_los_ordinal",
+        "trailing_severe_rate",
+        "velocity_ratio",
+        "obs_count",
+        "length_m",
+        "weekday",
+        "period_sin",
+        "period_cos",
+        "gap_minutes",
+        "pagerank_score",
+        "in_degree",
+        "out_degree",
+        "neighbor_los_ordinal",
+        "cluster_id",
+        "segment_train_prior_los",
+        "segment_train_severe_prior",
+        "street_causal_prior_los",
+        "street_causal_prior_sev",
+    )
     base_cols = [
         col
         for col in (
@@ -198,6 +224,7 @@ def generate_replay_Batch(
             "mean_velocity",
             "los_ordinal",
             "is_severe",
+            *extra_cols,
         )
         if col in frame.columns
     ]
@@ -283,6 +310,31 @@ def _ensure_kafka_topic(brokers: list[str], topic: str, num_partitions: int = NU
         admin.close()
 
 
+def _select_broker_demo_subset(replay_df: pd.DataFrame, max_messages: int) -> pd.DataFrame:
+    """Select `max_messages` preserving deterministic duplicate retries even on short live demos."""
+    if max_messages <= 0 or max_messages >= len(replay_df):
+        return replay_df
+    head_slice = replay_df.head(max_messages)
+    if "is_duplicate" in head_slice.columns and bool(head_slice["is_duplicate"].any()) or max_messages < 10:
+        return head_slice
+    dup_n = max(2, max_messages // 50)
+    base_n = max_messages - dup_n
+    front = replay_df.head(base_n).copy()
+    retries = front.iloc[:dup_n].copy()
+    retries["is_duplicate"] = True
+    return pd.concat([front, retries], ignore_index=True)
+
+
+def _resolve_input_paths(dataset_path: Path, raw_dir: Path) -> tuple[Path, Path, bool]:
+    """Resolve full dataset/raw paths, falling back cleanly to committed `data/demo_sample/`."""
+    sample_dir = Path("data/demo_sample")
+    win_path = dataset_path if dataset_path.is_file() else sample_dir / "sample_windows_23d.csv"
+    raw_status = raw_dir / "segment_status.csv"
+    raw_path = raw_status if raw_status.is_file() else sample_dir / "sample_raw_status.csv"
+    used_sample = (win_path != dataset_path) or (raw_path != raw_status)
+    return win_path, raw_path, used_sample
+
+
 def _read_broker_partition_offsets(brokers: list[str], topic: str) -> dict[str, int]:
     from kafka import KafkaConsumer, TopicPartition  # type: ignore[import-not-found]
 
@@ -315,7 +367,7 @@ def publish_to_kafka_broker(
         import time
         from kafka import KafkaProducer  # type: ignore[import-not-found]
 
-        brokers = [b.strip() for b in bootstrap_servers.split(",") if b.strip()]
+        brokers = [b.strip().replace("localhost:", "127.0.0.1:") for b in bootstrap_servers.split(",") if b.strip()]
         _ensure_kafka_topic(brokers, topic, num_partitions=NUM_KAFKA_PARTITIONS)
         producer = KafkaProducer(
             bootstrap_servers=brokers,
@@ -323,7 +375,7 @@ def publish_to_kafka_broker(
             value_serializer=lambda v: json.dumps(v, ensure_ascii=False, default=str).encode("utf-8"),
             request_timeout_ms=5000,
         )
-        subset = replay_df.head(max_messages) if max_messages > 0 else replay_df
+        subset = _select_broker_demo_subset(replay_df, max_messages)
         sent = 0
         part_sent: dict[str, int] = {"0": 0, "1": 0, "2": 0}
         for record in subset.to_dict(orient="records"):
@@ -374,29 +426,30 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _load_capped_csv(path: Path, limit: int) -> pd.DataFrame:
+    if not path.is_file():
+        raise FileNotFoundError(f"Input CSV not found: {path} (see docs/DATA_SETUP.md)")
+    frame = pd.read_csv(path)
+    return frame.head(limit).copy() if limit > 0 else frame
+
+
 def main() -> None:
     import sys
 
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     args = _build_parser().parse_args()
+    win_path, raw_status_path, used_sample = _resolve_input_paths(args.dataset_path, args.raw_dir)
 
     replay_df: pd.DataFrame | None = None
     summary: dict[str, Any] = {}
     if args.mode in ("window", "both"):
-        frame = pd.read_csv(args.dataset_path)
-        if args.limit > 0:
-            frame = frame.head(args.limit).copy()
+        frame = _load_capped_csv(win_path, args.limit)
         replay_df, summary = generate_replay_Batch(frame, seed=args.seed, late_seconds=args.late_seconds)
 
-    raw_status_path = args.raw_dir / "segment_status.csv"
     raw_replay_df: pd.DataFrame | None = None
     if args.mode in ("raw", "both"):
-        if not raw_status_path.is_file():
-            raise FileNotFoundError(f"Raw segment_status.csv not found: {raw_status_path}")
-        raw_df = pd.read_csv(raw_status_path)
-        if args.limit > 0:
-            raw_df = raw_df.head(args.limit).copy()
+        raw_df = _load_capped_csv(raw_status_path, args.limit)
         raw_replay_df, raw_summary = generate_raw_ping_replay(
             raw_df,
             seed=args.seed,
@@ -408,6 +461,7 @@ def main() -> None:
         else:
             summary["raw_ping_replay_summary"] = raw_summary
 
+    summary["data_source_mode"] = "demo_sample_fallback" if used_sample else "full_project_data"
     broker_df = raw_replay_df if args.mode == "raw" and raw_replay_df is not None else replay_df
     assert broker_df is not None
     summary["kafka_broker_delivery"] = publish_to_kafka_broker(
@@ -417,8 +471,13 @@ def main() -> None:
         max_messages=args.max_messages,
         replay_speed=args.replay_speed,
     )
-    args.output_summary.parent.mkdir(parents=True, exist_ok=True)
-    args.output_summary.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    out_path = args.output_summary
+    if out_path == Path("outputs/replay_stream_summary.json") and (
+        used_sample or (0 < args.max_messages < 5000) or args.topic != DEFAULT_TOPIC
+    ):
+        out_path = Path("outputs/live_producer_summary.json")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 

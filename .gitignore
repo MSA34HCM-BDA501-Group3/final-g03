@@ -22,5 +22,10 @@ Thumbs.db
 *credentials*
 
 # Large Raw Datasets & Regenerable Lakehouse Tables (generated via `python pipeline.py`)
+# Note: lightweight `data/demo_sample/` is intentionally whitelisted for clean-checkout Kafka & B1/B2/B3 demos
 raw_data/
-data/
+/data/*
+!/data/demo_sample/
+outputs/spark_pipeline_model/**/data/
+outputs/live_reset_signal.json
+evidence/session9/_template_*.docx

@@ -596,11 +596,7 @@ def _enrich_progress_with_reconciliation(
     return report
 
 
-def main() -> None:
-    import sys
-
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+def _build_stream_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="HCMC Smart Traffic Dual-Sink Structured Streaming Engine ([C6]-[C8])."
     )
@@ -613,11 +609,47 @@ def main() -> None:
     parser.add_argument("--progress-path", type=Path, default=Path("outputs/query_progress.json"))
     parser.add_argument("--num-microbatches", type=int, default=4)
     parser.add_argument("--kill-after-batch", type=int, default=1)
-    args = parser.parse_args()
+    parser.add_argument("--from-kafka", action="store_true", help="Consume live events from Kafka broker -> MongoDB")
+    parser.add_argument("--bootstrap-servers", type=str, default="localhost:9092")
+    parser.add_argument("--topic", type=str, default="hcmc-traffic-events")
+    parser.add_argument("--group-id", type=str, default="hcmc-toc-live-consumer")
+    parser.add_argument("--mongo-uri", type=str, default="mongodb://127.0.0.1:27017")
+    parser.add_argument("--max-messages", type=int, default=0)
+    parser.add_argument("--idle-timeout-sec", type=float, default=12.0)
+    parser.add_argument("--continuous", action="store_true", help="Keep polling Kafka indefinitely")
+    parser.add_argument("--reset-live", action="store_true", help="Clear live demo telemetry/scores before consuming")
+    return parser
 
-    if not args.bronze_path.is_file():
+
+def main() -> None:
+    import sys
+
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    args = _build_stream_parser().parse_args()
+
+    if args.from_kafka:
+        from live_kafka_stream import run_live_kafka_consumer
+
+        live_rep = run_live_kafka_consumer(
+            bootstrap_servers=args.bootstrap_servers,
+            topic=args.topic,
+            group_id=args.group_id,
+            mongo_uri=args.mongo_uri,
+            max_messages=args.max_messages,
+            idle_timeout_sec=args.idle_timeout_sec,
+            continuous=args.continuous,
+            reset_live=args.reset_live,
+        )
+        print(json.dumps(live_rep, ensure_ascii=False, indent=2))
+        return
+
+    if args.bronze_path.is_file():
+        events_df = pd.read_parquet(args.bronze_path)
+    elif Path("data/demo_sample/sample_windows_23d.csv").is_file():
+        events_df = pd.read_csv("data/demo_sample/sample_windows_23d.csv")
+    else:
         raise FileNotFoundError(f"Bronze replay stream not found: {args.bronze_path}")
-    events_df = pd.read_parquet(args.bronze_path)
     report = run_stream_with_restart_recovery(
         events_df,
         args.checkpoint_dir,

@@ -3,16 +3,16 @@
 - **Tên đề tài:** Hệ thống Giám sát Hiện trạng & Dự báo Ùn tắc Giao thông Đô thị TP. Hồ Chí Minh (*HCMC Smart Traffic Big Data Analytics & Congestion Prediction Platform*)
 - **Đơn vị & Học phần:** `FSB · FPT University | MSE AI | BDA501 – Big Data Analytics` (`Fall 2026`)
 - **Giảng viên hướng dẫn (Instructor):** **Đặng Trần Khánh**
-- **Bộ slide trình chiếu đi kèm:** `HCMC_Smart_Traffic_Final_Presentation.pptx` & `HCMC_Smart_Traffic_Final_Slides.pdf` (`16 Slides` theo cấu trúc **12 Phần chuẩn Học thuật & Hội nghị + 2 Slide Trực quan hóa Phương pháp**, nêu rõ **`Limitations & Risks` ngay tại từng Solution Component** và tổng hợp **`System-Wide Limitations & Risks + Plan`** ở cuối bài)
-- **Báo cáo tổng kết tra cứu đi kèm:** `HCMC_Smart_Traffic_Final_Report.pdf` & `product/00-proposal/project-proposal.md` (`7 Chương`)
-- **Nhóm thực hiện & Phân công Trình bày theo 16 Slides (3 Thành viên — Mỗi Slide đúng 1 Người nói):**
+- **Bộ slide trình chiếu đi kèm:** `HCMC_Smart_Traffic_Final_Presentation.pptx` & `HCMC_Smart_Traffic_Final_Slides.pdf` (`17 Slides` theo cấu trúc **12 Phần chuẩn Học thuật & Hội nghị + 2 Slide Trực quan hóa Phương pháp + Slide 17 Session 9 Technical Readiness Summary**)
+- **Báo cáo tổng kết & Kiểm định đi kèm:** `HCMC_Smart_Traffic_Final_Report.pdf`, `SESSION9_TECHNICAL_AUDIT_REPORT.md` (`evidence/session9/A..I`) & `product/00-proposal/project-proposal.md` (`7 Chương`)
+- **Nhóm thực hiện & Phân công Trình bày theo 17 Slides (3 Thành viên — Mỗi Slide đúng 1 Người nói):**
   1. **Nguyễn Tạ Minh Quyền (`25MS23280`)** — Phụ trách **Slide 01, Slide 02 (`1. Problem Statement`), Slide 04 (`3. System Architecture`), Slide 05 (`4. Data, EDA & Data Problem`), Slide 06 (`Giải thích Phương pháp 1/2: Nội suy Vmax & Monoid`) & Slide 08 (`5. Data Pipeline & Data Processing`)**
   2. **Nguyễn Thành Đạt (`25MS23306`)** — Phụ trách **Slide 03 (`2. Literature Review`), Slide 09 (`6. Modeling`), Slide 10 (`7. Batch Processing`), Slide 12 (`9A. Experiments: Ablation`) & Slide 13 (`9B. Experiments: Persistence Defense`)**
-  3. **Phạm Công Minh (`25MS23310`)** — Phụ trách **Slide 07 (`Giải thích Phương pháp 2/2: Line-Graph PageRank, 7D K-Means & O(1) Sketches`), Slide 11 (`8. Stream Processing`), Slide 14 (`10. Demonstration`), Slide 15 (`11. Limitations & Risks — Tổng hợp`), Slide 16 (`12. Plan`) & Trình diễn `Live Demo` trực tiếp trên `:8501`**
+  3. **Phạm Công Minh (`25MS23310`)** — Phụ trách **Slide 07 (`Giải thích Phương pháp 2/2: Line-Graph PageRank, 7D K-Means & O(1) Sketches`), Slide 11 (`8. Stream Processing`), Slide 14 (`10. Demonstration`), Slide 15 (`11. Limitations & Risks — Tổng hợp`), Slide 16 (`12. Plan`), Slide 17 (`13. Session 9 Technical Readiness Summary`) & Trình diễn `Live Demo` trực tiếp trên `:8501`**
 
 ---
 
-## Phần 1. Bảng Ánh Xạ Cấu Trúc 12 Phần Sang 16 Slides & Phân Bổ Thời Lượng (`18 Phút + 3 Phút Live Demo`)
+## Phần 1. Bảng Ánh Xạ Cấu Trúc 12 Phần + Session 9 Audit Sang 17 Slides (`18 Phút + 3 Phút Live Demo`)
 
 | Thứ tự Slide | Mục trong Cấu trúc 12 Phần | Nội dung Cốt lõi (Chỉ nêu `Limitations & Risks` ở các Phần Giải pháp) | Người Trình bày | Khung Thời gian | Mục Báo cáo |
 |---|---|---|---|---|---|
@@ -31,12 +31,13 @@
 | **Slide 13** | **9B. Experiments (Defense)** | Đối chứng 1-đối-1 `Persistence Baseline (94.84%)` vs `Random Forest (23D)` trên 4 chế độ thực tế | **Thành Đạt** | `13:30 – 14:45` | Chương 5 (`5.4`) |
 | **Slide 14** | **10. Demonstration** | Cận cảnh giao diện `:8501` (`Case Study 1: Tab 2 E → F`, `Case Study 2: Tab 4 Cold-Start`) & tổng quan 5 tab nghiệp vụ | **Công Minh** | `14:45 – 15:50` | Chương 6 (`6.4`) |
 | **Slide 15** | **11. Limitations & Risks** | **Bảng Tổng hợp (Roll-Up) Limitations của 5 Thành phần Giải pháp (Mục 3, 5, 6, 7, 8) & 4 Rủi ro Chung Toàn Hệ thống** | **Công Minh** | `15:50 – 16:55` | Chương 7 (`7.5`) |
-| **Slide 16** | **12. Plan** | **Kế hoạch Thực thi Đã Hoàn thành (100% của 3 thành viên) & Lộ trình Mở rộng 3 Giai đoạn (`Phase 1–3 Plan`)** | **Công Minh** | `16:55 – 18:00` | Chương 7 (`7.1–7.5`) |
-| **Live Demo** | **Trình diễn Trực tiếp (`:8501`)** | Thao tác trực tiếp 5 tab nghiệp vụ trên trình duyệt (`http://localhost:8501`) kết nối `MongoDB 8.0` | **Công Minh** | `18:00 – 21:00` | Toàn bộ 5 tab `app.py` |
+| **Slide 16** | **12. Plan** | **Kế hoạch Thực thi Đã Hoàn thành (100% của 3 thành viên) & Lộ trình Mở rộng 3 Giai đoạn (`Phase 1–3 Plan`)** | **Công Minh** | `16:40 – 17:20` | Chương 7 (`7.1–7.5`) |
+| **Slide 17** | **13. Session 9 Readiness** | **Tổng hợp Kiểm định Kỹ thuật `A–I` & `Card B` (`[I]` vs `[P]`, `B1–B3` `raw_data ↔ data`, Live Kafka → MongoDB)** | **Công Minh** | `17:20 – 18:00` | `evidence/session9/A..I` |
+| **Live Demo** | **Trình diễn Trực tiếp (`:8501`)** | Phát trực tiếp `200` sự kiện qua `Kafka 4.1` → `Consumer` → `MongoDB 8.0` → 5 tab `Streamlit (:8501)` | **Công Minh** | `18:00 – 21:00` | `producer.py`, `live_kafka_stream.py`, `app.py` |
 
 ---
 
-## Phần 2. Kịch Bản Lời Thoại Chi Tiết Từng Slide (`Slide 01` – `Slide 16`)
+## Phần 2. Kịch Bản Lời Thoại Chi Tiết Từng Slide (`Slide 01` – `Slide 17`)
 
 #### Slide 01: Mở Đầu — Trang Bìa Đề Tài, Học Phần, Nhóm Thực Hiện & Giảng Viên Hướng Dẫn (`00:00 – 00:35`)
 - **Người trình bày:** **Nguyễn Tạ Minh Quyền (`25MS23280`)**
@@ -249,31 +250,58 @@
 
 ---
 
-#### Slide 16: `12. Plan` — Nghiệm Thu Kế Hoạch Thực Hiện Nhóm & Lộ Trình Phát Triển 3 Giai Đoạn (`16:55 – 18:00`)
+#### Slide 16: `12. Plan` — Nghiệm Thu Kế Hoạch Thực Hiện Nhóm & Lộ Trình Phát Triển 3 Giai Đoạn (`16:40 – 17:20`)
 - **Người trình bày:** **Phạm Công Minh (`25MS23310`)**
-- **Mục tiêu truyền đạt:** Trình bày bảng nghiệm thu tiến độ thực hiện của 3 thành viên (`100% Hoàn thành`) gắn với 12 phần, và đưa ra **Kế hoạch hành động 3 giai đoạn (`Phase 1–3 Plan`)** giải quyết trực tiếp từng hạn chế đã nêu ở Phần 11 trước khi mở `Live Demo`.
+- **Mục tiêu truyền đạt:** Trình bày bảng nghiệm thu tiến độ thực hiện của 3 thành viên (`100% Hoàn thành`) gắn với 12 phần, và đưa ra **Kế hoạch hành động 3 giai đoạn (`Phase 1–3 Plan`)** giải quyết trực tiếp từng hạn chế đã nêu ở Phần 11.
 - **Chỉ dẫn trực quan:** Chỉ bảng nghiệm thu 3 thành viên phía trên, thẻ `Kế Hoạch Ngắn & Trung Hạn (Phase 1 & 2)` bên trái dưới và thẻ `Kế Hoạch Dài Hạn (Phase 3) & Quality Gate` bên phải dưới.
 - **Lời thoại thuyết trình:**
-  > "Khép lại bộ slide ở **Phần 12 — Plan** trên trang 16:
-  > - **Về kế hoạch thực thi đồ án hiện tại (bảng trên):** Cả 3 thành viên — bạn **Minh Quyền** (`Mục 1, 4, 5, 7A`), bạn **Thành Đạt** (`Mục 2, 6, 7B, 9`) và em **Công Minh** (`Mục 3, 8, 10, 11, 12`) — đều đã hoàn thành **100% khối lượng công việc**, vượt qua toàn bộ **22/22 bài kiểm thử tự động `pytest` & `Spark unittest`** và đạt `0` lỗi `Ruff`.
+  > "Tiếp theo ở **Phần 12 — Plan** trên Slide 16:
+  > - **Về kế hoạch thực thi đồ án hiện tại (bảng trên):** Cả 3 thành viên — bạn **Minh Quyền** (`Mục 1, 4, 5, 7A`), bạn **Thành Đạt** (`Mục 2, 6, 7B, 9`) và em **Công Minh** (`Mục 3, 8, 10, 11, 12`) — đều đã hoàn thành **100% khối lượng công việc**, vượt qua toàn bộ **27/27 bài kiểm thử tự động `pytest` & `Spark unittest`** và đạt `0` lỗi `Ruff`.
   > - **Về kế hoạch phát triển tiếp theo (`Phase 1–3 Plan` ở 2 thẻ dưới) nhằm giải quyết triệt để các hạn chế ở Phần 11:**
   >   - **`Phase 1 (Ngắn hạn — Khắc phục hạn chế Modeling & Sketch)`:** Áp dụng **Cost-Sensitive Focal Loss** để bắt nhạy các ca đột ngột hóa kẹt (`A–D → E–F`), đồng thời triển khai **Ring-Buffer Sliding Bloom Filter** tự xoay vòng bit mỗi 30 phút.
   >   - **`Phase 2 (Trung hạn — Đa nguồn dữ liệu & Chống Concept Drift)`:** Đấu nối luồng GPS xe buýt/xe công nghệ toàn TP.HCM (`~1.5–3.0 TB/ngày`) kèm API Thời tiết/Mưa ngập, và tự động kích hoạt huấn luyện lại `Phase A` hàng tuần khi chỉ số `PSI` báo hiệu trôi dạt phân phối.
-  >   - **`Phase 3 (Dài hạn — Hạ tầng Đa nút & Đóng vòng SCATS)`:** Nâng cấp lên cụm **Kubernetes Multi-Node + Sharded MongoDB + Vector-Tile GIS** và tích hợp trực tiếp API dự báo `+30m` vào hệ thống điều khiển đèn tín hiệu `SCATS`. Ngay sau đây, em xin phép mở trình duyệt tại `http://localhost:8501` để **Live Demo** trực tiếp hệ thống ạ!"
+  >   - **`Phase 3 (Dài hạn — Hạ tầng Đa nút & Đóng vòng SCATS)`:** Nâng cấp lên cụm **Kubernetes Multi-Node + Sharded MongoDB + Vector-Tile GIS** và tích hợp trực tiếp API dự báo `+30m` vào hệ thống điều khiển đèn tín hiệu `SCATS`."
 - **Tra cứu nhanh Báo cáo:** Chương 7, Mục `7.1` – `7.5`.
 
 ---
 
-## Phần 3. Kịch Bản Thao Tác `Live Demo` 3 Phút (`http://localhost:8501`)
+#### Slide 17: `13. Session 9 Technical Readiness Summary` — Kiểm Định Độc Lập `A–I` & `Card B` (`17:20 – 18:00`)
+- **Người trình bày:** **Phạm Công Minh (`25MS23310`)**
+- **Mục tiêu truyền đạt:** Tổng kết 5 kết luận kiểm định kỹ thuật thực chứng từ hồ sơ `evidence/session9/` (`A_architecture` đến `I_readiness`), phân định minh bạch giữa `[I] Implemented` và `[P] Proposed`, đối chứng trực tiếp `raw_data/ ↔ data/` trong `B1/B2/B3` (kèm gói mẫu `data/demo_sample/`), và chuyển mượt sang **Live Kafka Demo** trực tiếp trên `:8501`.
+- **Chỉ dẫn trực quan:** Chỉ lần lượt thẻ ngang `1. Architecture Truth` phía trên và 4 thẻ `2. Spark Performance`, `3. Card B1 & B2`, `4. Live Kafka Stream & MongoDB (B3)`, `5. Honest Limitations & Evidence Provenance` phía dưới.
+- **Lời thoại thuyết trình:**
+  > "Khép lại bộ slide trên **Slide 17 — Session 9 Technical Readiness Summary**, nhóm đúc kết 5 kết quả kiểm định kỹ thuật độc lập (`Self-Score: 95/100`):
+  > 1. **Architecture Truth (`[I]` vs `[P]`):** Tách bạch tường minh phần đã chạy thực chứng trong cụm Docker (`Kafka 4.1` → `Spark 3.5.7` → `Parquet` + `MongoDB 8.0` → `Streamlit :8501` & `ui-demo.html`) với các mở rộng đề xuất `[P]` (`8–17` tỷ tin viễn thông/ngày, `K8s`, `SCATS`), đồng thời chuẩn hóa thuật ngữ thành **`Predictive ML (Past-Only Priors τ < t)`** và **`7D Behavioral Road Archetypes`**.
+  > 2. **Controlled Performance:** Trên `Spark 3.5.7`, `BroadcastHashJoin` giảm tầng trộn mạng `Exchange` từ `10 → 2` (`-25.7%` thời gian: `1,418.6 → 1,054.2 ms`, `exceptAll = 0`), còn `8-Bucket Salted Monoid` kéo độ lệch phân vùng từ `687.43x → 1.023x` với sai số `0.0`.
+  > 3. **Card B Validation (`B1, B2`):** Đối chiếu chéo trực tiếp `raw_data/ ↔ data/` xác nhận `0/23` biến rò rỉ tương lai (`Future-Shuffle = 0.0`), và chứng minh trên đoạn `#21969 Nguyễn Kiệm` (`PageRank = 2.7313` nhưng chạy `45.41 km/h`, `LOS A`) rằng `PageRank` đo nguy cơ nút phễu hình học chứ không đồng nghĩa đường đang kẹt.
+  > 4. **Live End-to-End Kafka → MongoDB (`B3`):** Nhóm đã nối thông luồng trực tiếp từ `producer.py` → `Kafka` → `live-consumer` (`33.0 KiB Sketches` + `Random Forest 23D` chỉ đọc) → `MongoDB 8.0` (`IXSCAN = 0.636 ms`) → `Streamlit :8501`, kèm bộ dữ liệu mẫu gọn nhẹ `data/demo_sample/` để máy checkout mới chạy được ngay.
+  > 5. **Honest Provenance:** Hồ sơ `evidence/session9/` phân biệt rõ các kết quả lô lịch sử `38.5 MB` với kết quả chạy kiểm chứng lại (`Live Kafka 200 bản tin` & `27/27 pytest` đạt `100%`). Ngay sau đây, em xin phép chuyển sang màn hình `http://localhost:8501` và Terminal để **Live Demo luồng Kafka thời gian thực đầu–cuối** ạ!"
+- **Tra cứu nhanh Báo cáo:** `SESSION9_TECHNICAL_AUDIT_REPORT.md` & `evidence/session9/I_readiness.md`.
+
+---
+
+## Phần 3. Kịch Bản Thao Tác `Live Demo` 3 Phút (`Kafka 4.1 -> Consumer -> MongoDB 8.0 -> Streamlit :8501`)
+
+> **Chuẩn bị sẵn trước giờ lên bục (1 lệnh duy nhất khởi động đủ 5 container `kafka`, `mongo`, `spark`, `app`, `live-consumer`):**
+> ```powershell
+> docker compose --profile live up -d
+> ```
+> Mở sẵn trình duyệt tại `http://localhost:8501` (và mở sẵn `ui-demo.html` ở một tab phụ làm phương án dự phòng tức thời).
 
 1. **Phút 1 (`00:00 – 00:45`) — `Tab 1: Bản đồ Điểm nóng & Dữ liệu`:**
    - Chỉ dải 5 thông số tổng quan trên đầu trang (`90,938` bản tin GPS, `33,441` cửa sổ, `84,633` đoạn đường, `ROC-AUC = 0.9882`, `0.636 ms`), sau đó chỉ vào bản đồ TP.HCM có sông Sài Gòn và bảng xếp hạng điểm nóng `EWMA` (dẫn đầu là **Đoạn 47407 — Lý Thường Kiệt**, điểm `= 6.6652`, mức `F`).
-2. **Phút 2 (`00:45 – 01:55`) — `Tab 2: Dự báo +30 Phút & MongoDB`:**
+2. **Phút 2 (`00:45 – 02:10`) — `Tab 2: Dự báo +30 Phút & Trình diễn Luồng Kafka Thời Gian Thực Đầu–Cuối`:**
    - Giữ đoạn mặc định `Đoạn 21064 · Công Trường Quốc Tế` → chỉ rõ 5 ô kết quả: `Hiện tại = E`, `Đoán theo Hiện tại = E` (sai), **`Random Forest (23 biến) = F (59.6%, đổi trạng thái 73.0%)`**, `Thực tế = F` (đúng!).
-   - Nhấn nút **`🔄 Làm mới dữ liệu trực tuyến (5s)`** → chỉ trạng thái kết nối trực tiếp `MongoDB 8.0` (`33,441` bản ghi), rồi cuộn xuống biểu đồ so sánh trực diện giữa `Persistence Baseline` và `Random Forest`.
-3. **Phút 3 (`01:55 – 03:00`) — Lướt nhanh `Tab 3`, `Tab 4` & `Tab 5`:**
-   - **`Tab 3`:** Chỉ bảng nút cổ chai `Line-Graph PageRank` (`Phú Định`, `Lê Lai`, `Nguyễn Kiệm`) và lưu ý cỡ mẫu nhỏ (`5–8` khung) của luật lan truyền trễ.
-   - **`Tab 4`:** Chỉ bản đồ 6 cụm đường phố `7D K-Means` và công cụ tìm các đoạn đường có cảm biến tương đồng cho `74,606` đoạn thiếu GPS (`Cold-Start`).
+   - Cuộn xuống mục **`2B. 📡 Live Kafka Stream Monitor (producer.py -> Kafka -> Consumer -> MongoDB 8.0)`**:
+     - Bật ô **`⏱️ Tự động cập nhật mỗi 2 giây`** (hoặc nhấn **`🧹 Reset bộ đếm Live Demo`** để đưa bộ đếm về `0`).
+     - Mở 1 cửa sổ Terminal bên cạnh trình duyệt và chạy lệnh phát trực tiếp `200` sự kiện lịch sử theo thời gian thực vào `Kafka 4.1.0 KRaft` (`3 partitions`):
+       ```powershell
+       python producer.py --mode window --bootstrap-servers localhost:9092 --topic hcmc-traffic-events --max-messages 200 --replay-speed 0.2
+       ```
+     - **Lời giới thiệu trung thực khi số nhảy trực tiếp trên màn hình `:8501`:** *"Đây là luồng phát lại dữ liệu GPS lịch sử (`event-time replay`) qua broker `Kafka 4.1` gồm 3 phân vùng vào `live-consumer`. Thầy/cô có thể thấy trực tiếp trên giao diện: `200` bản tin vừa đi qua Kafka, bộ lọc `32.0 KiB Bloom Filter` bắt gọn `4` bản tin phát trùng, `Watermark 30m` giữ lại `4` bản tin trễ `> 30 phút` cho `Tier-2 Reconciliation`, `1.0 KiB HLL++` ước lượng `169` đoạn đường hoạt động (thực tế `165` đoạn), và `192` dự báo `STREAM_PROVISIONAL (v1)` được mô hình `Random Forest 23D` chấm điểm ghi thẳng vào `MongoDB 8.0`!"*
+3. **Phút 3 (`02:10 – 03:00`) — Lướt nhanh `Tab 3`, `Tab 4` & `Tab 5`:**
+   - **`Tab 3`:** Chỉ bảng nút cổ chai `Line-Graph PageRank` (`Phú Định`, `Lê Lai`, `Nguyễn Kiệm` `#21969`) và lưu ý cỡ mẫu nhỏ (`5–8` khung) của luật lan truyền trễ.
+   - **`Tab 4`:** Chỉ bản đồ 6 cụm đường phố `7D K-Means` (`Behavioral Archetypes`) và công cụ tra cứu cho `74,606` đoạn thiếu GPS (`[COLD-START PRIOR]`).
    - **`Tab 5`:** Chỉ bộ nhớ lọc trùng cố định `32.0 KiB` + `1.0 KiB`, độ đầy đủ đối soát hai tầng `98.50% -> 100.00%` và bằng chứng truy vấn `MongoDB IXSCAN` (`0.636 ms`).
 
 ---

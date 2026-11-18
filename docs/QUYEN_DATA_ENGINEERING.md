@@ -102,7 +102,7 @@ ICT date rollover (`date` + `date_utc`), and actual Spark `BroadcastHashJoin`/Pa
 ## Validation on 08–09/11/2026
 
 - Verified on both **Apache Spark 3.5.7 (Java 17)** (`song-recommender-spark:3.5.7`) and **PySpark 4.2.0 (Java 21)** (`Dockerfile.spark`).
-- Unit & integration tests: **5/5 Spark tests pass (`test_quyen_spark.py`)** and **15/15 Platform V3 tests pass (`test_platform_v3.py`)** (`20/20` total in `pytest -v`).
+- Historical PR-integration test record: **5 Spark tests** (`test_quyen_spark.py`) and **15 Platform V3 tests** (`test_platform_v3.py`) passed at that point. The suite has since changed; this historical count is not the current collected-test count. Run `pytest -v` to obtain the authoritative result.
 - Full raw snapshot using exclusive warmup cutoff `2020-08-01T00:00:00Z`, `local[2]`, 4 shuffle partitions:
 - 90,938 input deliveries = 90,787 accepted unique + 151 quarantined + 0 retries.
   All 151 are `E4_UNKNOWN_SEGMENT` after 427 non-road GIS entities (`S3_NON_ROAD_TYPE`) were excluded (accounting for exactly `33,441 - 33,394 = 47` windows).

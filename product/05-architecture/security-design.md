@@ -15,3 +15,7 @@
 1. **`Partitioned Idempotent Upsert` (`EC-10`):** Các tác vụ ghi vào `[C16]` `MongoDB 8.0` băm theo `segment_id` thành `4` phân vùng (`repartition(4)`), mỗi phân vùng đóng gói lô `500` lệnh `UpdateOne({"event_id": eid}, {"$set": doc}, upsert=True)` trên khóa `Unique Index` `{"event_id": 1}`, triệt tiêu hoàn toàn lỗi `E11000 duplicate key error` khi chạy lại job hoặc khi `Phase C` ghi đè `Phase B`.
 2. **Nhật ký `Write-Ahead Log (WAL)` (`outputs/checkpoints/`):** Lưu trữ offset luồng và trạng thái cửa sổ tại `outputs/checkpoints/raw/` và `outputs/checkpoints/agg/` cùng `outputs/query_progress.json` để phục hồi tức thời sau khi khởi động lại container.
 3. **Tuân thủ Bảo mật Git (`Git Security Hygiene`):** Không lưu khóa bí mật (`secrets`), `.env` hoặc thông tin nhạy cảm trong mã nguồn.
+
+## 3. Ranh Giới Bảo Mật Môi Trường Demo
+
+`docker-compose.yml` là cấu hình proof-of-concept chạy cục bộ: Kafka và MongoDB hiện chưa bật SASL/TLS hoặc xác thực tài khoản; các cổng host được bind vào `127.0.0.1` và các container giao tiếp trong bridge network nội bộ. Không triển khai cấu hình này trên máy chủ hoặc mạng không tin cậy. Production cần bật xác thực/ủy quyền, TLS, quản lý secret, network policy, audit log và quy trình xoay vòng credential.

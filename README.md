@@ -1,10 +1,12 @@
 # Hệ Thống Giám Sát Hiện Trạng & Dự Báo Ùn Tắc Giao Thông Đô Thị TP.HCM
 
 > **Bộ tài liệu chính thức của đồ án (`BDA501 — Big Data Analytics`):**
-> - **Báo cáo Tổng kết Đồ án & Đặc tả Kỹ thuật Chi tiết:** [`HCMC_Smart_Traffic_Final_Report.pdf`](./HCMC_Smart_Traffic_Final_Report.pdf) / [`HCMC_Smart_Traffic_Final_Project_Proposal.pdf`](./HCMC_Smart_Traffic_Final_Project_Proposal.pdf) & [`product/00-proposal/project-proposal.md`](./product/00-proposal/project-proposal.md)
-> - **Bộ Slide Thuyết trình Trực quan (`16 Slides`):** [`HCMC_Smart_Traffic_Final_Presentation.pptx`](./HCMC_Smart_Traffic_Final_Presentation.pptx) / [`HCMC_Smart_Traffic_Proposal_Presentation.pptx`](./HCMC_Smart_Traffic_Proposal_Presentation.pptx) & [`HCMC_Smart_Traffic_Final_Slides.pdf`](./HCMC_Smart_Traffic_Final_Slides.pdf)
+> - **Báo cáo Tổng kết Đồ án & Đặc tả Kỹ thuật Chi tiết:** [`HCMC_Smart_Traffic_Final_Report.pdf`](./HCMC_Smart_Traffic_Final_Report.pdf) & [`product/00-proposal/project-proposal.md`](./product/00-proposal/project-proposal.md)
+> - **Bộ Slide Thuyết trình Trực quan (`17 Slides`):** [`HCMC_Smart_Traffic_Final_Presentation.pptx`](./HCMC_Smart_Traffic_Final_Presentation.pptx) & [`HCMC_Smart_Traffic_Final_Slides.pdf`](./HCMC_Smart_Traffic_Final_Slides.pdf)
 > - **Kịch bản Thuyết trình, Live Demo & Cẩm nang Phản biện Q&A:** [`PRESENTATION_SCRIPT.md`](./PRESENTATION_SCRIPT.md)
-> - **Đặc tả Toán học & Kết quả Kiểm chứng Chuyên sâu:** [`TECHNICAL_NOTE.md`](./TECHNICAL_NOTE.md)
+> - **Hồ sơ Kiểm định Kỹ thuật Session 9 (`A–I` & `Card B`):** [`SESSION9_TECHNICAL_AUDIT_REPORT.md`](./SESSION9_TECHNICAL_AUDIT_REPORT.md), [`evidence/session9/I_readiness.md`](./evidence/session9/I_readiness.md) & [`BDA501_Session9_Lab_Manual_Completed.docx`](./BDA501_Session9_Lab_Manual_Completed.docx)
+> - **Hướng dẫn Chuẩn bị Dữ liệu & Giao diện Tĩnh 5-Tab:** [`docs/DATA_SETUP.md`](./docs/DATA_SETUP.md), [`data/demo_sample/README.md`](./data/demo_sample/README.md) & [`ui-demo.html`](./ui-demo.html)
+> - **Đặc tả Toán học & Kết quả Kiểm chứng Chuyên sâu:** [`TECHNICAL_NOTE.md`](./TECHNICAL_NOTE.md) & [`docs/QUYEN_DATA_ENGINEERING.md`](./docs/QUYEN_DATA_ENGINEERING.md)
 
 ## 1. Bức Tranh Tổng Thể Trong 4 Bước Nối Tiếp Nhau
 
@@ -45,26 +47,38 @@ Mục tiêu của hệ thống là **giám sát hiện trạng và dự báo tr�
 
 ---
 
-## 4. Hướng dẫn Khởi chạy & Kiểm thử Tự động
+## 4. Hướng dẫn Chuẩn bị Dữ liệu, Khởi chạy, Live Kafka Demo & Kiểm thử Tự động
 
-### 4.1. Khởi chạy Cụm Dịch vụ Docker (`10.5 / 16.0 GB RAM`)
+> **Chuẩn bị dữ liệu (`raw_data/` & `data/demo_sample/`):** Để giữ kho mã nguồn gọn nhẹ, 5 tệp CSV gốc (`~38.50 MB`) đặt tại `raw_data/` theo hướng dẫn chi tiết trong [`docs/DATA_SETUP.md`](./docs/DATA_SETUP.md). Đồng thời, kho mã nguồn **đã đính kèm sẵn gói mẫu thực nghiệm [`data/demo_sample/`](./data/demo_sample/README.md) (`238 KB`)** để bất kỳ máy checkout mới nào cũng chạy ngay được **Live Kafka Demo**, kiểm định **`Card B (B1/B2/B3)`** và giao diện mà không cần tải trước `38.50 MB`.
+
+### 4.1. Giao diện Tĩnh 5-Tab Không Cần Cài Đặt (`ui-demo.html`) & Streamlit Dashboard (`:8501`)
+- **Xem nhanh tức thì không cần cài Python/Docker:** Mở trực tiếp tệp [`ui-demo.html`](./ui-demo.html) bằng trình duyệt để trải nghiệm giao diện 5 tab có bộ lọc tương tác cơ bản.
+- **Khởi chạy cụm Docker đầy đủ kèm Consumer Kafka thời gian thực (`10.5 / 16.0 GB RAM`):**
 ```powershell
-docker compose up -d kafka mongo spark app
+docker compose --profile live up -d
 
 # Chạy tác vụ Spark Batch độc lập từ dữ liệu thô trên Apache Spark 3.5.7 (Java 17):
 $env:TRAFFIC_FIT_CUTOFF = '2020-08-01T00:00:00Z'
 docker compose -f compose.quyen.yml run --build --rm batch
 ```
 
-### 4.2. Chạy Trọn vẹn Dây chuyền 4 Bước, Kiểm chứng Hồi phục `WAL` & Kiểm thử Tự động
+### 4.2. Demo Luồng Thời Gian Thực Đầu–Cuối (`producer.py` → `Kafka 4.1` → `Consumer` → `MongoDB 8.0` → `Streamlit :8501`)
+1. Đảm bảo cụm container đang chạy (`docker compose --profile live up -d`) và mở <http://localhost:8501> → chuyển sang **`Tab 2: Dự báo +30 Phút & MongoDB`** → bật ô **`⏱️ Tự động cập nhật mỗi 2 giây`** tại mục **`2B. 📡 Live Kafka Stream Monitor`**.
+2. Mở một cửa sổ Terminal và phát trực tiếp `200` sự kiện lịch sử (`event-time replay`) qua broker `Kafka 4.1.0 KRaft` (`3 partitions`):
+```powershell
+python producer.py --mode window --bootstrap-servers localhost:9092 --topic hcmc-traffic-events --max-messages 200 --replay-speed 0.2
+```
+3. Quan sát bộ đếm trên `Streamlit :8501` cập nhật trực tiếp từ `MongoDB 8.0` (`bda501.live_stream_scores` & `bda501.live_stream_telemetry`): `200` bản tin tiêu thụ, `4` bản tin phát trùng bị chặn bởi `32.0 KiB Bloom Filter`, `4` bản tin trễ `> 30m` chuyển sang `Tier-2 Reconciliation`, và `192` dự báo `STREAM_PROVISIONAL (v1)` được `Random Forest (23 biến)` chấm điểm trực tuyến. *(Lưu ý trình bày trung thực: đây là phát lại sự kiện GPS lịch sử qua Kafka theo thời gian thực để kiểm chứng luồng đầu–cuối, không phải nguồn viễn thông trực tiếp).*
+
+### 4.3. Chạy Trọn vẹn Dây chuyền 4 Bước, Kiểm chứng Hồi phục `WAL` & Kiểm thử Tự động (`27/27 Passed`)
 ```powershell
 python -m pip install -r requirements.txt
 python pipeline.py
 python baseline.py
-python producer.py --mode both --bootstrap-servers localhost:9092
 python starter_stream.py --kill-after-batch 1
-pytest -v
-ruff check . --select E,F,W,C901 --config "lint.mccabe.max-complexity=14" --config "line-length=120"
+python scripts/run_session9_audit.py
+python -m pytest -v
+python -m ruff check . --select E,F,W,C901 --config "lint.mccabe.max-complexity=14" --config "line-length=120"
 streamlit run app.py
 ```
 

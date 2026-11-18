@@ -1,4 +1,4 @@
-"""Build the 16-Slide Executive, Conference & Academic Defense Presentation (.pptx, .pdf & HD .pngs)."""
+"""Build the 17-Slide Executive, Conference & Academic Defense Presentation (.pptx, .pdf & HD .pngs)."""
 
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ WORKSPACE_DIR = REPO_DIR.parent
 ARTIFACT_DIR = Path(r"C:\Users\PC\.gemini\antigravity\brain\f813022d-2858-4604-88b6-b1934862999e")
 CHART_DIR = REPO_DIR / "outputs" / "slide_charts"
 SLIDE_PNG_DIR = REPO_DIR / "outputs" / "slides"
-TOTAL_SLIDES = 16
+TOTAL_SLIDES = 17
 
 
 def render_eda_chart(out_path: Path) -> Path:
@@ -1303,13 +1303,107 @@ def _add_slide_16_plan_and_roadmap(prs: Presentation) -> DualSlide:
         [
             "Phase 3 (Dài hạn — Đa nút & Đóng vòng Đèn): Nâng cấp lên Kubernetes Multi-Node + Sharded MongoDB + "
             "Vector-Tile GIS và tích hợp API dự báo +30m vào hệ thống đèn tín hiệu SCATS.",
-            "Quality Gate Nghiệm thu: Vượt qua 100% kiểm thử tự động (22/22 pytest & Spark unittest; 0 lỗi Ruff).",
+            "Quality Gate Nghiệm thu: Vượt qua 100% kiểm thử tự động (27/27 pytest & Spark unittest; 0 lỗi Ruff).",
         ],
         badge="Phase 3 & QA",
         theme="navy",
         body_size=8.3,
     )
     return s16
+
+
+def _add_slide_17_session9_readiness_summary(prs: Presentation) -> DualSlide:
+    """Slide 17 (Session 9 Readiness): Technical Readiness Audit Summary & Card B Verification."""
+    s17 = DualSlide(prs)
+    s17.add_chrome(
+        17,
+        TOTAL_SLIDES,
+        5,
+        "SESSION 9 READINESS AUDIT · KIỂM ĐỊNH KỸ THUẬT A–I & CARD B (95 / 100)",
+        "13. Session 9 Technical Readiness Summary (Card B)",
+        "Đối chứng ranh giới [I] vs [P], kiểm nghiệm B1–B3 (raw_data ↔ data) & luồng Live Kafka → MongoDB",
+    )
+    s17.add_card(
+        0.55,
+        2.00,
+        14.90,
+        1.78,
+        "1. Architecture Truth: Ranh Giới [I] Đã Triển Khai vs [P] Đề Xuất & Chuẩn Hóa Thuật Ngữ",
+        [
+            "[I] Implemented: Cụm 4 dịch vụ (Kafka 4.1 KRaft 3 phân vùng → Spark 3.5.7 → Parquet + MongoDB 8.0 → "
+            "Streamlit :8501 + ui-demo.html) kèm gói mẫu data/demo_sample/.",
+            "[P] Proposed & Card B Fixes: Luồng viễn thông 8–17 tỷ tin/ngày, K8s đa nút & đèn SCATS gắn nhãn [P]. "
+            "Chuẩn hóa thành Predictive ML (Past-Only Priors τ < t) & 7D Behavioral Archetypes.",
+        ],
+        badge="[I] vs [P] Truth",
+        theme="sky_strong",
+        body_size=8.2,
+    )
+    s17.add_card(
+        0.55,
+        3.94,
+        7.35,
+        2.12,
+        "2. Controlled Spark Performance & Query Plan",
+        [
+            "BroadcastHashJoin giảm tầng trộn mạng Exchange từ 10 → 2 (-80%) và giảm 25.7% thời gian chạy "
+            "(1,418.6 ms → 1,054.2 ms; exceptAll = 0 dòng).",
+            "2-Stage 8-Bucket Salted 5-Tuple Monoid kéo độ lệch phân vùng từ 687.43x → 1.023x "
+            "(+19.2 ms, sai số 0.0) và cắt tỉa 9/10 phân vùng tháng Parquet.",
+        ],
+        badge="10 → 2 Exchanges",
+        theme="soft",
+        body_size=8.2,
+    )
+    s17.add_card(
+        8.10,
+        3.94,
+        7.35,
+        2.12,
+        "3. Data & Predictive ML Validation (Card B1, B2)",
+        [
+            "B1 Point-in-Time: 0/23 biến dùng khoảng (t, t+30m]; Future-Shuffle diff = 0.0; đối chiếu trực tiếp "
+            "raw_data ↔ data trên #47407 Lý Thường Kiệt & #21260 Nguyễn Bỉnh Khiêm.",
+            "B2 Falsification: Đoạn #21969 Nguyễn Kiệm có PageRank 2.7313 nhưng chạy 45.41 km/h (LOS A) → "
+            "PageRank đo nguy cơ nút phễu hình học, không đồng nghĩa đang kẹt.",
+        ],
+        badge="B1 & B2 Verified",
+        theme="soft",
+        body_size=8.2,
+    )
+    s17.add_card(
+        0.55,
+        6.22,
+        7.35,
+        2.16,
+        "4. Live Kafka Stream & MongoDB Serving (Card B3)",
+        [
+            "Rerun 2026-11-18: Phát 200 sự kiện qua Kafka → Consumer lọc 4/4 tin trùng (32.0 KiB Bloom), giữ 4 tin "
+            "trễ >30m cho Tier-2 và ghi 192 dự báo v1 vào MongoDB 8.0 & :8501.",
+            "B3 Sketch Impact: 1.0 KiB HLL++ sai số 3.98% (9,628 vs 10,027 đoạn) chỉ hiển thị KPI tổng quan "
+            "(0 cảnh báo nhầm); chỉ mục ESR đạt warm p95 = 0.636 ms.",
+        ],
+        badge="Live E2E Stream",
+        theme="sky",
+        body_size=8.2,
+    )
+    s17.add_card(
+        8.10,
+        6.22,
+        7.35,
+        2.16,
+        "5. Honest Limitations & Evidence Provenance",
+        [
+            "Giới hạn Thực tế: 88.15% (74,606 đoạn) thiếu GPS gắn nhãn [COLD-START PRIOR]; tập TEST có 8 ca chuyển "
+            "đột ngột sang E/F (ROC-AUC = 0.8136, Lift 9.35x).",
+            "Phân định Minh bạch: Tách rõ kết quả lô lịch sử 38.5 MB (2026-11-09..11) với kết quả chạy lại "
+            "(2026-11-18: Live Kafka → MongoDB, B1–B3 & 27/27 kiểm thử đạt 100%).",
+        ],
+        badge="95/100 Readiness",
+        theme="navy",
+        body_size=8.2,
+    )
+    return s17
 
 
 def _safe_copy(src: Path, dst: Path) -> None:
@@ -1394,8 +1488,8 @@ def main() -> None:
     )
     prs.core_properties.subject = "FSB Course BDA501 — Big Data Analytics (12-Section Structure)"
     prs.core_properties.comments = (
-        "16-Slide Deck: 1.Problem 2.Literature 3.Arch 4.EDA + 2 Visual Method Explainers + "
-        "5.Pipeline 6.Modeling 7.Batch 8.Stream 9.Experiments 10.Demo 11.Limitations/Risks 12.Plan"
+        "17-Slide Deck: 1.Problem 2.Literature 3.Arch 4.EDA + 2 Visual Method Explainers + "
+        "5.Pipeline 6.Modeling 7.Batch 8.Stream 9.Experiments 10.Demo 11.Limitations/Risks 12.Plan 13.Session9Readiness"
     )
 
     all_slides = [
@@ -1415,6 +1509,7 @@ def main() -> None:
         _add_slide_14_demonstration(prs, ui2, ui4),
         _add_slide_15_limitations_and_risks_summary(prs),
         _add_slide_16_plan_and_roadmap(prs),
+        _add_slide_17_session9_readiness_summary(prs),
     ]
 
     pptx_path, pdf_path = _save_and_sync_slide_outputs(prs, all_slides)

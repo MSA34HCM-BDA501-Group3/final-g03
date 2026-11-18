@@ -42,6 +42,8 @@ TRANSITION_CSV_PATH = ROOT / "outputs" / "transition_evaluation.csv"
 MAP_HOTSPOTS_PATH = ROOT / "outputs" / "slide_charts" / "map_hcmc_hotspots_coldstart.png"
 MAP_CLUSTERS_PATH = ROOT / "outputs" / "slide_charts" / "map_hcmc_clusters_7d.png"
 TRANSITION_CHART_PATH = ROOT / "outputs" / "slide_charts" / "chart_transition_analysis.png"
+LIVE_TELEMETRY_PATH = ROOT / "outputs" / "live_kafka_telemetry.json"
+LIVE_SCORES_PATH = ROOT / "outputs" / "live_kafka_scores.json"
 
 LOS_ORDER = ["A", "B", "C", "D", "E", "F"]
 ORDINAL_TO_LOS = {index: label for index, label in enumerate(LOS_ORDER)}
@@ -329,6 +331,182 @@ def query_operational_serving_store(limit: int = 25) -> tuple[pd.DataFrame, dict
 _fetch_live_mongo_status = query_operational_serving_store
 
 
+def _try_query_live_kafka_mongo(mongo_uri: str, limit: int) -> tuple[dict[str, Any], pd.DataFrame] | None:
+    try:
+        import pymongo  # type: ignore[import-not-found]
+
+        client = pymongo.MongoClient(mongo_uri, serverSelectionTimeoutMS=800)
+        db = client["bda501"]
+        tel = db["live_stream_telemetry"].find_one({"_id": "current"}, {"_id": 0})
+        if tel is not None:
+            docs = list(
+                db["live_stream_scores"].find({}, {"_id": 0}).sort([("seq_id", -1), ("severe_prob", -1)]).limit(limit)
+            )
+            client.close()
+            if not docs and int(tel.get("sink2_scored_v1", 0)) > 0 and LIVE_SCORES_PATH.is_file():
+                docs = json.loads(LIVE_SCORES_PATH.read_text(encoding="utf-8"))[:limit]
+            return dict(tel), pd.DataFrame(docs)
+        client.close()
+    except Exception:
+        pass
+    return None
+
+
+def query_live_kafka_stream_monitor(limit: int = 15) -> tuple[dict[str, Any], pd.DataFrame]:
+    """Read live Kafka consumer telemetry & provisional v1 rows from MongoDB 8.0 or file fallback."""
+    env_uri = os.environ.get("MONGO_URI", "").strip()
+    uris = [env_uri] if env_uri else ["mongodb://127.0.0.1:27017", "mongodb://mongo:27017"]
+    for uri in uris:
+        res = _try_query_live_kafka_mongo(uri, limit)
+        if res is not None:
+            return res
+    tel = _read_optional_json(LIVE_TELEMETRY_PATH)
+    rows: list[dict[str, Any]] = []
+    if LIVE_SCORES_PATH.is_file():
+        try:
+            rows = json.loads(LIVE_SCORES_PATH.read_text(encoding="utf-8"))[:limit]
+        except Exception:
+            rows = []
+    return tel, pd.DataFrame(rows)
+
+
+def _format_live_stream_display(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty or "segment_id" not in df.columns:
+        return df
+    seq_col = df["seq_id"].astype(int) if "seq_id" in df.columns else pd.Series(range(1, len(df) + 1), index=df.index)
+    part_col = df["kafka_partition"].astype(int) if "kafka_partition" in df.columns else 0
+    return pd.DataFrame(
+        {
+            "STT": seq_col,
+            "Giờ nhận": df["received_at_ict"] if "received_at_ict" in df.columns else "",
+            "Partition": part_col,
+            "Mã đoạn": df["segment_id"].astype(int),
+            "Tuyến đường": df["street_name"].fillna("N/A"),
+            "Cấp": df["street_level"].astype(int),
+            "Vận tốc (km/h)": df["mean_velocity"].astype(float).round(1),
+            "LOS hiện tại": df["current_los"],
+            "Dự báo +30p (RF 23D)": df["predicted_next_los"],
+            "Nguy cơ E/F (%)": (df["severe_prob"].astype(float) * 100.0).round(1),
+            "Điểm EWMA": df["ewma_hotspot_score"].astype(float).round(2),
+            "Trạng thái": df["lifecycle_status"],
+        }
+    )
+
+
+def _trigger_live_kafka_replay_async(mongo_uri: str) -> None:
+    """Reset Bloom/HLL++ state, wait 1s for consumer sync, and launch 200-msg Kafka producer."""
+    import subprocess
+    import sys
+    import time
+    from live_kafka_stream import reset_live_stream_state
+
+    reset_live_stream_state(mongo_uri=mongo_uri, telemetry_path=LIVE_TELEMETRY_PATH, scores_json_path=LIVE_SCORES_PATH)
+    time.sleep(1.0)
+    brokers = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "127.0.0.1:9092")
+    subprocess.Popen(
+        [
+            sys.executable,
+            "producer.py",
+            "--mode",
+            "window",
+            "--bootstrap-servers",
+            brokers,
+            "--topic",
+            "hcmc-traffic-events",
+            "--max-messages",
+            "200",
+            "--replay-speed",
+            "0.25",
+        ],
+        cwd=str(Path(__file__).resolve().parent),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def render_live_kafka_monitor_section() -> None:
+    """Render interactive Live Kafka -> 33 KiB Sketches + RF 23D -> MongoDB 8.0 monitor."""
+    import time
+    from live_kafka_stream import reset_live_stream_state
+
+    st.subheader("2B. 📡 Live Kafka Stream Monitor (Kafka 4.1 → 33 KiB Sketches + RF 23D → MongoDB 8.0)")
+    c_poll, c_play, c_reset, c_info = st.columns([1.2, 1.25, 1.05, 1.9])
+    if "live_auto_poll" not in st.session_state:
+        st.session_state["live_auto_poll"] = False
+    mongo_uri = os.environ.get("MONGO_URI", "mongodb://127.0.0.1:27017")
+    if c_play.button("▶️ Phát ngay 200 tin qua Kafka"):
+        _trigger_live_kafka_replay_async(mongo_uri)
+        st.session_state["live_auto_poll"] = True
+        st.rerun()
+    if c_reset.button("🧹 Reset bộ đếm về 0"):
+        reset_live_stream_state(
+            mongo_uri=mongo_uri, telemetry_path=LIVE_TELEMETRY_PATH, scores_json_path=LIVE_SCORES_PATH
+        )
+        time.sleep(0.9)
+        st.rerun()
+    auto_poll = c_poll.checkbox("⚡ Tự động cập nhật (2s)", key="live_auto_poll")
+
+    tel, live_df = query_live_kafka_stream_monitor(limit=15)
+    status_lbl = tel.get("status", "CHƯA CHẠY LUỒNG LIVE")
+    parts = tel.get("partition_counts", {"0": 0, "1": 0, "2": 0})
+    c_info.caption(
+        f"**Trạng thái:** `{status_lbl}` · **Topic:** `{tel.get('topic', 'hcmc-traffic-events')}` · "
+        f"**Cập nhật:** `{tel.get('last_updated_ict', 'N/A')} ICT`"
+    )
+
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric(
+        "Tin nhận từ Kafka (3 Partitions)",
+        f"{int(tel.get('messages_consumed', 0)):,}",
+        f"P0:{parts.get('0', 0)} · P1:{parts.get('1', 0)} · P2:{parts.get('2', 0)}",
+    )
+    k2.metric(
+        "Bloom 32 KiB Chặn trùng",
+        f"{int(tel.get('duplicates_caught_bloom', 0)):,} tin trùng",
+        f"Trễ >30p (chờ Tier-2): {int(tel.get('late_dropped_for_tier2', 0)):,}",
+    )
+    k3.metric(
+        "HLL++ 1 KiB Đếm đoạn đường",
+        f"{float(tel.get('hll_estimated_segments', 0.0)):.0f} đoạn",
+        f"Thực tế: {int(tel.get('exact_distinct_segments', 0)):,} đoạn",
+    )
+    k4.metric(
+        "Cảnh báo v1 ghi MongoDB",
+        f"{int(tel.get('sink2_scored_v1', 0)):,} bản ghi",
+        (
+            f"Nguy cơ E/F: {int(tel.get('severe_alerts_v1_count', 0)):,} · "
+            f"Bảo vệ v2: {int(tel.get('v2_guard_protected_count', 0)):,}"
+        ),
+    )
+
+    if not live_df.empty:
+        st.caption(
+            f"🟢 **Bảng dữ liệu thời gian thực từ `MongoDB 8.0 (bda501.live_stream_scores)`** — "
+            f"Hiển thị **{len(live_df)}** bản ghi dự báo `+30 phút` mới nhất vừa đi qua `Kafka` & `33 KiB Sketches`:"
+        )
+        _render_dataframe(_format_live_stream_display(live_df))
+    else:
+        st.info(
+            "Bộ đếm đang sẵn sàng ở `0`. Bấm nút **▶️ Phát ngay 200 tin qua Kafka** ở trên "
+            "(hoặc chạy lệnh `python producer.py ...` trong Terminal) để xem luồng dự báo nhảy trực tiếp!"
+        )
+
+    with st.expander(
+        "📋 Lệnh chạy nhanh Live Demo Real-Time (Producer → Kafka 3 Partitions → Consumer → MongoDB → UI)"
+    ):
+        st.code(
+            "# Bước 1: Khởi động Kafka + MongoDB + Live Consumer + Streamlit UI\n"
+            "docker compose --profile live up -d kafka mongo app live-consumer\n\n"
+            "# Bước 2: Phát 200 sự kiện từ dữ liệu dự án vào Kafka (tốc độ trực quan ~8 giây)\n"
+            "python producer.py --mode window --bootstrap-servers localhost:9092 "
+            "--topic hcmc-traffic-events --max-messages 200 --replay-speed 0.2",
+            language="powershell",
+        )
+    if auto_poll:
+        time.sleep(2.0)
+        st.rerun()
+
+
 def render_overview_tab(data: pd.DataFrame, metrics: dict[str, Any]) -> None:
     """Tab 1: HCMC Map, Hotspots, Quality Funnel & Architecture Overview."""
     st.info(
@@ -434,6 +612,8 @@ def render_forecast_tab(data: pd.DataFrame, artifact: dict[str, Any], metrics: d
     )
     if not alerts_df.empty:
         _render_dataframe(_format_alerts_display(alerts_df.head(10)))
+
+    render_live_kafka_monitor_section()
 
     st.subheader("3. Bảng Thực nghiệm Mô hình & Kiểm định Khi Giao thông Đổi Trạng Thái")
     ablation_df = _read_optional_csv(ABLATION_PATH)

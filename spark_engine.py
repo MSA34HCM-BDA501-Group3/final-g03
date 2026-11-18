@@ -668,7 +668,7 @@ def main() -> None:
     parser.add_argument("--dataset-path", type=Path, default=Path("data/dataset.csv"))
     parser.add_argument("--lakehouse-dir", type=Path, default=Path("data/lakehouse"))
     parser.add_argument("--output-dir", type=Path, default=Path("outputs"))
-    parser.add_argument("--mongo-uri", type=str, default="mongodb://mongodb:27017")
+    parser.add_argument("--mongo-uri", type=str, default="mongodb://mongo:27017")
     parser.add_argument("--model-sha256", type=str, default="")
     parser.add_argument("--mode", choices=["all", "spark", "mongo"], default="all")
     args = parser.parse_args()

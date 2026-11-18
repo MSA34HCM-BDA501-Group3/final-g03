@@ -1,0 +1,24 @@
+{
+  "status": "STREAMING_LIVE",
+  "topic": "hcmc-traffic-events",
+  "batches_processed": 200,
+  "messages_consumed": 200,
+  "partition_counts": {
+    "0": 78,
+    "1": 60,
+    "2": 62
+  },
+  "quarantined_count": 0,
+  "sink1_bronze_total": 200,
+  "duplicates_caught_bloom": 4,
+  "late_dropped_for_tier2": 4,
+  "sink2_scored_v1": 192,
+  "severe_alerts_v1_count": 92,
+  "v2_guard_protected_count": 192,
+  "bloom_memory_kb": 32.0,
+  "hll_memory_kb": 1.0,
+  "hll_estimated_segments": 169.2,
+  "exact_distinct_segments": 165,
+  "mongo_connected": true,
+  "last_updated_ict": "20:54:14"
+}

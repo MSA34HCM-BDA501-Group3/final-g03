@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -31,19 +32,42 @@ try:
 except ModuleNotFoundError:
     HAS_PYSPARK = False
 
-SPARK_CONTAINER = "song-recommender-spark-master-1"
+SPARK_CONTAINER_CANDIDATES = (
+    "groupexe-knowledgetest-spark-1",
+    "song-recommender-spark-master-1",
+)
 CONTAINER_WORKDIR = "/tmp/quyen_test"
 CONTAINER_PYTHONPATH = "/opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip:/tmp/quyen_test"
 
 
+def _resolve_spark_container() -> str:
+    """Locate a running Spark 3.5.7 container for host-delegated Spark tests."""
+    env_override = os.environ.get("BDA501_SPARK_CONTAINER", "").strip()
+    if env_override:
+        return env_override
+    proc = subprocess.run(
+        ["docker", "ps", "--format", "{{.Names}}"],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    running = set(proc.stdout.splitlines()) if proc.returncode == 0 else set()
+    for candidate in SPARK_CONTAINER_CANDIDATES:
+        if candidate in running:
+            return candidate
+    raise unittest.SkipTest(f"No running Spark container found among {SPARK_CONTAINER_CANDIDATES}")
+
+
 def _run_tests_in_spark_container() -> tuple[set[str], str]:
     """Sync source files and execute test_quyen_spark.py inside the live Spark 3.5.7 container."""
+    spark_container = _resolve_spark_container()
     repo_root = Path(__file__).resolve().parent.parent
     subprocess.run(
         [
             "docker",
             "exec",
-            SPARK_CONTAINER,
+            spark_container,
             "mkdir",
             "-p",
             f"{CONTAINER_WORKDIR}/traffic_data",
@@ -63,7 +87,7 @@ def _run_tests_in_spark_container() -> tuple[set[str], str]:
     ]
     for rel_src, dst in files_to_copy:
         subprocess.run(
-            ["docker", "cp", str(repo_root / rel_src), f"{SPARK_CONTAINER}:{dst}"],
+            ["docker", "cp", str(repo_root / rel_src), f"{spark_container}:{dst}"],
             check=True,
             capture_output=True,
             text=True,
@@ -77,7 +101,7 @@ def _run_tests_in_spark_container() -> tuple[set[str], str]:
             CONTAINER_WORKDIR,
             "-e",
             f"PYTHONPATH={CONTAINER_PYTHONPATH}",
-            SPARK_CONTAINER,
+            spark_container,
             "python3",
             "-W",
             "ignore",
