@@ -2,6 +2,8 @@
 
 Tài liệu này là **Master Product Governance Index** tuân thủ khung quản trị sản phẩm toàn diện `/workflow` (**11 Giai đoạn / Phases 0–10**, **5 Cổng kiểm soát / Stage-Gates 1–5**, **8 Luồng công việc song song / Workstreams W1–W8**) kết hợp **Stage-Gate**, **Dual-Track Agile**, **DevOps** và **Data-Driven Product Management** cho hệ thống **HCMC Smart Traffic Analytics & Congestion Prediction Platform (Architecture V3, Zones A–F, Components `[C1]`–`[C17]`)**.
 
+Các trạng thái Gate và số liệu dưới đây là hồ sơ kết quả đã ghi nhận ở những lần chạy trước, không thay thế việc xác minh trên checkout hiện tại. Theo [audit Session 9](../evidence/session9/I_readiness.md), dữ liệu nguồn chưa có trong workspace và các kiểm thử cần được chạy lại trước khi khẳng định release readiness.
+
 ---
 
 ## 1. Bản đồ 11 Giai đoạn (Phases 0–10) & Danh mục Tài liệu `product/`
@@ -15,10 +17,10 @@ Tài liệu này là **Master Product Governance Index** tuân thủ khung quả
 | **Phase 4** | **UX/UI Design** | [`04-design/wireframes/dashboard-5tabs-wireframe.md`](04-design/wireframes/dashboard-5tabs-wireframe.md) | ✅ Hoàn tất | Thiết kế 5 Tabs Streamlit Dashboard (`[C17]`) có điều khiển lọc tương tác, hiển thị vòng đời `STREAM_PROVISIONAL` & `BATCH_RECONCILED`. |
 | **Phase 5** | **System Architecture** | [`05-architecture/architecture-decisions/adr-001-zero-conflict-mlops.md`](05-architecture/architecture-decisions/adr-001-zero-conflict-mlops.md)<br>[`05-architecture/architecture-decisions/adr-002-two-tier-reconciliation.md`](05-architecture/architecture-decisions/adr-002-two-tier-reconciliation.md)<br>[`05-architecture/architecture-decisions/adr-003-causal-priors-7d-kmeans.md`](05-architecture/architecture-decisions/adr-003-causal-priors-7d-kmeans.md) | ✅ Hoàn tất | Kiến trúc 6 phân vùng (`Zones A–F`, `[C1]–[C17]`), 3 ADRs cốt lõi: Zero-Conflict MLOps, Two-Tier Reconciliation & Train-Only 7D K-Means. |
 | **Phase 6** | **Engineering & Implementation** | [`06-engineering/development-guidelines.md`](06-engineering/development-guidelines.md)<br>[`06-engineering/release-plan.md`](06-engineering/release-plan.md) | ✅ Hoàn tất | Clean Architecture, Cognitive Complexity `< 15` (`max-complexity=14`), 0 lỗi Ruff, PySpark 3.5.7 + MongoDB 8.0 + Kafka 4.1. |
-| **Phase 7** | **Quality Assurance & Testing** | [`07-quality/test-strategy.md`](07-quality/test-strategy.md) | ✅ Hoàn tất | Bộ kiểm thử tự động `pytest` (`22 passed`: `17` trong `tests/test_platform_v3.py`, `5` trong `tests/test_quyen_spark.py`) bao phủ 4 trụ cột, kiểm định chuyển pha & Failure Injection. |
+| **Phase 7** | **Quality Assurance & Testing** | [`07-quality/test-strategy.md`](07-quality/test-strategy.md) | ⚠️ Cần chạy lại | Có bộ kiểm thử `pytest` cho 4 trụ cột, kiểm định chuyển pha & Failure Injection. Số test/pass phải lấy từ lần chạy hiện tại; chưa thể xác nhận trong checkout thiếu raw data. |
 | **Phase 8** | **Launch, Pilot & Operations** | [`08-launch/operations-runbook.md`](08-launch/operations-runbook.md)<br>[`08-launch/pilot-report.md`](08-launch/pilot-report.md) | ✅ Hoàn tất | Runbook vận hành Docker Compose, kiểm chứng chịu lỗi WAL Checkpoint Kill/Restart (`0` duplicate side-effects). |
 | **Phase 9** | **Growth & Analytics** | [`09-growth/experiment-log.md`](09-growth/experiment-log.md)<br>[`09-growth/product-analytics.md`](09-growth/product-analytics.md) | ✅ Hoàn tất | Ablation Study 7 mô hình (Validation Gate chọn `Random Forest 23D`: `ROC-AUC = 0.9882`, `PR-AUC = 0.9471`, `Macro-F1 = 0.5543`) & giải mã nghịch lý `Persistence Baseline`. |
-| **Phase 10** | **Continuous Improvement & Governance** | [`../PROPOSAL_V3_AUDIT_CHECKLIST.md`](../PROPOSAL_V3_AUDIT_CHECKLIST.md)<br>[`../TECHNICAL_NOTE.md`](../TECHNICAL_NOTE.md) | ✅ Hoàn tất | Đối soát 100% các mục kiểm toán (`28/28` nhóm, `50/50` tasks: `G01–G05`, `Q01–Q11`, `D01–D12`, `M01–M14`, `T01–T08`) với bằng chứng runtime thực. |
+| **Phase 10** | **Continuous Improvement & Governance** | [`../evidence/session9/I_readiness.md`](../evidence/session9/I_readiness.md)<br>[`../TECHNICAL_NOTE.md`](../TECHNICAL_NOTE.md) | ⚠️ Cần tái xác minh | Audit hiện tại ghi rõ bằng chứng nào đã lưu, phần nào thiếu dữ liệu để tái chạy và các hành động cần đóng trước release. |
 
 ---
 
@@ -28,9 +30,9 @@ Tài liệu này là **Master Product Governance Index** tuân thủ khung quả
 | :--- | :--- | :--- | :--- | :---: |
 | **Gate 1: Problem Validation** | Phase 1 → Phase 2 | Dữ liệu thực tế từ 5 bảng gốc được kiểm kê đầy đủ; xác định rõ 10 Edge Cases (`EC-1`..`EC-10`) và tỷ lệ vùng mù cảm biến (`88.15%`). | `outputs/file_inventory.csv`, `outputs/quarantine_summary.csv`, `01-discovery/validation-report.md` | **PASSED** |
 | **Gate 2: Solution & Business Feasibility** | Phase 3/4/5 → Phase 6 | Kiến trúc 17 thành phần (`[C1]–[C17]`), 3 ADRs khoá chặt hợp đồng Zero-Conflict MLOps, Two-Tier Reconciliation và Train-Only Priors. | `03-requirements/prd.md`, `04-design/`, `05-architecture/architecture-decisions/adr-001..003.md` | **PASSED** |
-| **Gate 3: Release Readiness** | Phase 6/7 → Phase 8 | Toàn bộ pipeline Batch/Stream/Spark/Mongo thực thi không Data Leakage (`max(train.target_ts) <= train_cutoff`), `22/22` `pytest` PASS, độ phức tạp hàm `< 15`, 0 lỗi lint. | `pipeline.py`, `spark_engine.py`, `starter_stream.py`, `outputs/model_registry_manifest.json` | **PASSED** |
+| **Gate 3: Release Readiness** | Phase 6/7 → Phase 8 | Cần xác nhận lại pipeline, kiểm thử và lint trên checkout có đủ input. | `pipeline.py`, `spark_engine.py`, `tests/`, `evidence/session9/I_readiness.md` | **NOT REVALIDATED** |
 | **Gate 4: Product-Market Fit Signals** | Phase 8 → Phase 9 | Vận hành ổn định trên Spark 3.5.7, MongoDB 8.0.34 (`IXSCAN`, `0` `SORT`, `warm_p95 = 0.636 ms`), Kafka 4.1.0 (`3,000` bản tin) và Streamlit 5-Tab UI (`:8501`). | `outputs/spark_runtime_evidence.json`, `outputs/mongo_verify.json`, `outputs/query_progress.json` | **PASSED** |
-| **Gate 5: Scale Readiness** | Phase 9 → Phase 10 | Đối soát 2 tầng đạt `100.0%` (`exceptAll = 0` trong watermark, hồi phục `100.0%` sau khi bù `501` bản tin trễ, cập nhật đặc trưng lịch sử trễ cho `3,953` cửa sổ kế tiếp & chấm điểm lại `377` cửa sổ hạ lưu). | `outputs/reconciliation_audit.csv`, `09-growth/experiment-log.md`, `PROPOSAL_V3_AUDIT_CHECKLIST.md` | **PASSED** |
+| **Gate 5: Scale Readiness** | Phase 9 → Phase 10 | Bằng chứng đã lưu ghi nhận đối soát trong watermark `100.0%`, phục hồi độ đầy đủ lên `100.0%`, cập nhật `3,953` cửa sổ hạ lưu và chấm lại `377` cửa sổ. Cần tái chạy khi dữ liệu nguồn sẵn sàng. | `outputs/reconciliation_audit.csv`, `09-growth/experiment-log.md`, `evidence/session9/I_readiness.md` | **RECORDED; NOT RERUN** |
 
 ---
 

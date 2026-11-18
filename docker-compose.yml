@@ -17,7 +17,7 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_HEAP_OPTS: "-Xms512M -Xmx512M"
     ports:
-      - "9092:9092"
+      - "127.0.0.1:9092:9092"
     deploy:
       resources:
         limits:
@@ -35,7 +35,7 @@ services:
     image: mongo:8.0
     command: ["mongod", "--wiredTigerCacheSizeGB", "1.0", "--bind_ip_all"]
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
     volumes:
       - mongo_data:/data/db
     deploy:
@@ -53,9 +53,12 @@ services:
 
   spark:
     image: song-recommender-spark:3.5.7
+    build:
+      context: .
+      dockerfile: Dockerfile.spark35
     working_dir: /workspace
+    command: ["python", "-c", "import time; time.sleep(10**8)"]
     environment:
-      PYTHONPATH: /opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip
       SPARK_DRIVER_MEMORY: 4g
       MONGO_URI: mongodb://mongo:27017
     volumes:
@@ -77,7 +80,7 @@ services:
       MONGO_URI: mongodb://mongo:27017
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     ports:
-      - "8501:8501"
+      - "127.0.0.1:8501:8501"
     volumes:
       - ./app.py:/app/app.py
       - ./pipeline.py:/app/pipeline.py
@@ -128,6 +131,7 @@ services:
 
 networks:
   bda501-net:
+    name: bda501-net
     driver: bridge
 
 volumes:

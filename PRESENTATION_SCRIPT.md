@@ -255,7 +255,7 @@
 - **Chỉ dẫn trực quan:** Chỉ bảng nghiệm thu 3 thành viên phía trên, thẻ `Kế Hoạch Ngắn & Trung Hạn (Phase 1 & 2)` bên trái dưới và thẻ `Kế Hoạch Dài Hạn (Phase 3) & Quality Gate` bên phải dưới.
 - **Lời thoại thuyết trình:**
   > "Khép lại bộ slide ở **Phần 12 — Plan** trên trang 16:
-  > - **Về kế hoạch thực thi đồ án hiện tại (bảng trên):** Cả 3 thành viên — bạn **Minh Quyền** (`Mục 1, 4, 5, 7A`), bạn **Thành Đạt** (`Mục 2, 6, 7B, 9`) và em **Công Minh** (`Mục 3, 8, 10, 11, 12`) — đều đã hoàn thành **100% khối lượng công việc**, vượt qua toàn bộ **22/22 bài kiểm thử tự động `pytest` & `Spark unittest`** và đạt `0` lỗi `Ruff`.
+  > - **Về phân công thực thi đồ án (bảng trên):** Cả 3 thành viên — bạn **Minh Quyền** (`Mục 1, 4, 5, 7A`), bạn **Thành Đạt** (`Mục 2, 6, 7B, 9`) và em **Công Minh** (`Mục 3, 8, 10, 11, 12`) — phụ trách các phần tương ứng. Số test/pass và kết quả `Ruff` cần được lấy từ lần chạy gần nhất trước khi trình bày; số liệu `22/22` trong bản kịch bản cũ không được xem là trạng thái xác nhận hiện tại.
   > - **Về kế hoạch phát triển tiếp theo (`Phase 1–3 Plan` ở 2 thẻ dưới) nhằm giải quyết triệt để các hạn chế ở Phần 11:**
   >   - **`Phase 1 (Ngắn hạn — Khắc phục hạn chế Modeling & Sketch)`:** Áp dụng **Cost-Sensitive Focal Loss** để bắt nhạy các ca đột ngột hóa kẹt (`A–D → E–F`), đồng thời triển khai **Ring-Buffer Sliding Bloom Filter** tự xoay vòng bit mỗi 30 phút.
   >   - **`Phase 2 (Trung hạn — Đa nguồn dữ liệu & Chống Concept Drift)`:** Đấu nối luồng GPS xe buýt/xe công nghệ toàn TP.HCM (`~1.5–3.0 TB/ngày`) kèm API Thời tiết/Mưa ngập, và tự động kích hoạt huấn luyện lại `Phase A` hàng tuần khi chỉ số `PSI` báo hiệu trôi dạt phân phối.

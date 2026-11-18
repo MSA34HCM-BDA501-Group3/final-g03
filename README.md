@@ -1,8 +1,8 @@
 # Hệ Thống Giám Sát Hiện Trạng & Dự Báo Ùn Tắc Giao Thông Đô Thị TP.HCM
 
 > **Bộ tài liệu chính thức của đồ án (`BDA501 — Big Data Analytics`):**
-> - **Báo cáo Tổng kết Đồ án & Đặc tả Kỹ thuật Chi tiết:** [`HCMC_Smart_Traffic_Final_Report.pdf`](./HCMC_Smart_Traffic_Final_Report.pdf) / [`HCMC_Smart_Traffic_Final_Project_Proposal.pdf`](./HCMC_Smart_Traffic_Final_Project_Proposal.pdf) & [`product/00-proposal/project-proposal.md`](./product/00-proposal/project-proposal.md)
-> - **Bộ Slide Thuyết trình Trực quan (`16 Slides`):** [`HCMC_Smart_Traffic_Final_Presentation.pptx`](./HCMC_Smart_Traffic_Final_Presentation.pptx) / [`HCMC_Smart_Traffic_Proposal_Presentation.pptx`](./HCMC_Smart_Traffic_Proposal_Presentation.pptx) & [`HCMC_Smart_Traffic_Final_Slides.pdf`](./HCMC_Smart_Traffic_Final_Slides.pdf)
+> - **Báo cáo Tổng kết Đồ án & Đặc tả Kỹ thuật Chi tiết:** [`HCMC_Smart_Traffic_Final_Report.pdf`](./HCMC_Smart_Traffic_Final_Report.pdf) & [`product/00-proposal/project-proposal.md`](./product/00-proposal/project-proposal.md)
+> - **Bộ Slide Thuyết trình Trực quan:** [`HCMC_Smart_Traffic_Final_Presentation.pptx`](./HCMC_Smart_Traffic_Final_Presentation.pptx) & [`HCMC_Smart_Traffic_Final_Slides.pdf`](./HCMC_Smart_Traffic_Final_Slides.pdf)
 > - **Kịch bản Thuyết trình, Live Demo & Cẩm nang Phản biện Q&A:** [`PRESENTATION_SCRIPT.md`](./PRESENTATION_SCRIPT.md)
 > - **Đặc tả Toán học & Kết quả Kiểm chứng Chuyên sâu:** [`TECHNICAL_NOTE.md`](./TECHNICAL_NOTE.md)
 
@@ -43,13 +43,15 @@ Mục tiêu của hệ thống là **giám sát hiện trạng và dự báo tr�
 | `segment_status.csv` | 90,938 | 4 | 3.58 MB | Bản tin vận tốc GPS thực tế dùng để gom `33,441` cửa sổ 30 phút (`33,394` đường cơ giới) & phát luồng |
 | `train.csv` | 33,441 | 18 | 4.99 MB | Bảng đối chứng độc lập dùng để kiểm tra độ khớp `100.0%` khóa cửa sổ `(segment_id, date, period)` |
 
+Các bảng nguồn và dữ liệu sinh trong `raw_data/` và `data/` được loại khỏi Git theo `.gitignore`. Xem [hướng dẫn tải dữ liệu và tái lập](./docs/DATA_SETUP.md) trước khi chạy pipeline; không tải raw data lên repository nếu chưa xác nhận quyền phân phối.
+
 ---
 
 ## 4. Hướng dẫn Khởi chạy & Kiểm thử Tự động
 
 ### 4.1. Khởi chạy Cụm Dịch vụ Docker (`10.5 / 16.0 GB RAM`)
 ```powershell
-docker compose up -d kafka mongo spark app
+docker compose up --build -d kafka mongo spark
 
 # Chạy tác vụ Spark Batch độc lập từ dữ liệu thô trên Apache Spark 3.5.7 (Java 17):
 $env:TRAFFIC_FIT_CUTOFF = '2020-08-01T00:00:00Z'
@@ -68,7 +70,15 @@ ruff check . --select E,F,W,C901 --config "lint.mccabe.max-complexity=14" --conf
 streamlit run app.py
 ```
 
-Sau khi khởi chạy, mở trình duyệt tại <http://localhost:8501> để sử dụng giao diện điều hành 5 tab.
+`pipeline.py` yêu cầu đã tải đủ dữ liệu theo [hướng dẫn thiết lập](./docs/DATA_SETUP.md). Sau khi pipeline tạo `data/dataset.csv`, chạy `docker compose up -d app` hoặc `streamlit run app.py`; mở <http://localhost:8501> để dùng dashboard 5 tab.
+
+### 4.3. Xem nhanh UI Demo độc lập
+
+Mở [`ui-demo.html`](./ui-demo.html) trực tiếp bằng trình duyệt để xem bản demo giao diện 5 tab. Đây là snapshot tĩnh phục vụ trình bày, không kết nối Kafka, MongoDB hoặc mô hình đang chạy; dashboard vận hành thật vẫn là `app.py` ở cổng `8501`.
+
+### 4.4. Kiểm tra readiness theo Session 9
+
+Xem [bảng đối chiếu tiêu chí và bằng chứng](./evidence/session9/I_readiness.md). Trạng thái trong đó phân biệt kết quả đã lưu với kết quả có thể tái chạy từ checkout hiện tại.
 
 ---
 

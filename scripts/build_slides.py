@@ -1303,7 +1303,7 @@ def _add_slide_16_plan_and_roadmap(prs: Presentation) -> DualSlide:
         [
             "Phase 3 (Dài hạn — Đa nút & Đóng vòng Đèn): Nâng cấp lên Kubernetes Multi-Node + Sharded MongoDB + "
             "Vector-Tile GIS và tích hợp API dự báo +30m vào hệ thống đèn tín hiệu SCATS.",
-            "Quality Gate Nghiệm thu: Vượt qua 100% kiểm thử tự động (22/22 pytest & Spark unittest; 0 lỗi Ruff).",
+            "Quality Gate: Trạng thái test và Ruff cần xác nhận bằng lần chạy mới nhất; xem gói readiness.",
         ],
         badge="Phase 3 & QA",
         theme="navy",

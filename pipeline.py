@@ -2674,7 +2674,7 @@ def compute_road_pagerank(
 def _try_run_spark_container_verification(
     workspace_dir: Path,
     model_sha256: str,
-    mongo_uri: str = "mongodb://mongodb:27017",
+    mongo_uri: str = "mongodb://mongo:27017",
 ) -> dict[str, Any] | None:
     """Invoke spark_engine.py inside song-recommender-spark:3.5.7 container when Docker is available."""
     cmd = [
@@ -2682,13 +2682,11 @@ def _try_run_spark_container_verification(
         "run",
         "--rm",
         "--network",
-        "song-recommender_default",
+        "bda501-net",
         "-v",
         f"{workspace_dir.as_posix()}:/workspace",
         "-w",
         "/workspace",
-        "-e",
-        "PYTHONPATH=/opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip",
         "--entrypoint",
         "python3",
         "song-recommender-spark:3.5.7",

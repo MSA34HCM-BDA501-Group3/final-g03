@@ -1,0 +1,4 @@
+variant,input_pings,output_windows,runtime_ms,exchange_stages,peak_to_median_skew_ratio,max_abs_diff,evidence_source,provenance
+SortMergeJoin + unsalted GroupBy,90938,33441,1418.60,10,687.43,0.0,attached BDA501 Session 9 manual section 3.1,reported measurement; original run capture absent
+BroadcastHashJoin + unsalted Monoid,90938,33441,1054.17,2,687.43,0.0,outputs/metrics.json and outputs/spark_runtime_evidence.json plus attached manual section 3.1,stored measurement; not rerun in this checkout
+BroadcastHashJoin + 8-bucket salted Monoid,90938,33441,1073.37,2,1.023,0.0,outputs/metrics.json and outputs/spark_runtime_evidence.json,stored measurement; not rerun in this checkout

@@ -32,6 +32,7 @@ from app import (  # noqa: E402
     _predict_single_window,
     _select_forecast_candidates,
 )
+import pipeline as pipeline_module  # noqa: E402
 from baseline import (  # noqa: E402
     audit_records_against_monoid,
     monoid_combine,
@@ -67,6 +68,7 @@ from pipeline import (  # noqa: E402
     score_feature_snapshot,
     validate_raw_records_ordered,
     verify_two_tier_reconciliation,
+    _try_run_spark_container_verification,
 )
 from producer import generate_raw_ping_replay, generate_replay_Batch  # noqa: E402
 from starter_stream import (  # noqa: E402
@@ -715,6 +717,26 @@ def test_cold_start_scoring_and_cli_contracts(tmp_path: Path) -> None:
     assert stream_rep["restart_recovery_verified"] is True
     assert stream_rep["duplicate_side_effects_on_restart"] == 0
     assert stream_rep["frozen_registry_integrity"]["verified"] is True
+
+
+def test_spark_container_verification_uses_compose_network_and_mongo_service(
+    monkeypatch, tmp_path: Path
+) -> None:
+    captured: dict[str, list[str]] = {}
+
+    class FailedDockerRun:
+        returncode = 1
+
+    def fake_run(command: list[str], **_kwargs: object) -> FailedDockerRun:
+        captured["command"] = command
+        return FailedDockerRun()
+
+    monkeypatch.setattr(pipeline_module.subprocess, "run", fake_run)
+
+    assert _try_run_spark_container_verification(tmp_path, "model-sha") is None
+    command = captured["command"]
+    assert command[command.index("--network") + 1] == "bda501-net"
+    assert command[command.index("--mongo-uri") + 1] == "mongodb://mongo:27017"
 
 
 def test_t01_end_to_end_mini_fixture_without_train_csv(tmp_path: Path) -> None:

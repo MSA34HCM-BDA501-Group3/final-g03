@@ -1,0 +1,8 @@
+check,recorded_result,evidence,status_in_this_checkout
+Raw ping accounting,"90938 input; 90938 accepted; 0 rejected; 0 dedup-dropped",outputs/metrics.json -> quality_funnel_c5,stored result; inputs absent
+UTC window reference join,"33441 of 33441 keys matched; 0 missing/extra/duplicate keys; max velocity difference 0.0",outputs/monoid_baseline_verification.json,stored result; inputs absent
+Graph topology,"84633 directed segments; 151929 transitions; 48 dangling segments",outputs/metrics.json -> dataset and graph_and_patterns,stored result; inputs absent
+Ordered quarantine,"580 unique bad segments; 154 non-positive lengths; 427 non-road OSM segments",outputs/metrics.json -> quality_funnel_c5 and outputs/quarantine_summary.csv,stored result; inputs absent
+Street normalization,"695 raw names canonicalized to 649; 46 merged entities",outputs/metrics.json -> quality_funnel_c5,stored result; inputs absent
+Velocity imputation,"84633 segments covered by reported 3-tier lookup; source missing-velocity rate 88.34%",outputs/metrics.json -> quality_funnel_c5,stored result; inputs absent
+Train/validation/test evaluation split,"5494 train; 1167 validation; 1182 test rows",outputs/metrics.json -> evaluation,stored result; model/data not rerun
