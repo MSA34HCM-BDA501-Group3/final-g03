@@ -1,5 +1,5 @@
 regime,sample_count,persistence_6class_acc,rf_23d_6class_acc,dt_23d_6class_acc,persistence_severe_pr_auc,rf_23d_severe_pr_auc,gbt_23d_severe_pr_auc,persistence_brier_error,rf_23d_brier_error
-"1. Toàn tập kiểm thử TEST (94.84% giữ nguyên mức cũ, 81.13% mức A)",1182,0.9484,0.9289,0.8748,0.9367,0.9595,0.9454,0.0169,0.021
-2. Nhóm đổi trạng thái LOS(t) != LOS(t+30p) — Ngưỡng mặc định,61,0.0,0.1148,0.1475,0.5408,0.6223,0.6261,0.3279,0.2872
-3. Nhóm đổi trạng thái LOS(t) != LOS(t+30p) — Ngưỡng hiệu chỉnh VAL (P >= 0.40),61,0.0,0.1967,0.1475,0.5408,0.6223,0.6261,0.3279,0.2872
-4. Cặp tín hiệu GPS ngắt quãng > 30 phút (49.21% đổi mức LOS),3605,0.5079,0.489,,0.5732,0.6293,0.6239,,
+"1. Toàn tập kiểm thử TEST (94.84% giữ nguyên mức cũ, 81.13% mức A)",1182,0.9484,0.9255,0.879,0.9367,0.9543,0.9498,0.0169,0.0198
+2. Nhóm đổi trạng thái LOS(t) != LOS(t+30p) — Ngưỡng mặc định,61,0.0,0.1639,0.1639,0.5408,0.5556,0.6811,0.3279,0.2811
+3. Nhóm đổi trạng thái LOS(t) != LOS(t+30p) — Ngưỡng hiệu chỉnh VAL (P >= 0.40),61,0.0,0.2295,0.1639,0.5408,0.5556,0.6811,0.3279,0.2811
+4. Cặp tín hiệu GPS ngắt quãng > 30 phút (49.21% đổi mức LOS),3605,0.5079,0.491,,0.5732,0.6405,0.6175,,

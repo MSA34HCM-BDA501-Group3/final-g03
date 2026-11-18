@@ -162,8 +162,12 @@ def compute_raw_event_id(
 
 
 def _utc_window_key(updated_at_text: str) -> tuple[str, str]:
-    clean = updated_at_text.strip().replace("Z", "+00:00")
+    clean = updated_at_text.strip()
+    if clean.endswith(("Z", "z")):
+        clean = clean[:-1] + "+00:00"
     dt = datetime.fromisoformat(clean)
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc)
     date_str = dt.strftime("%Y-%m-%d")
     minute_bucket = "00" if dt.minute < 30 else "30"
     period_str = f"period_{dt.hour}_{minute_bucket}"

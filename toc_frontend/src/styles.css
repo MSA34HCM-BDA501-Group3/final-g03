@@ -232,6 +232,12 @@ body {
   gap: 12px;
 }
 
+.kpi-row-6 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .kpi-card,
 .card {
   background: var(--card);
@@ -584,7 +590,8 @@ table.toc-table tr.selected-row {
   .grid-2 {
     grid-template-columns: 1fr;
   }
-  .kpi-row {
+  .kpi-row,
+  .kpi-row-6 {
     grid-template-columns: repeat(2, 1fr);
   }
 }

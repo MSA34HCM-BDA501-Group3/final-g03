@@ -47,12 +47,13 @@ from baseline import compute_raw_event_id, verify_against_medallion
 from producer import generate_raw_ping_replay, generate_replay_Batch, publish_to_kafka_broker
 from starter_stream import (
     BLOOM_NUM_BITS,
-    BLOOM_NUM_HASHES,
     HLL_NUM_REGISTERS,
     HLL_P_BITS,
-    bloom_check_and_add,
+    ROTATING_BLOOM_CAPACITY,
+    ROTATING_BLOOM_GEN_BITS,
+    ROTATING_BLOOM_NUM_HASHES,
+    RotatingBloomFilter,
     bloom_hash_positions,
-    create_bitpacked_bloom,
     hll_add,
     hll_estimate,
     run_stream_with_restart_recovery,
@@ -388,6 +389,32 @@ def _classify_segment_first_failing_rule(row: dict[str, Any]) -> str | None:
     return None
 
 
+def _resolve_raw_event_id(row: pd.Series, idx: Any) -> str:
+    raw_eid = str(row.get("raw_event_id") or "")
+    if raw_eid:
+        return raw_eid
+    return compute_raw_event_id(
+        row.get("_id", idx),
+        row["segment_id"],
+        str(row.get("event_ts") or row.get("updated_at")),
+        row.get("velocity", row.get("mean_velocity")),
+    )
+
+
+def _dedup_validated_records(accepted_first: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    seen_ids: set[str] = set()
+    keep_indices: list[Any] = []
+    dedup_dropped = 0
+    for idx, row in accepted_first.iterrows():
+        raw_eid = _resolve_raw_event_id(row, idx)
+        if raw_eid in seen_ids:
+            dedup_dropped += 1
+        else:
+            seen_ids.add(raw_eid)
+            keep_indices.append(idx)
+    return accepted_first.loc[keep_indices].copy(), dedup_dropped
+
+
 def validate_raw_records_ordered(
     raw_status_df: pd.DataFrame,
     valid_segment_ids: set[int] | None = None,
@@ -406,26 +433,7 @@ def validate_raw_records_ordered(
         }
 
     accepted_first, rejected = validate_stream_batch_ordered(raw_status_df, valid_segment_ids)
-    seen_ids: set[str] = set()
-    keep_indices: list[int] = []
-    dedup_dropped = 0
-
-    for idx, row in accepted_first.iterrows():
-        raw_eid = str(row.get("raw_event_id") or "")
-        if not raw_eid:
-            raw_eid = compute_raw_event_id(
-                row.get("_id", idx),
-                row["segment_id"],
-                str(row.get("event_ts") or row.get("updated_at")),
-                row.get("velocity", row.get("mean_velocity")),
-            )
-        if raw_eid in seen_ids:
-            dedup_dropped += 1
-        else:
-            seen_ids.add(raw_eid)
-            keep_indices.append(idx)
-
-    accepted_dedup = accepted_first.loc[keep_indices].copy()
+    accepted_dedup, dedup_dropped = _dedup_validated_records(accepted_first)
     if not rejected.empty:
         rejected = rejected.copy()
         rejected["raw_payload"] = [
@@ -659,15 +667,34 @@ def _compute_segment_p85_vmax(fit_df: pd.DataFrame, v_col: str, min_p85_obs: int
     }
 
 
+def _assert_train_cutoff_bounds(
+    frame: pd.DataFrame,
+    train_cutoff_ts: pd.Timestamp | None,
+) -> None:
+    """Verify every row passed to TRAIN-only lookup fitting respects slot_ts <= train_cutoff_ts."""
+    if train_cutoff_ts is None or frame.empty or "slot_ts" not in frame.columns:
+        return
+    max_slot_ts = pd.to_datetime(frame["slot_ts"], utc=True).max()
+    cutoff_utc = pd.Timestamp(train_cutoff_ts)
+    if cutoff_utc.tzinfo is None:
+        cutoff_utc = cutoff_utc.tz_localize("UTC")
+    if max_slot_ts > cutoff_utc:
+        raise AssertionError(
+            f"fit_train_vmax_lookup leakage guard tripped: max(slot_ts)={max_slot_ts} > train_cutoff_ts={cutoff_utc}"
+        )
+
+
 def fit_train_vmax_lookup(
     train_windows_df: pd.DataFrame,
     min_p85_obs: int = 5,
+    train_cutoff_ts: pd.Timestamp | None = None,
 ) -> dict[str, Any]:
     """[Q04] Fit immutable 3-Tier max_velocity lookup strictly on organic TRAIN windows:
     Tier 1: Segment observed max_velocity or TRAIN P85 velocity (for segments with >= min_p85_obs)
     Tier 2: Distinct-segment TRAIN median(street_level, street_type)
     Tier 3: Hierarchical level prior {1: 80, 2: 60, 3: 50, 4: 40} km/h.
     """
+    _assert_train_cutoff_bounds(train_windows_df, train_cutoff_ts)
     fit_df = train_windows_df
     if "is_synthetic_burst" in fit_df.columns and int((fit_df["is_synthetic_burst"] == 0).sum()) > 0:
         fit_df = fit_df[fit_df["is_synthetic_burst"] == 0]
@@ -751,9 +778,8 @@ def apply_vmax_lookup(
         out["ratio_los"] = derive_los_series(out["velocity_ratio"])
         out["derived_los"] = derive_urban_los_series(out["mean_velocity"], raw_vmax)
         out["derived_los_ordinal"] = out["derived_los"].map(LOS_TO_ORDINAL).fillna(0).astype(int)
-        if "causal_velocity_ratio" in out.columns:
-            seg_grp = out.groupby("segment_id", sort=False)
-            out["causal_velocity_ratio"] = seg_grp["velocity_ratio"].cumsum() / (seg_grp.cumcount() + 1.0)
+        # Do not overwrite causal_velocity_ratio here; strictly tau < t lags are owned by
+        # add_temporal_and_neighbor_lags.
     return out
 
 
@@ -843,7 +869,7 @@ def build_medallion_frame(
         train_slice = frame[(frame["slot_ts"] <= ts_cutoff) & (frame["is_synthetic_burst"] == 0)]
         if train_slice.empty:
             train_slice = frame[frame["slot_ts"] <= ts_cutoff]
-        vmax_lookup = fit_train_vmax_lookup(train_slice)
+        vmax_lookup = fit_train_vmax_lookup(train_slice, train_cutoff_ts=ts_cutoff)
     frame = apply_vmax_lookup(frame, vmax_lookup)
 
     frame["mean_velocity"] = frame["mean_velocity"].fillna(frame["max_velocity"] * 0.6)
@@ -1232,12 +1258,14 @@ def build_static_feature_store(
         non_burst = train_slice[train_slice["is_synthetic_burst"] == 0]
         if len(non_burst) > 0:
             train_slice = non_burst
+    if "slot_ts" in train_slice.columns:
+        train_slice = train_slice.sort_values(["slot_ts", "segment_id"])
 
     obs_all = medallion_df.groupby("segment_id", as_index=False).agg(obs_windows=("event_id", "count"))
     obs_train = train_slice.groupby("segment_id", as_index=False).agg(
         train_obs_windows=("event_id", "count"),
-        mean_los_ordinal=("los_ordinal", "mean"),
-        severe_rate=("is_severe", "mean"),
+        mean_los_ordinal=("segment_train_prior_los", "last"),
+        severe_rate=("segment_train_severe_prior", "last"),
         mean_velocity=("mean_velocity", "mean"),
         segment_train_prior_los=("segment_train_prior_los", "last"),
         segment_train_severe_prior=("segment_train_severe_prior", "last"),
@@ -1273,10 +1301,10 @@ def build_static_feature_store(
     store["length_m"] = store["length"].where(store["length"] > 0, med_len).fillna(med_len).astype(float)
     store["street_causal_prior_los"] = store["street_causal_prior_los"].fillna(global_los)
     store["street_causal_prior_sev"] = store["street_causal_prior_sev"].fillna(global_sev)
-    store["mean_los_ordinal"] = store["mean_los_ordinal"].fillna(store["street_causal_prior_los"])
-    store["severe_rate"] = store["severe_rate"].fillna(store["street_causal_prior_sev"])
     store["segment_train_prior_los"] = store["segment_train_prior_los"].fillna(store["street_causal_prior_los"])
     store["segment_train_severe_prior"] = store["segment_train_severe_prior"].fillna(store["street_causal_prior_sev"])
+    store["mean_los_ordinal"] = store["mean_los_ordinal"].fillna(store["segment_train_prior_los"])
+    store["severe_rate"] = store["severe_rate"].fillna(store["segment_train_severe_prior"])
     fallback_v = store["max_velocity"] * (1.0 - 0.14 * store["mean_los_ordinal"])
     store["mean_velocity"] = store["mean_velocity"].fillna(fallback_v).clip(lower=5.0)
     store["velocity_ratio"] = (store["mean_velocity"] / store["max_velocity"]).clip(0.1, 1.2)
@@ -1332,7 +1360,7 @@ def find_peer_segments(
     limit: int = 10,
     prefer_observed_peers: bool = True,
 ) -> pd.DataFrame:
-    """[D07/M14] Find Top-K Euclidean peers in 7D K-Means space covering all 84,633 segments (incl. Cold-Start)."""
+    """[D07/M14] Find Top-K Euclidean peers in 7D K-Means space covering all 84,206 clean motorized segments."""
     matches = static_store_df[static_store_df["segment_id"] == int(query_segment_id)]
     if matches.empty:
         return pd.DataFrame()
@@ -1632,7 +1660,7 @@ def _update_bloom_counters(
 ) -> tuple[int, int]:
     if oracle_seen is None:
         return (1 if in_bloom else 0), 0
-    dup = int(eid in oracle_seen)
+    dup = int((eid in oracle_seen) and in_bloom)
     fp = int((eid not in oracle_seen) and in_bloom)
     oracle_seen.add(eid)
     return dup, fp
@@ -1641,11 +1669,13 @@ def _update_bloom_counters(
 def _simulate_stream_sketches(
     stream_events: pd.DataFrame,
     num_bits: int = BLOOM_NUM_BITS,
-    num_hashes: int = BLOOM_NUM_HASHES,
+    num_hashes: int = ROTATING_BLOOM_NUM_HASHES,
+    capacity: int = ROTATING_BLOOM_CAPACITY,
     validate_oracle: bool = True,
 ) -> tuple[int, int, int, float, dict[str, int]]:
-    """[M05] Bit-packed 32 KiB Bloom Filter (uint8[32768]) + 1 KiB HLL++ stream sketch engine."""
-    bloom_bytes = create_bitpacked_bloom(num_bits)
+    """[M05] Two-generation 32 KiB RotatingBloomFilter (2 x 16 KiB) + 1 KiB HLL++ stream sketch engine."""
+    bits_per_gen = max(num_bits // 2, 1)
+    bloom = RotatingBloomFilter(bits_per_gen=bits_per_gen, num_hashes=num_hashes, capacity=capacity)
     hll_registers = np.zeros(HLL_NUM_REGISTERS, dtype=np.uint8)
     oracle_seen: set[str] | None = set() if validate_oracle else None
     oracle_segments: set[int] | None = set() if validate_oracle else None
@@ -1654,7 +1684,7 @@ def _simulate_stream_sketches(
 
     for row in stream_events.itertuples(index=False):
         eid = str(getattr(row, "raw_event_id", None) or getattr(row, "event_id"))
-        in_bloom = bloom_check_and_add(bloom_bytes, eid, num_bits=num_bits, num_hashes=num_hashes)
+        in_bloom = bloom.check_and_add(eid)
         dup_inc, fp_inc = _update_bloom_counters(in_bloom, eid, oracle_seen)
         duplicates_caught += dup_inc
         false_positives += fp_inc
@@ -1667,7 +1697,10 @@ def _simulate_stream_sketches(
     hll_est = hll_estimate(hll_registers)
     exact_card = len(oracle_segments) if oracle_segments is not None else int(round(hll_est))
     memory_audit = {
-        "bloom_array_bytes": int(bloom_bytes.nbytes),
+        "bloom_array_bytes": int(bloom.nbytes),
+        "bloom_bits_per_gen": int(bloom.bits_per_gen),
+        "bloom_num_hashes": int(bloom.num_hashes),
+        "bloom_capacity_per_gen": int(bloom.capacity),
         "hll_register_bytes": int(hll_registers.nbytes),
         "oracle_enabled_for_benchmark": int(validate_oracle),
     }
@@ -1867,7 +1900,11 @@ def run_streaming_and_reconciliation(
     late_out_wm_count = len(out_wm_indices)
 
     duplicates_caught, false_positives, exact_card, hll_est, mem_audit = _simulate_stream_sketches(
-        replay_df, num_bits=BLOOM_NUM_BITS, num_hashes=BLOOM_NUM_HASHES, validate_oracle=True
+        replay_df,
+        num_bits=BLOOM_NUM_BITS,
+        num_hashes=ROTATING_BLOOM_NUM_HASHES,
+        capacity=ROTATING_BLOOM_CAPACITY,
+        validate_oracle=True,
     )
 
     hotspots_df = _compute_decaying_hotspots(base_events, decay_alpha=decay_alpha)
@@ -1876,7 +1913,11 @@ def run_streaming_and_reconciliation(
     )
 
     rel_error_pct = abs(hll_est - exact_card) / max(exact_card, 1) * 100.0
-    theoretical_fp = (1.0 - math.exp(-BLOOM_NUM_HASHES * total_valid / BLOOM_NUM_BITS)) ** BLOOM_NUM_HASHES
+    eff_n = min(total_valid, ROTATING_BLOOM_CAPACITY)
+    gen_fp = (
+        1.0 - math.exp(-ROTATING_BLOOM_NUM_HASHES * eff_n / ROTATING_BLOOM_GEN_BITS)
+    ) ** ROTATING_BLOOM_NUM_HASHES
+    theoretical_fp = 1.0 - (1.0 - gen_fp) ** 2 if total_valid > ROTATING_BLOOM_CAPACITY else gen_fp
 
     streaming_summary = {
         "total_stream_events_processed": int(len(replay_df)),
@@ -1888,10 +1929,17 @@ def run_streaming_and_reconciliation(
         "decay_alpha": decay_alpha,
         "decay_state_complexity": "O(1) per segment (8 bytes/segment), O(|V_active|) system-wide with epsilon eviction",
         "bloom_filter": {
+            "type": "RotatingBloomFilter (2 generations x 16.0 KiB)",
             "bits": BLOOM_NUM_BITS,
+            "bits_per_generation": ROTATING_BLOOM_GEN_BITS,
+            "generations": 2,
+            "capacity_per_generation": ROTATING_BLOOM_CAPACITY,
             "bit_packed_uint8_bytes": mem_audit["bloom_array_bytes"],
+            "memory_bytes": mem_audit["bloom_array_bytes"],
             "memory_kb": round(mem_audit["bloom_array_bytes"] / 1024.0, 2),
-            "hash_functions": BLOOM_NUM_HASHES,
+            "hash_functions": ROTATING_BLOOM_NUM_HASHES,
+            "duplicates_flagged": int(duplicates_caught),
+            "false_positives": int(false_positives),
             "empirical_fp_rate": round(false_positives / max(total_valid, 1), 6),
             "theoretical_fp_rate": round(theoretical_fp, 6),
         },
@@ -2016,11 +2064,13 @@ def _select_val_transition_thresholds(full_frame: pd.DataFrame, ml_artifacts: di
         return 0.30, 0.10
     if "current_los_ordinal" not in val_work.columns:
         val_work["current_los_ordinal"] = val_work["los_ordinal"]
-    X_val = ml_artifacts["ml_imputer"].transform(val_work[ml_artifacts["full_features"]])
+    imp_full = ml_artifacts.get("ml_imputer_full", ml_artifacts["ml_imputer"])
+    rf_23d_model = ml_artifacts.get("rf_23d", ml_artifacts["rf_multiclass"])
+    X_val = imp_full.transform(val_work[ml_artifacts["full_features"]])
     v_cur = val_work["current_los_ordinal"].astype(int).to_numpy()
     v_true = val_work["target_next_los_ordinal"].astype(int).to_numpy()
     v_trans = (v_cur != v_true).astype(int)
-    v_probs_6 = _proba_6class(ml_artifacts["rf_multiclass"], X_val)
+    v_probs_6 = _proba_6class(rf_23d_model, X_val)
     v_p_change = 1.0 - v_probs_6[np.arange(len(val_work)), np.clip(v_cur, 0, 5)]
 
     tau_grid = (0.15, 0.20, 0.25, 0.30, 0.35, 0.40)
@@ -2177,11 +2227,13 @@ def _evaluate_spatial_cold_start_cv(test_df: pd.DataFrame, ml_artifacts: dict[st
     masked["gap_minutes"] = 180.0
     masked["obs_count"] = 1
 
-    X_cs = ml_artifacts["ml_imputer"].transform(masked[ml_artifacts["full_features"]])
+    imp_full = ml_artifacts.get("ml_imputer_full", ml_artifacts["ml_imputer"])
+    rf_23d_model = ml_artifacts.get("rf_23d", ml_artifacts["rf_multiclass"])
+    X_cs = imp_full.transform(masked[ml_artifacts["full_features"]])
     y_true = test_df["target_next_los_ordinal"].astype(int).to_numpy()
     y_sev = (y_true >= SEVERE_ORDINAL_THRESHOLD).astype(int)
-    rf_pred = ml_artifacts["rf_multiclass"].predict(X_cs)
-    rf_prob = np.clip(_proba_6class(ml_artifacts["rf_multiclass"], X_cs)[:, 4:].sum(axis=1), 0.0, 1.0)
+    rf_pred = rf_23d_model.predict(X_cs)
+    rf_prob = np.clip(_proba_6class(rf_23d_model, X_cs)[:, 4:].sum(axis=1), 0.0, 1.0)
     roc_cs, pr_cs, brier_cs = _safe_binary_ranking_metrics(y_sev, rf_prob)
     global_mode_acc = round(float(accuracy_score(y_true, np.zeros_like(y_true))), 4)
     return {
@@ -2210,7 +2262,9 @@ def evaluate_transition_regimes(
         return pd.DataFrame(), {"test_samples": 0}
     if "current_los_ordinal" not in work.columns:
         work["current_los_ordinal"] = work["los_ordinal"]
-    X_full = ml_artifacts["ml_imputer"].transform(work[ml_artifacts["full_features"]])
+    imp_full = ml_artifacts.get("ml_imputer_full", ml_artifacts["ml_imputer"])
+    rf_23d_model = ml_artifacts.get("rf_23d", ml_artifacts["rf_multiclass"])
+    X_full = imp_full.transform(work[ml_artifacts["full_features"]])
 
     y_true = work["target_next_los_ordinal"].astype(int).to_numpy()
     y_cur = work["current_los_ordinal"].astype(int).to_numpy()
@@ -2219,8 +2273,8 @@ def evaluate_transition_regimes(
     y_cur_sev = (y_cur >= SEVERE_ORDINAL_THRESHOLD).astype(int)
     pers_scores = y_cur / 5.0
 
-    rf_probs_6 = _proba_6class(ml_artifacts["rf_multiclass"], X_full)
-    rf_pred = ml_artifacts["rf_multiclass"].predict(X_full)
+    rf_probs_6 = _proba_6class(rf_23d_model, X_full)
+    rf_pred = rf_23d_model.predict(X_full)
     rf_prob = np.clip(rf_probs_6[:, 4:].sum(axis=1), 0.0, 1.0)
     dt_probs_6 = _proba_6class(ml_artifacts["dt_multiclass"], X_full)
     dt_pred = ml_artifacts["dt_multiclass"].predict(X_full)
@@ -2391,12 +2445,14 @@ def _evaluate_next_observed_gap_regime(frame: pd.DataFrame, ml_artifacts: dict[s
 
     if "current_los_ordinal" not in te_next.columns:
         te_next["current_los_ordinal"] = te_next["los_ordinal"]
-    X_next = ml_artifacts["ml_imputer"].transform(te_next[ml_artifacts["full_features"]])
+    imp_full = ml_artifacts.get("ml_imputer_full", ml_artifacts["ml_imputer"])
+    rf_23d_model = ml_artifacts.get("rf_23d", ml_artifacts["rf_multiclass"])
+    X_next = imp_full.transform(te_next[ml_artifacts["full_features"]])
     yn_true = te_next["next_obs_los_ordinal"].astype(int).to_numpy()
     yn_cur = te_next["current_los_ordinal"].astype(int).to_numpy()
     yn_sev = te_next["next_obs_severe"].astype(int).to_numpy()
-    rfn_pred = ml_artifacts["rf_multiclass"].predict(X_next)
-    rfn_prob = np.clip(_proba_6class(ml_artifacts["rf_multiclass"], X_next)[:, 4:].sum(axis=1), 0.0, 1.0)
+    rfn_pred = rf_23d_model.predict(X_next)
+    rfn_prob = np.clip(_proba_6class(rf_23d_model, X_next)[:, 4:].sum(axis=1), 0.0, 1.0)
     gbtn_prob = np.clip(ml_artifacts["gbt_severe"].predict_proba(X_next)[:, 1], 0.0, 1.0)
     p_roc, p_pr, _ = _safe_binary_ranking_metrics(yn_sev, yn_cur / 5.0)
     rf_roc, rf_pr, _ = _safe_binary_ranking_metrics(yn_sev, rfn_prob)
@@ -2430,7 +2486,11 @@ def _evaluate_val_candidates(
         val_acc6 = (
             round(float(accuracy_score(y_val_multi, c_model.predict(c_X_val))), 4) if c_kind == "multiclass" else None
         )
-        comp = round(0.5 * val_acc6 + 0.5 * val_pr, 4) if val_acc6 is not None else round(val_pr, 4)
+        comp = (
+            round((val_acc6 + val_pr + val_roc) / 3.0, 4)
+            if val_acc6 is not None
+            else round(0.5 * val_pr + 0.5 * val_roc, 4)
+        )
         rows.append(
             {
                 "candidate_model": c_name,
@@ -2498,6 +2558,41 @@ def _run_burst_ablation(
         "with_burst_severe_f1": round(float(f1_score(y_test_bin, preds_bin, zero_division=0)), 4),
         "organic_only_severe_f1": organic_f1,
     }
+
+
+def _build_ablation_rows(
+    test_df: pd.DataFrame,
+    y_test_multi: np.ndarray,
+    y_test_bin: np.ndarray,
+    multiclass_specs: list[tuple[str, str, Any, np.ndarray]],
+    binary_specs: list[tuple[str, str, Any, np.ndarray]],
+    val_thresholds: dict[str, float],
+) -> list[dict[str, Any]]:
+    """Score Persistence + all multiclass/binary candidates under each model's own VAL threshold."""
+    persistence_multi = test_df["current_los_ordinal"].astype(int).to_numpy()
+    persistence_bin = (persistence_multi >= SEVERE_ORDINAL_THRESHOLD).astype(int)
+    persistence_scores = persistence_multi / 5.0
+    rows: list[dict[str, Any]] = [
+        _score_model_row(
+            "Persistence Baseline (t -> t+30m)",
+            "Local (Lag-0)",
+            y_test_multi,
+            persistence_multi,
+            y_test_bin,
+            persistence_bin,
+            persistence_scores,
+        )
+    ]
+    for model_name, feat_label, model, x_test in multiclass_specs:
+        probs = _proba_6class(model, x_test)[:, 4:].sum(axis=1)
+        preds_multi = model.predict(x_test)
+        preds_bin = (probs >= val_thresholds[model_name]).astype(int)
+        rows.append(_score_model_row(model_name, feat_label, y_test_multi, preds_multi, y_test_bin, preds_bin, probs))
+    for model_name, feat_label, model, x_test in binary_specs:
+        probs = model.predict_proba(x_test)[:, 1]
+        preds_bin = (probs >= val_thresholds[model_name]).astype(int)
+        rows.append(_score_gbt_row(model_name, feat_label, y_test_bin, preds_bin, probs))
+    return rows
 
 
 def train_and_evaluate_models(
@@ -2643,71 +2738,35 @@ def train_and_evaluate_models(
     best_preds_multi = selected_model.predict(X_test_sel)
     best_preds_bin = (best_probs >= selected_threshold).astype(int)
 
-    persistence_multi = test_df["current_los_ordinal"].astype(int).to_numpy()
-    persistence_bin = (persistence_multi >= SEVERE_ORDINAL_THRESHOLD).astype(int)
-    persistence_scores = persistence_multi / 5.0
-
-    ablation_rows = [
-        _score_model_row(
-            "Persistence Baseline (t -> t+30m)",
-            "Local (Lag-0)",
-            y_test_multi,
-            persistence_multi,
-            y_test_bin,
-            persistence_bin,
-            persistence_scores,
-        ),
-        _score_model_row(
-            "Decision Tree (Local Only)",
-            "Local Features (14D)",
-            y_test_multi,
-            dt_local.predict(X_test_local),
-            y_test_bin,
-            (dt_local.predict(X_test_local) >= 4).astype(int),
-            _proba_6class(dt_local, X_test_local)[:, 4:].sum(axis=1),
-        ),
-        _score_model_row(
+    val_thresholds = {str(r["candidate_model"]): float(r["val_optimal_threshold"]) for r in val_selection_rows}
+    multiclass_specs = [
+        ("Decision Tree (Local Only)", "Local Features (14D)", dt_local, X_test_local),
+        (
             "Decision Tree (+Graph PageRank, Causal Priors & K-Means)",
             "Local + Graph + Cluster (23D)",
-            y_test_multi,
-            dt_full.predict(X_test_full),
-            y_test_bin,
-            (dt_full.predict(X_test_full) >= 4).astype(int),
-            _proba_6class(dt_full, X_test_full)[:, 4:].sum(axis=1),
+            dt_full,
+            X_test_full,
         ),
-        _score_model_row(
-            "Random Forest (Local Only)",
-            "Local Features (14D)",
-            y_test_multi,
-            rf_local.predict(X_test_local),
-            y_test_bin,
-            (rf_local.predict(X_test_local) >= 4).astype(int),
-            _proba_6class(rf_local, X_test_local)[:, 4:].sum(axis=1),
-        ),
-        _score_model_row(
+        ("Random Forest (Local Only)", "Local Features (14D)", rf_local, X_test_local),
+        (
             "Random Forest (+Graph PageRank, Causal Priors & K-Means)",
             "Local + Graph + Cluster (23D)",
-            y_test_multi,
-            best_preds_multi,
-            y_test_bin,
-            best_preds_bin,
-            best_probs,
-        ),
-        _score_gbt_row(
-            "GBT Binary Alerting (Local Only)",
-            "Local Features (14D)",
-            y_test_bin,
-            gbt_local.predict(X_test_local),
-            gbt_local.predict_proba(X_test_local)[:, 1],
-        ),
-        _score_gbt_row(
-            "GBT Binary Alerting (+Graph PageRank, Causal Priors & K-Means)",
-            "Local + Graph + Cluster (23D)",
-            y_test_bin,
-            gbt_full.predict(X_test_full),
-            gbt_full.predict_proba(X_test_full)[:, 1],
+            rf_full,
+            X_test_full,
         ),
     ]
+    binary_specs = [
+        ("GBT Binary Alerting (Local Only)", "Local Features (14D)", gbt_local, X_test_local),
+        (
+            "GBT Binary Alerting (+Graph PageRank, Causal Priors & K-Means)",
+            "Local + Graph + Cluster (23D)",
+            gbt_full,
+            X_test_full,
+        ),
+    ]
+    ablation_rows = _build_ablation_rows(
+        test_df, y_test_multi, y_test_bin, multiclass_specs, binary_specs, val_thresholds
+    )
     ablation_df = pd.DataFrame(ablation_rows)
 
     fpr, tpr, thresholds = roc_curve(y_test_bin, best_probs)
@@ -2738,10 +2797,11 @@ def train_and_evaluate_models(
         "val_purged_boundary_samples": int(split_info["sup_val_purged_count"]),
         "test_samples": int(len(test_df)),
         "positive_severe_test_samples": int(y_test_bin.sum()),
+        "best_model_name": selected_model_name,
         "validation_gate_selection": {
             "selected_multiclass_model": selected_model_name,
             "selected_val_threshold": selected_threshold,
-            "selection_criterion": "0.5 * val_accuracy_6class + 0.5 * val_pr_auc",
+            "selection_criterion": "(val_accuracy_6class + val_pr_auc + val_roc_auc) / 3",
             "candidates": val_selection_rows,
         },
         "burst_filtering_ablation": burst_ablation,
@@ -2766,6 +2826,7 @@ def train_and_evaluate_models(
         "full_features": FULL_ML_FEATURES,
         "selected_features": sel_features,
         "ml_imputer": sel_imputer,
+        "ml_imputer_full": imputer_full,
         "ml_imputer_local": imputer_local,
         "rf_multiclass": selected_model,
         "rf_23d": rf_full,
@@ -2828,12 +2889,18 @@ def _score_gbt_row(
     }
 
 
-def write_roc_plot(roc_frame: pd.DataFrame, auc_val: float, path: Path) -> None:
+def write_roc_plot(
+    roc_frame: pd.DataFrame,
+    auc_val: float,
+    path: Path,
+    model_name: str | None = None,
+) -> None:
     fig, axis = plt.subplots(figsize=(7.5, 5.2))
+    label_name = model_name or "Selected Multiclass Model"
     axis.plot(
         roc_frame["false_positive_rate"],
         roc_frame["true_positive_rate"],
-        label=f"Random Forest + Graph PageRank & K-Means (AUC = {auc_val:.4f})",
+        label=f"{label_name} (AUC = {auc_val:.4f})",
         color="#d95f02",
         linewidth=2.2,
     )
@@ -3343,12 +3410,19 @@ def _format_verified_mongo_report(
 def _query_mongo_via_mongosh(
     container_name: str, sample_docs: list[dict[str, Any]]
 ) -> tuple[dict[str, Any] | None, str]:
-    docs_json = json.dumps(sample_docs, ensure_ascii=False)
+    from spark_engine import _sanitize_mongo_doc
+
+    clean_docs = [_sanitize_mongo_doc(d) for d in sample_docs]
+    docs_json = json.dumps(clean_docs, ensure_ascii=False)
     js_lines = [
         'const dbRef = db.getSiblingDB("bda501");',
         f"const docs = {docs_json};",
         "const ops = docs.map(d => ({ updateOne: {"
-        " filter: { event_id: d.event_id }, update: { $set: d }, upsert: true } }));",
+        " filter: { event_id: d.event_id },"
+        " update: [{ $replaceRoot: { newRoot: { $cond: ["
+        " { $gt: [{ $ifNull: ['$status_version', 0] }, d.status_version] },"
+        " '$$ROOT', { $mergeObjects: ['$$ROOT', { $literal: d }] } ] } } }],"
+        " upsert: true } }));",
         "if (ops.length > 0) { dbRef.traffic_scores.bulkWrite(ops, { ordered: false }); }",
         'dbRef.traffic_scores.createIndex({ event_id: 1 }, { unique: true, name: "event_id_unique" });',
         "dbRef.traffic_scores.createIndex("
@@ -3547,15 +3621,27 @@ def _write_frozen_registry_manifest(
     manifest_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
-def _simulate_two_step_serving_lifecycle(
-    serving: pd.DataFrame,
+def _resolve_lifecycle_label(
+    idx: int,
+    out_wm_indices: set[int],
+    in_flight_provisional_indices: set[int],
+) -> str:
+    if idx in out_wm_indices:
+        return "BATCH_RECONCILED"
+    if idx in in_flight_provisional_indices:
+        return "STREAM_PROVISIONAL"
+    return "BATCH_VERIFIED"
+
+
+def _build_phase_b_c_docs(
+    records: list[dict[str, Any]],
     phase_b_preds: pd.DataFrame,
     out_wm_indices: set[int],
     in_flight_provisional_indices: set[int],
-) -> tuple[pd.DataFrame, dict[str, int], dict[str, int], dict[str, int]]:
-    serving_store: dict[str, dict[str, Any]] = {}
-    phase_b_docs = []
-    for idx, row in enumerate(serving.to_dict(orient="records")):
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    phase_b_docs: list[dict[str, Any]] = []
+    phase_c_docs: list[dict[str, Any]] = []
+    for idx, row in enumerate(records):
         if idx not in out_wm_indices:
             phase_b_docs.append(
                 {
@@ -3566,17 +3652,29 @@ def _simulate_two_step_serving_lifecycle(
                     "status_version": 1,
                 }
             )
-    b_stats = upsert_serving_records_with_version_guard(serving_store, phase_b_docs)
+        if idx not in in_flight_provisional_indices:
+            phase_c_docs.append(
+                {
+                    **row,
+                    "lifecycle_status": "BATCH_RECONCILED" if idx in out_wm_indices else "BATCH_VERIFIED",
+                    "status_version": 2,
+                }
+            )
+    return phase_b_docs, phase_c_docs
 
-    phase_c_docs = [
-        {
-            **row,
-            "lifecycle_status": "BATCH_RECONCILED" if idx in out_wm_indices else "BATCH_VERIFIED",
-            "status_version": 2,
-        }
-        for idx, row in enumerate(serving.to_dict(orient="records"))
-        if idx not in in_flight_provisional_indices
-    ]
+
+def _simulate_two_step_serving_lifecycle(
+    serving: pd.DataFrame,
+    phase_b_preds: pd.DataFrame,
+    out_wm_indices: set[int],
+    in_flight_provisional_indices: set[int],
+) -> tuple[pd.DataFrame, dict[str, int], dict[str, int], dict[str, int]]:
+    serving_store: dict[str, dict[str, Any]] = {}
+    records = serving.to_dict(orient="records")
+    phase_b_docs, phase_c_docs = _build_phase_b_c_docs(
+        records, phase_b_preds, out_wm_indices, in_flight_provisional_indices
+    )
+    b_stats = upsert_serving_records_with_version_guard(serving_store, phase_b_docs)
     c_stats = upsert_serving_records_with_version_guard(serving_store, phase_c_docs)
 
     stale_retry_docs = [
@@ -3590,10 +3688,7 @@ def _simulate_two_step_serving_lifecycle(
 
     serving["phase_b_status"] = "STREAM_PROVISIONAL"
     serving["lifecycle_status"] = [
-        "BATCH_RECONCILED"
-        if idx in out_wm_indices
-        else ("STREAM_PROVISIONAL" if idx in in_flight_provisional_indices else "BATCH_VERIFIED")
-        for idx in range(len(serving))
+        _resolve_lifecycle_label(idx, out_wm_indices, in_flight_provisional_indices) for idx in range(len(serving))
     ]
     serving["status_version"] = [1 if idx in in_flight_provisional_indices else 2 for idx in range(len(serving))]
     serving["model_version"] = "rf_full_23d_v3"
@@ -3767,7 +3862,8 @@ def _prepare_medallion_and_splits(
     init_lags = add_temporal_and_neighbor_lags(initial_med, edges_df=edges_df)
     split_init = compute_chronological_split_boundaries(init_lags)
 
-    vmax_lookup = fit_train_vmax_lookup(initial_med.loc[split_init["frame_train_mask"].to_numpy()])
+    train_vmax_slice = init_lags.loc[split_init["frame_train_mask"]]
+    vmax_lookup = fit_train_vmax_lookup(train_vmax_slice, train_cutoff_ts=split_init["train_cutoff_ts"])
     vmax_lookup_path = output_dir / "vmax_lookup.json"
     vmax_lookup_path.write_text(json.dumps(vmax_lookup, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -3950,7 +4046,12 @@ def _export_outputs_and_verify(
     eval_metrics["transition_analysis"] = trans_summary
     trans_df.to_csv(output_dir / "transition_evaluation.csv", index=False, encoding="utf-8")
     roc_df.to_csv(output_dir / "roc_curve.csv", index=False, encoding="utf-8")
-    write_roc_plot(roc_df, eval_metrics["roc_auc"], output_dir / "roc_curve.png")
+    write_roc_plot(
+        roc_df,
+        eval_metrics["roc_auc"],
+        output_dir / "roc_curve.png",
+        model_name=eval_metrics["validation_gate_selection"]["selected_multiclass_model"],
+    )
 
     model_path = output_dir / "model.joblib"
     joblib.dump(

@@ -19,7 +19,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-COPY app.py baseline.py pipeline.py producer.py starter_stream.py live_kafka_stream.py spark_engine.py spark_batch.py ./
+COPY baseline.py pipeline.py producer.py starter_stream.py live_kafka_stream.py spark_engine.py spark_batch.py ./
 COPY scripts ./scripts
 COPY traffic_data ./traffic_data
 COPY toc_backend ./toc_backend
@@ -29,6 +29,9 @@ COPY evidence ./evidence
 COPY product ./product
 RUN mkdir -p /app/raw_data /app/data /app/outputs
 
-EXPOSE 8501 8000
+EXPOSE 8000
 
-CMD ["streamlit", "run", "app.py", "--server.address=0.0.0.0", "--server.port=8501"]
+HEALTHCHECK --interval=15s --timeout=5s --retries=5 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"
+
+CMD ["uvicorn", "toc_backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

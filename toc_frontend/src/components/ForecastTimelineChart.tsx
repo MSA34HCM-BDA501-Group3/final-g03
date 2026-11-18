@@ -216,7 +216,7 @@ export const ForecastTimelineChart: React.FC<Props> = ({ timeline }) => {
               stroke="#047857"
               strokeWidth={1.2}
             >
-              <title>{`GPS thực tế tương lai lúc ${p.time_ict} ICT: ${p.velocity_kmh} km/h`}</title>
+              <title>{`GPS Ping #${p.ping_id} (thực tế tương lai) lúc ${p.time_ict} ICT: ${p.velocity_kmh} km/h`}</title>
             </circle>
           ))}
 

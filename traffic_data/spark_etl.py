@@ -88,6 +88,15 @@ def _build_nfc_pairs() -> tuple[tuple[str, str], ...]:
 
 _NFC_PAIRS = _build_nfc_pairs()
 
+_KEEP_DUONG_PREFIX_REGEX = (
+    r"^[Đđ]ường\s+(?:"
+    r"[Ss][ốô](?:$|[^\p{L}\p{N}_])"
+    r"|(?:[Cc]ao\s+[Tt]ốc|[Dd]ẫn|[Hh]ầm|[Tt]ỉnh|[Vv]ành\s+[Đđ]ai|[Vv]en|[Đđ]ất|"
+    r"[Ll]iên\s+(?:[Kk]hu|[Ấấ]p|[Xx]ã))(?:$|[^\p{L}\p{N}_])"
+    r"|(?:[A-Z]{1,4}\d*[A-Za-zÀ-ỹ]*|\d+[A-Za-zÀ-ỹ]*)(?:\s*[-–]|$)"
+    r")"
+)
+
 
 def normalize_name(value: Column | str) -> Column:
     """Normalize Vietnamese street names in pure Spark SQL (NFC, Eth, whitespace, prefix, admin suffix)."""
@@ -98,11 +107,10 @@ def normalize_name(value: Column | str) -> Column:
         composed = F.regexp_replace(composed, pat, rep)
     text = F.when(text.rlike("[\u0300-\u036f]"), composed).otherwise(text)
     text = F.trim(F.regexp_replace(text, r"\s+", " "))
-    text = F.regexp_replace(
-        text,
-        r"(?iu)^đường\s+(?!số(?:$|[^\p{L}\p{N}_])|(?-i:[A-Z0-9]{1,4})(?:$|[^\p{L}\p{N}_]))",
-        "",
-    )
+    text = F.when(
+        text.rlike(r"^[Đđ]ường\s+") & ~text.rlike(_KEEP_DUONG_PREFIX_REGEX),
+        F.regexp_replace(text, r"^[Đđ]ường\s+", ""),
+    ).otherwise(text)
     text = F.regexp_replace(text, r"^Xa\s+[lL]ộ\s+", "Xa Lộ ")
     text = F.regexp_replace(
         text,
@@ -277,23 +285,43 @@ def aggregate_monoid(events: DataFrame, salted: bool = True, buckets: int = 8) -
     return merged.withColumn("mean_velocity", F.col("sum_velocity") / F.col("obs_count"))
 
 
+def flag_synthetic_burst_events(
+    events: DataFrame,
+    min_simultaneous_segments: int = 1000,
+) -> DataFrame:
+    """Flag pings falling in 30m UTC slots with >= min_simultaneous_segments distinct segments."""
+    if "is_synthetic_burst" in events.columns:
+        return events
+    with_win = events.withColumn("_burst_window_start", F.window("event_ts", "30 minutes").getField("start"))
+    burst_slots = (
+        with_win.groupBy("_burst_window_start")
+        .agg(F.countDistinct("segment_id").alias("_slot_distinct_segments"))
+        .withColumn("is_synthetic_burst", F.col("_slot_distinct_segments") >= F.lit(min_simultaneous_segments))
+        .select("_burst_window_start", "is_synthetic_burst")
+    )
+    return with_win.join(burst_slots, "_burst_window_start", "left").drop("_burst_window_start")
+
+
 def fit_velocity_lookup(
     events: DataFrame,
     segments: DataFrame,
     train_end: str,
     use_observed_gis_vmax: bool = True,
     min_p85_obs: int = 5,
+    min_burst_segments: int = 1000,
 ) -> DataFrame:
-    """Exclusive cutoff. Segment P85 (>= min_p85_obs pings) and road medians use TRAIN data only.
+    """Exclusive cutoff. Segment P85 (>= min_p85_obs pings) and road medians use organic TRAIN data only.
 
-    Lookup fits strictly before train_end UTC to avoid leakage and resolves 3 tiers:
+    Lookup fits strictly before train_end UTC (excluding synthetic burst slots) to avoid leakage
+    and resolves 3 tiers:
     SEGMENT_OBSERVED_VMAX (when use_observed_gis_vmax=True and in (0, 200]) ->
     SEGMENT_P85 (count >= min_p85_obs and > 0) -> LEVEL_TYPE_MEDIAN (distinct segments) ->
     LEVEL_PRIOR {1: 80, 2: 60, 3: 50, 4: 40}.
     """
     train = events.filter(F.col("event_ts") < F.to_timestamp(F.lit(train_end)))
-    if "is_synthetic_burst" in train.columns:
-        train = train.filter(~F.coalesce(F.col("is_synthetic_burst").cast("boolean"), F.lit(False)))
+    if "is_synthetic_burst" not in train.columns:
+        train = flag_synthetic_burst_events(train, min_simultaneous_segments=min_burst_segments)
+    train = train.filter(~F.coalesce(F.col("is_synthetic_burst").cast("boolean"), F.lit(False)))
     p85 = (
         train.groupBy("segment_id")
         .agg(
@@ -343,7 +371,39 @@ def derive_los(ratio):
     return F.when(ratio.isNull(), F.lit(None).cast("string")).otherwise(result)
 
 
-derive_urban_los = derive_los
+def derive_urban_los(
+    mean_velocity_col: Column | str,
+    raw_max_velocity_col: Column | str | None = None,
+) -> Column:
+    """Derive HCMC urban 5 km/h speed-band LOS (A..F) matching BkTraffic & pipeline.py thresholds."""
+    vel = (F.col(mean_velocity_col) if isinstance(mean_velocity_col, str) else mean_velocity_col).cast("double")
+    if raw_max_velocity_col is None:
+        shift = F.lit(0.0)
+    else:
+        raw_v = (
+            F.col(raw_max_velocity_col) if isinstance(raw_max_velocity_col, str) else raw_max_velocity_col
+        ).cast("double")
+        safe_raw = F.when(
+            raw_v.isNull() | F.isnan(raw_v) | (F.abs(raw_v) == float("inf")), F.lit(0.0)
+        ).otherwise(raw_v)
+        shift = (
+            F.when(safe_raw >= F.lit(70.0), F.lit(10.0))
+            .when(safe_raw >= F.lit(60.0), F.lit(5.0))
+            .otherwise(F.lit(0.0))
+        )
+    safe_vel = F.when(vel.isNull() | F.isnan(vel), F.lit(-1.0)).otherwise(vel)
+    result = F.lit("F")
+    for threshold, label in reversed([(35.0, "A"), (30.0, "B"), (25.0, "C"), (20.0, "D"), (15.0, "E")]):
+        result = F.when(safe_vel >= (F.lit(threshold) + shift), F.lit(label)).otherwise(result)
+    return result
+
+
+def _resolve_raw_vmax_col(frame: DataFrame) -> Column | None:
+    if "raw_max_velocity" in frame.columns:
+        return F.col("raw_max_velocity")
+    if "observed_max_velocity" in frame.columns:
+        return F.col("observed_max_velocity")
+    return None
 
 
 def enrich_windows(
@@ -353,14 +413,16 @@ def enrich_windows(
     broadcast: bool = True,
     streets: DataFrame | None = None,
 ) -> DataFrame:
-    """Enrich 30m windows with topology, velocity lookup, LOS, and UTC + ICT temporal contract."""
+    """Enrich 30m windows with topology, velocity lookup, urban LOS, and UTC + ICT temporal contract."""
     dim = segments.join(F.broadcast(lookup) if broadcast else lookup, "segment_id")
     result = windows.join(F.broadcast(dim) if broadcast else dim, "segment_id")
     if streets is not None:
         result = result.join(F.broadcast(streets) if broadcast else streets, "street_id")
+    raw_vmax_col = _resolve_raw_vmax_col(result)
     result = (
         result.withColumn("velocity_ratio", F.col("mean_velocity") / F.col("max_velocity"))
-        .withColumn("LOS", derive_los(F.col("velocity_ratio")))
+        .withColumn("ratio_los", derive_los(F.col("velocity_ratio")))
+        .withColumn("LOS", derive_urban_los(F.col("mean_velocity"), raw_vmax_col))
         .withColumn("date_utc", F.date_format("window_start", "yyyy-MM-dd"))
         .withColumn("local_ts", F.from_utc_timestamp("window_start", "Asia/Ho_Chi_Minh"))
     )

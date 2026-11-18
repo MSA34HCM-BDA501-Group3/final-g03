@@ -442,18 +442,18 @@ def render_hcmc_clusters_map(geom: pd.DataFrame, out_path: Path) -> Path:
     counts = static_df["cluster_id"].value_counts().to_dict()
 
     palette = {
-        0: ("#2563EB", 0.90, f"Nhóm 0: Đại lộ / Quốc lộ Vmax cao ({counts.get(0, 0):,} đoạn)"),
-        1: ("#94A3B8", 0.30, f"Nhóm 1: Đường nhánh & hẻm dân cư ({counts.get(1, 0):,} đoạn)"),
-        2: ("#DC2626", 0.88, f"Nhóm 2: Giao lộ nội đô hay kẹt ({counts.get(2, 0):,} đoạn)"),
-        3: ("#F59E0B", 0.68, f"Nhóm 3: Đoạn liên kết dài ~236m ({counts.get(3, 0):,} đoạn)"),
-        4: ("#10B981", 0.62, f"Nhóm 4: Hành lang thông thoáng ({counts.get(4, 0):,} đoạn)"),
-        5: ("#8B5CF6", 0.80, f"Nhóm 5: Nút cổ chai PageRank cao ({counts.get(5, 0):,} đoạn)"),
+        0: ("#F59E0B", 0.56, f"Nhóm 0: Đường nội đô Vmax ~43 km/h ({counts.get(0, 0):,} đoạn)"),
+        1: ("#DC2626", 0.90, f"Nhóm 1: Trục nội đô hay kẹt 43.3% ({counts.get(1, 0):,} đoạn)"),
+        2: ("#94A3B8", 0.30, f"Nhóm 2: Đường nhánh & hành lang thoáng ({counts.get(2, 0):,} đoạn)"),
+        3: ("#2563EB", 0.95, f"Nhóm 3: Tuyến tốc độ cao / cửa ngõ ({counts.get(3, 0):,} đoạn)"),
+        4: ("#8B5CF6", 0.82, f"Nhóm 4: Trục chính & nút cổ chai PR cao ({counts.get(4, 0):,} đoạn)"),
+        5: ("#10B981", 0.70, f"Nhóm 5: Đoạn liên kết dài ~234m ({counts.get(5, 0):,} đoạn)"),
     }
 
     fig, ax = plt.subplots(figsize=(8.3, 6.5), dpi=240, facecolor="white")
     _draw_hcmc_cartographic_base(ax)
 
-    for z_idx, cid in enumerate([1, 4, 3, 5, 0, 2], start=1):
+    for z_idx, cid in enumerate([2, 0, 5, 4, 3, 1], start=1):
         color, lw, _ = palette[cid]
         sub = m[m["cluster_id"] == cid]
         coll = LineCollection(_segments_to_lines(sub), colors=color, linewidths=lw, alpha=0.86, zorder=z_idx)
@@ -642,7 +642,8 @@ def render_pdf_equations() -> dict[str, Path]:
         ),
         "eq_sketches": (
             [
-                r"$P_{\mathrm{fp}} \approx \left(1 - e^{-kn/m}\right)^k \;\; (m = 262,144,\; k = 4)"
+                r"$P_{\mathrm{fp}} \approx \left(1 - e^{-kn/m}\right)^k \;\; "
+                r"(2 \times 131,072\;\mathrm{bits},\; k = 10)"
                 r"\qquad \hat{E}_{\mathrm{HLL}} = \alpha_m m^2 \left(\sum_{j=0}^{m-1} 2^{-M[j]}\right)^{-1}$",
                 r"$C_s(t) = (1 - \alpha)\,C_s(t - 1) + \mathbb{I}\left(\mathrm{LOS}_{s,t} \in \{E, F\}\right)"
                 r"\qquad (\alpha = 0.15,\; \mathrm{prune}\; C_s(t) < \varepsilon = 10^{-4})$",
@@ -717,8 +718,9 @@ def render_ablation_t30m_chart(out_path: Path) -> Path:
     ax2.set_ylim(0.25, 1.08)
     ax2.set_ylabel("Điểm 6 mức (LOS A–F)", fontsize=8.4, fontweight="bold")
     gain_pct = (macro_f1[-1] - macro_f1[1]) * 100.0
+    wf1 = float(ab_df.loc["Random Forest (+Graph PageRank, Causal Priors & K-Means)", "weighted_f1_6class"])
     ax2.set_title(
-        f"Phân loại 6 Mức LOS A–F (+{gain_pct:.2f}% Macro-F1 so với DT 23D; Weighted-F1 0.9304)",
+        f"Phân loại 6 Mức LOS A–F (+{gain_pct:.2f}% Macro-F1 so với DT 23D; Weighted-F1 {wf1:.4f})",
         fontsize=9.3,
         fontweight="bold",
         color="#0F172A",

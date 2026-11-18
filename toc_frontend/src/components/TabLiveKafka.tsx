@@ -169,7 +169,13 @@ export const TabLiveKafka: React.FC<Props> = ({
                     <tr
                       key={`${r.event_id}-${idx}`}
                       className="clickable"
-                      onClick={() => onJumpToSegment(Number(r.segment_id), String(r.ict_date || ''), Number(r.vn_hour || 12))}
+                      onClick={() =>
+                        onJumpToSegment(
+                          Number(r.segment_id),
+                          String(r.ict_date || r.date || ''),
+                          Number(r.vn_hour ?? 12)
+                        )
+                      }
                     >
                       <td>#{String(r.seq_id ?? idx + 1)}</td>
                       <td>{String(r.received_at_ict || '')}</td>

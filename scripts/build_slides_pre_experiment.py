@@ -337,7 +337,7 @@ def _add_ms_slide_04_system_architecture(prs: Presentation, arch_img: Path) -> D
             "Phase B (Online Speed Layer): Luồng trực tuyến chỉ đọc (.predict_proba) phát cảnh báo tạm thời (v1), "
             "tuyệt đối không xung đột ghi.",
             "Phase C (Late Recon): Cuối ngày gom tin trễ > 30m cập nhật bản chuẩn (v2) "
-            "trong ngân sách 12.0 / 16.0 GB RAM.",
+            "trong ngân sách 11.0 / 16.0 GB RAM.",
         ],
         badge="0 Write Conflict",
         theme="sky",
@@ -350,8 +350,8 @@ def _add_ms_slide_04_system_architecture(prs: Presentation, arch_img: Path) -> D
         3.12,
         "Limitations & Risks (Arch)",
         [
-            "Single-Host Contention: Thiết kế 6 dịch vụ Kafka (1.5G), Spark (6G), Mongo (2G), TOC Web (:8000) & "
-            "Streamlit (:8501) trên 1 máy tiềm ẩn tranh chấp I/O đĩa khi Shuffle lớn.",
+            "Single-Host Contention: Thiết kế 5 dịch vụ mặc định Kafka (1.5G), Spark (6G), Mongo (2G), ReactJS+FastAPI "
+            "TOC (:8000, 1G) & live-consumer (0.5G) trên 1 máy tiềm ẩn tranh chấp I/O đĩa khi Shuffle lớn.",
             "Eventual Consistency Gap: Cảnh báo luồng (v1) ưu tiên độ trễ thấp, nên việc cập nhật biến trễ từ các gói "
             "tin muộn > 30m có độ trễ đến chu kỳ Phase C cuối ngày.",
         ],
@@ -504,8 +504,8 @@ def _add_ms_slide_07_method_explainer_2(prs: Presentation, method_img2: Path) ->
         1.74,
         "Vì Sao Thiết Kế Bộ Đếm O(1) Sketches?",
         [
-            "Ở quy mô tỷ bản tin/ngày, lưu danh sách mã tin để lọc trùng sẽ tràn RAM. Thiết kế dãy bit Bloom Filter "
-            "(32 KiB), HLL++ (1 KiB) và điểm nóng EWMA giúp xử lý tức thời trong ngân sách bộ nhớ cố định cực nhỏ.",
+            "Ở quy mô tỷ bản tin/ngày, lưu danh sách mã tin để lọc trùng sẽ tràn RAM. Thiết kế RotatingBloomFilter "
+            "(32 KiB · 2×16 KiB), HLL++ (1 KiB) và điểm nóng EWMA giúp xử lý tức thời trong ngân sách bộ nhớ cực nhỏ.",
         ],
         badge="33.0 KiB Budget",
         theme="sky_strong",
@@ -619,8 +619,8 @@ def _add_ms_slide_09_modeling(prs: Presentation) -> DualSlide:
         3.08,
         "Mô Hình Nghiên Cứu & Cơ Chế Cold-Start",
         [
-            "Mô hình Đề xuất — Random Forest (23D): Thiết kế 250 cây, max_depth=14, clean sqrt cls_w (0.65) và tuyển "
-            "chọn bằng Live VAL Composite Gate (0.5·Acc + 0.5·PR-AUC) trên dữ liệu organic thưa.",
+            "Mô hình Đề xuất — Random Forest (23D): Thiết kế 250 cây, max_depth=14, tuyển chọn khách quan bằng Live "
+            "VAL Composite Gate (val_acc + val_pr + val_roc) / 3 trên dữ liệu organic thưa.",
             "Hệ đối chứng Ablation dự kiến: Đặt cạnh Persistence Baseline, Decision Tree & Binary GBT (14D vs. 23D); "
             "kết hợp Static Feature Store phủ 74,211 đoạn Cold-Start (84,206 đoạn cơ giới).",
         ],
@@ -719,11 +719,11 @@ def _add_ms_slide_11_stream_processing(prs: Presentation, stream_flow_img: Path)
         "Thiết Kế Luồng O(1), Đối Soát Hai Tầng & Serving",
         [
             "O(1) Sketches & WAL: Phân vùng Kafka KRaft theo segment_id; thiết kế bộ nhớ cố định 33.0 KiB gồm "
-            "BitPackedBloomFilter (32.0 KiB, 262,144 bits) lọc trùng & HyperLogLog++ (1.0 KiB) đếm đường hoạt động; "
+            "RotatingBloomFilter (32.0 KiB · 2×16 KiB, k=10) lọc trùng & HyperLogLog++ (1.0 KiB) đếm đường hoạt động; "
             "EWMA Hotspot (α=0.15) bắt điểm ĐANG kẹt lì bổ trợ Random Forest (+30m) kèm nhật ký WAL.",
             "Two-Tier Recon & MongoDB: Thiết kế đối soát Tier 1 (kiểm chuẩn đúng hạn) & Tier 2 (gom bù tin trễ > 30m, "
-            "tính lại lag & re-score v2); Bulk Upsert kèm khóa $status_version & IXSCAN (mục tiêu < 10 ms) cho Dual-UI "
-            ":8000/:8501.",
+            "tính lại lag & re-score v2); Bulk Upsert kèm khóa $status_version & IXSCAN (mục tiêu < 10 ms) cho "
+            "ReactJS + FastAPI TOC (:8000).",
         ],
         badge="33.0 KiB · SLA <10ms",
         theme="sky",
@@ -736,8 +736,8 @@ def _add_ms_slide_11_stream_processing(prs: Presentation, stream_flow_img: Path)
         2.10,
         "Limitations & Risks (Stream Processing)",
         [
-            "Rủi ro bão hòa bit Bloom Filter: Mảng cố định 32.0 KiB (262,144 bits) sẽ tăng tỷ lệ báo trùng giả (FPR) "
-            "nếu chạy liên tục nhiều ngày ở quy mô 1.5–3.0 TB/ngày mà không xoay vòng (Ring-Buffer Rotation).",
+            "Giới hạn cửa sổ xoay vòng RotatingBloomFilter (2×16 KiB): Thiết kế 2 thế hệ tránh bão hòa bit dài ngày, "
+            "nhưng bản tin trùng đến quá muộn sau 2 thế hệ sẽ dựa vào chỉ mục event_id duy nhất trên MongoDB.",
             "Độ trễ cập nhật của sự kiện quá muộn (> 30m Watermark): Bản tin trễ hơn 30 phút do mất sóng di động phải "
             "đợi chu kỳ Tier-2 Reconciliation cuối ngày mới được cập nhật vào bản chuẩn v2.",
         ],
@@ -768,7 +768,7 @@ def _add_ms_slide_12_limitations_and_risks(prs: Presentation) -> DualSlide:
         [
             "3. System Architecture",
             (
-                "6 dịch vụ chia sẻ tài nguyên trên 1 máy Docker (12.0/16 GB);\n"
+                "5 dịch vụ mặc định chia sẻ tài nguyên trên 1 máy Docker (11.0/16 GB);\n"
                 "độ trễ đồng bộ biến trễ giữa Phase B và Phase C"
             ),
             "Giới hạn cứng mem_limit từng container;\nphân tách đọc/ghi 3-Phase MLOps",
@@ -796,8 +796,8 @@ def _add_ms_slide_12_limitations_and_risks(prs: Presentation) -> DualSlide:
         ],
         [
             "8. Stream Processing",
-            "Bloom Filter 32.0 KiB dễ đầy bit nếu chạy dài ngày;\ntin trễ > 30m phải chờ phiên đối soát cuối ngày",
-            "Thiết kế Two-Tier Reconciliation bù trễ;\nkhóa $status_version chặn tin cũ v1 ghi đè bản chuẩn v2",
+            "RotatingBloom 32.0 KiB giải phóng sau 2 thế hệ;\ntin trễ > 30m phải chờ phiên đối soát cuối ngày",
+            "MongoDB event_id unique + Two-Tier Recon bù trễ;\nkhóa $status_version chặn tin cũ v1 ghi đè bản v2",
         ],
     ]
     s12.add_table(0.55, 2.00, 8.55, 6.38, comp_headers, comp_rows, [0.22, 0.43, 0.35], font_size=8.0)
@@ -866,11 +866,11 @@ def _add_ms_slide_13_plan_next_actions(prs: Presentation) -> DualSlide:
             "3. Phạm Công Minh\n(MSSV: 25MS23310)",
             (
                 "Hoàn tất thiết kế Mục 3, 8, 9 & 10:\n"
-                "Kiến trúc Zones A–F (Docker 12.0G),\n"
-                "luồng Kafka, Sketches 33 KiB & Dual-UI"
+                "Kiến trúc Zones A–F (Docker 11.0G),\n"
+                "luồng Kafka, Sketches 33 KiB & Web TOC"
             ),
             "Đo kiểm Runtime luồng Kafka → Speed Layer (watermark thật) → MongoDB ($status_version & p50/p95 "
-            "IXSCAN); kiểm thử WAL Recovery, Tier-2 Recon & dựng Dual-UI (FastAPI TOC Web :8000 & Streamlit :8501).",
+            "IXSCAN); kiểm thử WAL Recovery, Tier-2 Recon & dựng ReactJS + FastAPI TOC 5-Tab (:8000).",
         ],
     ]
     s13.add_table(0.55, 2.00, 14.90, 3.82, t_headers, t_rows, [0.19, 0.30, 0.51], font_size=8.1)
@@ -884,8 +884,8 @@ def _add_ms_slide_13_plan_next_actions(prs: Presentation) -> DualSlide:
         [
             "Sprint 1 — Thực nghiệm Đồ thị & Học máy Dự báo +30m: Sinh kho Static Feature Store (84,206 đoạn cơ "
             "giới), tách burst khỏi TRAIN, khóa Frozen Registry, chạy Ablation 7 mô hình & đo phủ Cold-Start.",
-            "Sprint 2 — Benchmark Runtime Hạ tầng & Tích hợp Dual-UI: Khởi chạy cụm 6 container Docker (Kafka, "
-            "Spark, MongoDB, TOC Web :8000 & Streamlit :8501), đo độ trễ IXSCAN explain('executionStats') & WAL.",
+            "Sprint 2 — Benchmark Runtime Hạ tầng & Tích hợp Web TOC: Khởi chạy cụm 5 container mặc định Docker "
+            "(Kafka, Spark, MongoDB, live-consumer & ReactJS + FastAPI TOC :8000), đo IXSCAN & WAL.",
         ],
         badge="Immediate Next Actions",
         theme="sky_strong",

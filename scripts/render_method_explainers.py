@@ -510,9 +510,9 @@ def _draw_coldstart_col(ax: plt.Axes) -> None:
     )
     # Cluster circles
     clusters = [
-        (7.42, 1.96, "#FEE2E2", "#DC2626", "Cụm 2: Giao lộ\nnội đô hay kẹt"),
-        (9.12, 1.96, "#DBEAFE", "#2563EB", "Cụm 4: Hành lang\nthông thoáng"),
-        (10.80, 1.96, "#F1F5F9", "#64748B", "Cụm 1: Đường\nnhánh dân cư"),
+        (7.42, 1.96, "#FEE2E2", "#DC2626", "Cụm 1: Trục nội đô\nhay kẹt (E/F 43.3%)"),
+        (9.12, 1.96, "#DBEAFE", "#2563EB", "Cụm 4: Nút cổ chai\nPageRank cao nhất"),
+        (10.80, 1.96, "#F1F5F9", "#64748B", "Cụm 2: Đường nhánh\nthông thoáng (53.3k)"),
     ]
     for cx, cy, fc, ec, lbl in clusters:
         ax.add_patch(Circle((cx, cy + 0.08), 0.45, facecolor=fc, edgecolor=ec, lw=1.5, zorder=3))
@@ -552,7 +552,7 @@ def _draw_sketches_col(ax: plt.Axes) -> None:
     ax.text(
         12.48,
         4.28,
-        "Bloom Filter (32.0 KiB) — Dãy bit gác cổng lọc tin trùng:",
+        "RotatingBloom (32.0 KiB · 2×16 KiB) — Lọc tin trùng:",
         fontsize=8.2,
         fontweight="bold",
         color="#0F172A",
@@ -569,7 +569,7 @@ def _draw_sketches_col(ax: plt.Axes) -> None:
     ax.text(
         15.92,
         3.81,
-        "Cả 4 ô đều = 1\n→ CHẶN TIN TRÙNG!\n(Tốn đúng 32 KiB)",
+        "Cả k=10 ô = 1\n→ CHẶN TIN TRÙNG!\n(Cố định 32 KiB)",
         fontsize=7.6,
         fontweight="bold",
         color="#5B21B6",

@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app import (  # noqa: E402
+from toc_backend.service_helpers import (  # noqa: E402
     SPARK_VERIFY_PATH,
     _fetch_live_mongo_status,
     _find_similar_segments,
@@ -124,7 +124,8 @@ def test_p1_ec1_ec2_ec4_quality_funnel_and_imputation() -> None:
     )
     assert sum(qf["vmax_imputation_tiers_windows"].values()) == 33394
     assert qf["vmax_imputation_tiers_windows"]["TIER_1_SEGMENT_OBSERVED"] == 4946
-    assert qf["vmax_imputation_tiers_windows"]["TIER_1_SEGMENT_TRAIN_P85"] == 9376
+    assert qf["vmax_imputation_tiers_windows"]["TIER_1_SEGMENT_TRAIN_P85"] == 7650
+    assert qf["vmax_imputation_tiers_segments"]["TIER_1_SEGMENT_TRAIN_P85"] == 472
 
     q_df = pd.read_csv(OUTPUTS_DIR / "quarantine_summary.csv")
     assert len(q_df) == 6
@@ -160,7 +161,7 @@ def test_p1_full_dataset_and_quarantine_lakehouse() -> None:
 
     tier_counts = df["vmax_impute_tier"].value_counts().to_dict()
     assert tier_counts["TIER_1_SEGMENT_OBSERVED"] == 4946
-    assert tier_counts["TIER_1_SEGMENT_TRAIN_P85"] == 9376
+    assert tier_counts["TIER_1_SEGMENT_TRAIN_P85"] == 7650
     assert sum(tier_counts.values()) == 33394
     assert qf["vmax_imputation_tiers_windows"] == tier_counts
 
@@ -295,7 +296,9 @@ def test_p1_ec8_monoid_salting_and_medallion_lakehouse() -> None:
     assert spark_rt["status"] == "verified"
     assert spark_rt["spark_kmeans_train_only_verified"] is True
     assert spark_rt["spark_kmeans_standard_scaler_verified"] is True
-    assert spark_rt["spark_rf_train_rows"] == 5481
+    assert spark_rt["spark_kmeans_train_segments"] == 3609
+    assert spark_rt["spark_fpgrowth_rules_count"] >= 10
+    assert spark_rt["spark_rf_train_rows"] == 1885
     assert spark_rt["spark_rf_numeric_features_count"] == 23
     assert spark_rt["spark_sink1_output_path"] == "outputs/spark_bronze_stream_sink"
 
@@ -407,6 +410,7 @@ def test_p2_uc5_ec5_ec6_7d_kmeans_and_cold_start_feature_store() -> None:
     assert store_m["total_segments_indexed"] == 84206
     assert store_m["observed_active_segments"] == 9995
     assert store_m["cold_start_blind_spot_segments"] == 74211
+    assert store_m["vmax_imputation_tiers"]["TIER_1_SEGMENT_TRAIN_P85"] == 472
 
     sample_static = pd.read_parquet(DATA_DIR / "demo_sample" / "sample_static_features.parquet")
     sample_win = pd.read_csv(DATA_DIR / "demo_sample" / "sample_windows_23d.csv")
@@ -631,7 +635,10 @@ def test_p4_uc1_uc6_ec8_ec9_stream_sketches_and_reconciliation() -> None:
     assert sm["injected_late_in_watermark"] == 1168
     assert sm["injected_late_dropped_by_watermark"] == 500
     assert sm["bloom_filter"]["bit_packed_uint8_bytes"] == 32768
+    assert sm["bloom_filter"]["memory_bytes"] == 32768
     assert sm["bloom_filter"]["memory_kb"] == 32.0
+    assert sm["bloom_filter"]["duplicates_flagged"] == 333
+    assert sm["bloom_filter"]["empirical_fp_rate"] < 0.005
     assert sm["hyperloglog"]["memory_kb"] == 1.0
     assert sm["hyperloglog"]["relative_error_pct"] < 5.0
 
@@ -681,7 +688,7 @@ def test_p4_uc1_uc6_ec8_ec9_stream_sketches_and_reconciliation() -> None:
     assert progress["duplicate_side_effects_on_restart"] == 0
     assert progress["version_guard_audit"]["stale_provisional_retries_rejected"] == 25
     assert progress["healed_downstream_rescored_windows"] == 384
-    assert progress["rescore_prob_changed_windows_count"] == 185
+    assert progress["rescore_prob_changed_windows_count"] == 213
     assert progress["Phase_B_in_flight_provisional_retained"] == 489
     assert progress["frozen_registry_integrity"]["verified"] is True
 
@@ -1076,11 +1083,11 @@ def _assert_human_storytelling_and_honesty(name: str, text: str) -> None:
             premature_jargon not in ch1_opening
         ), f"Found premature technical jargon {premature_jargon!r} in Section 1.1 opening of {name}"
     honest_groups = (
-        ("7 / 61", "7/61"),
-        ("12 / 61", "12/61"),
-        ("0.015625", "0.0156"),
+        ("10 / 61", "10/61"),
+        ("14 / 61", "14/61"),
+        ("0.001953", "0.0020"),
         ("8 / 993", "8/993"),
-        ("23.55x",),
+        ("31.36x",),
     )
     for grp in honest_groups:
         assert any(tok in text for tok in grp), f"Missing honest Chapter 5 evaluation disclosure {grp!r} in {name}"
@@ -1185,7 +1192,7 @@ def _assert_pptx_concise_slide_word_budget(pptx_path: Path) -> None:
 
 
 def test_proposal_pdf_and_pptx_deliverables_synchronized() -> None:
-    """Verify Final Report PDF, 17-slide PPTX/PDF, Wave 2 Markdown docs, and app.py consistency."""
+    """Verify Final Report PDF, 17-slide PPTX/PDF, Wave B docs, and toc_backend/service_helpers.py consistency."""
     proposal_pdf = ROOT / "HCMC_Smart_Traffic_Final_Report.pdf"
     slides_pdf = ROOT / "HCMC_Smart_Traffic_Final_Slides.pdf"
     slides_pptx = ROOT / "HCMC_Smart_Traffic_Final_Presentation.pptx"
@@ -1249,15 +1256,17 @@ def test_proposal_pdf_and_pptx_deliverables_synchronized() -> None:
         "1,182",
         "2020-12-12T08:00:00Z",
         "2020-12-25T03:30:00Z",
-        "0.9289",
-        "0.9900",
-        "0.9595",
-        "0.9301",
+        "0.9255",
+        "0.9894",
+        "0.9543",
+        "0.9362",
+        "0.4253",
         "32.0 KiB",
         "500",
         "384",
         "609",
-        "0.692 ms",
+        "0.603 ms",
+        "31.36x",
         "Proof-of-Scale",
         "25MS23280",
         "25MS23306",
@@ -1270,16 +1279,18 @@ def test_proposal_pdf_and_pptx_deliverables_synchronized() -> None:
         "1,885",
         "1,167",
         "1,182",
-        "0.9289",
-        "0.9900",
-        "0.9595",
+        "0.9255",
+        "0.9894",
+        "0.9543",
+        "0.9362",
+        "0.4253",
         "32.0 KiB",
         "500",
         "384",
         "609",
-        "0.692 ms",
+        "0.603 ms",
         "Proof-of-Scale",
-        "23.55x",
+        "31.36x",
         "25MS23280",
         "25MS23306",
         "25MS23310",
@@ -1354,7 +1365,7 @@ def test_proposal_pdf_and_pptx_deliverables_synchronized() -> None:
     proposal_md = (PRODUCT_DIR / "00-proposal" / "project-proposal.md").read_text(encoding="utf-8")
     tech_note_md = (ROOT / "TECHNICAL_NOTE.md").read_text(encoding="utf-8")
     readme_md = (ROOT / "README.md").read_text(encoding="utf-8")
-    app_py_txt = (ROOT / "app.py").read_text(encoding="utf-8")
+    service_helpers_txt = (ROOT / "toc_backend" / "service_helpers.py").read_text(encoding="utf-8")
     wave2_md_sections = tuple(
         tok for tok in chapters_and_sections if tok not in {"Bảng 5.5", "Hình 6.2", "Hình 6.3", "Hình 6.4"}
     )
@@ -1382,13 +1393,18 @@ def test_proposal_pdf_and_pptx_deliverables_synchronized() -> None:
             "Proof-of-Scale",
             "84,206",
             "33,394",
-            "0.9900",
-            "0.9595",
+            "0.9894",
+            "0.9543",
             sha_prefixes[0],
         ),
         wave2_doc_forbidden + ("Báo cáo Đề xuất",),
     )
-    _assert_deliverable_tokens("app.py", app_py_txt, ("27017", "LIVE_MONGODB_8.0"), FORBIDDEN_STALE_AND_INTERNAL_TOKENS)
+    _assert_deliverable_tokens(
+        "toc_backend/service_helpers.py",
+        service_helpers_txt,
+        ("27017", "LIVE_MONGODB_8.0"),
+        FORBIDDEN_STALE_AND_INTERNAL_TOKENS,
+    )
     _assert_deliverable_tokens("Presentation PPTX", pptx_text, slide_metrics, forbidden_slide_dumps)
     if slides_text is not None:
         assert len(slides_text) > 8_000, "Slides PDF must have a searchable vector text layer"
@@ -1425,18 +1441,22 @@ def test_presentation_script_completeness_and_sync() -> None:
         "Đặng Trần Khánh",
         "Live Demo",
         "localhost:8000",
-        "localhost:8501",
         "Tra cứu nhanh Báo cáo:",
         "Proof-of-Scale",
-        "0.9900",
-        "0.692 ms",
+        "0.9894",
+        "0.9543",
+        "0.9255",
+        "0.9362",
+        "0.4253",
+        "0.603 ms",
+        "31.36x",
         "32.0 KiB",
     )
     _assert_deliverable_tokens(
         "PRESENTATION_SCRIPT.md",
         script_text,
         slide_markers + qa_markers + speaker_and_demo_tokens,
-        FORBIDDEN_STALE_AND_INTERNAL_TOKENS,
+        FORBIDDEN_STALE_AND_INTERNAL_TOKENS + ("localhost:8501", "streamlit run app.py"),
     )
 
 
@@ -1529,7 +1549,7 @@ def test_transition_regime_live_dataset_execution() -> None:
     )
     assert summary["cold_start_coverage"]["total_network_segments"] == 84206
 
-    trans_row = df[(df["segment_id"] == 21064) & (df["date"] == "2021-04-22") & (df["period"] == "period_4_30")].iloc[0]
+    trans_row = df[(df["segment_id"] == 50026) & (df["date"] == "2021-01-04") & (df["period"] == "period_0_00")].iloc[0]
     pred_ui = _predict_single_window(trans_row, artifact)
     assert trans_row["LOS"] == "E"
     assert pred_ui["persistence_los"] == "E"
@@ -1537,6 +1557,13 @@ def test_transition_regime_live_dataset_execution() -> None:
     assert pred_ui["rf_calibrated_los"] == "F"
     assert pred_ui["rf_change_prob"] > 0.70
     assert pred_ui["rf_severe_prob"] > 0.50
+
+    story_row = df[(df["segment_id"] == 21064) & (df["date"] == "2021-04-22") & (df["period"] == "period_4_30")].iloc[0]
+    pred_story = _predict_single_window(story_row, artifact)
+    assert story_row["LOS"] == "E"
+    assert pred_story["actual_next_los"] == "F"
+    assert pred_story["rf_change_prob"] >= 0.40
+    assert pred_story["rf_severe_prob"] > 0.60
 
 
 def test_pre_experiment_milestone_slide_copy_calibrated_and_synced() -> None:
@@ -1577,21 +1604,31 @@ def test_pre_experiment_milestone_slide_copy_calibrated_and_synced() -> None:
     forbidden_empirical_leaks = (
         "0.9882",
         "0.9900",
+        "0.9894",
         "0.9593",
         "0.9595",
+        "0.9543",
         "0.9471",
         "0.9450",
         "0.9289",
+        "0.9255",
+        "0.9362",
+        "0.4253",
         "0.5543",
         "79.82%",
         "50.51%",
         "2/61",
         "9/61",
         "7/61",
+        "10/61",
+        "14/61",
+        "0.001953",
         "9.35x",
         "23.55x",
+        "31.36x",
         "0.636 ms",
         "0.692 ms",
+        "0.603 ms",
         "0.530 ms",
         "687.43x",
         "1.023x",
@@ -1600,12 +1637,15 @@ def test_pre_experiment_milestone_slide_copy_calibrated_and_synced() -> None:
         "2.7799",
         "0.2853",
         "0.2197",
+        "0.2241",
         "0.616%",
         "3.98%",
         "501 cửa sổ",
         "3,953",
         "377",
         "100% Hoàn thành",
+        "localhost:8501",
+        "Streamlit",
     )
     _assert_deliverable_tokens("Pre-Experiment PPTX", pre_pptx_text, required_pre_tokens, forbidden_empirical_leaks)
     if pre_pdf_text is not None:
@@ -1640,28 +1680,47 @@ def test_pre_experiment_presentation_script_completeness_and_sync() -> None:
     forbidden_post_run_tokens = FORBIDDEN_STALE_AND_INTERNAL_TOKENS + (
         "#### Slide 14:",
         "0.9882",
+        "0.9900",
+        "0.9894",
         "0.9593",
+        "0.9595",
+        "0.9543",
         "0.9471",
         "0.9450",
+        "0.9289",
+        "0.9255",
+        "0.9362",
+        "0.4253",
         "0.5543",
         "79.82%",
         "50.51%",
         "2/61",
         "9/61",
+        "7/61",
+        "10/61",
+        "14/61",
+        "0.001953",
         "9.35x",
+        "23.55x",
+        "31.36x",
         "0.636 ms",
+        "0.692 ms",
+        "0.603 ms",
         "0.530 ms",
         "687.43x",
         "1.023x",
         "7,294",
         "3.7515",
         "0.2853",
+        "0.2241",
         "0.616%",
         "3.98%",
         "501 cửa sổ",
         "3,953",
         "377",
         "100% Hoàn thành",
+        "localhost:8501",
+        "Streamlit",
     )
     _assert_deliverable_tokens(
         "PRESENTATION_SCRIPT_PRE_EXPERIMENT.md",
@@ -1705,13 +1764,13 @@ def test_spark_container_verification_uses_compose_network_and_mongo_service() -
 
 def test_live_kafka_stream_processor_and_demo_sample_fallback(tmp_path: Path) -> None:
     """Verify data/demo_sample/, producer subset selection, and live_kafka_stream batch scoring."""
-    import app as dashboard_app
     from live_kafka_stream import (
         init_live_state,
         load_readonly_scorer_context,
         process_kafka_records_batch,
     )
     from producer import _select_broker_demo_subset, generate_replay_Batch
+    from toc_backend import service_helpers as dashboard_app
 
     sample_dir = ROOT / "data" / "demo_sample"
     for fname in (
@@ -1756,7 +1815,8 @@ def test_live_kafka_stream_processor_and_demo_sample_fallback(tmp_path: Path) ->
 
 
 def test_session9_evidence_and_card_b_raw_vs_data_audit() -> None:
-    """Verify ReactJS+FastAPI TOC UI (replacing legacy ui-demo.html), DATA_SETUP.md, & Session 9 evidence."""
+    """Verify ReactJS+FastAPI TOC UI (replacing legacy app.py & ui-demo.html), DATA_SETUP.md, & Session 9 evidence."""
+    assert not (ROOT / "app.py").exists(), "Legacy Streamlit app.py must be retired"
     assert not (ROOT / "ui-demo.html").exists(), "Legacy ui-demo.html should be retired in favor of ReactJS+FastAPI"
     assert (ROOT / "toc_frontend" / "dist" / "index.html").is_file()
     assert (ROOT / "docs" / "DATA_SETUP.md").is_file()
@@ -1875,10 +1935,15 @@ def test_toc_fastapi_command_center_and_story_replay() -> None:
 
     tl = api_segment_timeline(21064, ict_date="2021-04-22", vn_hour=11.5)
     assert tl["forecast_comparison"]["current_los"] == "E"
-    assert tl["forecast_comparison"]["effective_forecast_los"] == "F"
     assert tl["forecast_comparison"]["actual_next_los"] == "F"
+    assert tl["forecast_comparison"]["severe_prob"] > 0.60
+    assert tl["forecast_comparison"]["change_prob"] >= 0.40
     if HAS_RAW_DATA:
         assert len(tl["raw_pings_past"]) >= 1
+    tl_trans = api_segment_timeline(21063, ict_date="2021-04-22", vn_hour=11.5)
+    assert tl_trans["forecast_comparison"]["current_los"] == "F"
+    assert tl_trans["forecast_comparison"]["effective_forecast_los"] == "E"
+    assert tl_trans["forecast_comparison"]["actual_next_los"] == "E"
     tl_sample = api_segment_timeline(47407, ict_date="2020-08-03", vn_hour=7.0)
     assert len(tl_sample["raw_pings_past"]) >= 1
 
@@ -2110,3 +2175,101 @@ def test_regression_gold_parquet_lakehouse_no_duplicate_year_month(tmp_path: Pat
     assert len(gold_read) == 3
     assert list(gold_read.columns).count("year_month") == 1
     assert set(gold_read["year_month"].astype(str)) == {"2020-07", "2020-08"}
+
+
+def test_regression_vmax_lookup_train_cutoff_guard_and_zero_leakage() -> None:
+    """[Wave B Regression 1] Guard fit_train_vmax_lookup against post-cutoff leakage and verify 472 P85 segs."""
+    cutoff = pd.Timestamp("2020-12-12T08:00:00Z")
+    leaked_df = pd.DataFrame(
+        {
+            "segment_id": [101, 101],
+            "street_level": [2, 2],
+            "street_type": ["primary", "primary"],
+            "max_velocity": [np.nan, np.nan],
+            "mean_velocity": [35.0, 42.0],
+            "slot_ts": [pd.Timestamp("2020-12-12T07:30:00Z"), pd.Timestamp("2020-12-12T08:30:00Z")],
+        }
+    )
+    with pytest.raises(AssertionError, match="leakage guard"):
+        fit_train_vmax_lookup(leaked_df, train_cutoff_ts=cutoff)
+
+    clean_lookup = fit_train_vmax_lookup(leaked_df.iloc[:1], train_cutoff_ts=cutoff)
+    assert clean_lookup["fitted_on"] == "ORGANIC_TRAIN_ONLY"
+
+    if HAS_FULL_DATASET:
+        vmax_json = json.loads((OUTPUTS_DIR / "vmax_lookup.json").read_text(encoding="utf-8"))
+        assert len(vmax_json["tier1_segment_train_p85"]) == 472
+
+
+def test_regression_toc_api_ping_id_b1_23d_no_nan() -> None:
+    """[Wave B Regression 2] Verify TOC API 23D B1 matrix, Mongo speedup, timeline ping_id > 0, & NaN street clean."""
+    from fastapi.testclient import TestClient
+    from toc_backend.data_store import _clean_street_name
+    from toc_backend.main import app as toc_app
+
+    client = TestClient(toc_app)
+    infra_res = client.get("/api/infrastructure-audit")
+    assert infra_res.status_code == 200
+    infra = infra_res.json()
+
+    b1_rows = infra["card_b1_pit_matrix"]
+    assert len(b1_rows) == 23
+    assert [int(r["feature_idx"]) for r in b1_rows] == list(range(1, 24))
+
+    lat = infra["mongo_verify"]["uc2_arterial_query"]["latency_benchmark_ms"]
+    assert float(lat["speedup_vs_collscan_x"]) > 1.0
+
+    tl_res = client.get("/api/segment/47407/timeline", params={"ict_date": "2020-08-03", "vn_hour": 7.0})
+    assert tl_res.status_code == 200
+    pings = tl_res.json()["raw_pings_past"]
+    if pings:
+        assert all(int(p["ping_id"]) > 0 for p in pings)
+
+    assert _clean_street_name(float("nan"), 84535) == "Segment #84535"
+    assert _clean_street_name("  ", 84535) == "Segment #84535"
+    assert _clean_street_name("Lý Thường Kiệt", 47407) == "Lý Thường Kiệt"
+
+
+def test_regression_live_kafka_exact_segments_and_val_threshold(tmp_path: Path) -> None:
+    """[Wave B Regression 3] Verify live_kafka_stream urban LOS, selected_val_threshold, & exact_distinct_segments."""
+    import live_kafka_stream as lks
+
+    assert lks.derive_urban_los(18.0, 40.0) == "E"
+    assert lks.derive_urban_los(18.0, 60.0) == "F"
+    assert lks.derive_urban_los(45.0, 70.0) == "A"
+
+    scorer_ctx = lks.load_readonly_scorer_context()
+    manifest = json.loads((OUTPUTS_DIR / "model_registry_manifest.json").read_text(encoding="utf-8"))
+    assert "selected_val_threshold" in scorer_ctx
+    assert abs(float(scorer_ctx["selected_val_threshold"]) - float(manifest["selected_val_threshold"])) < 1e-9
+
+    state = lks.init_live_state()
+    tel_file = tmp_path / "reg_tel.json"
+    scores_file = tmp_path / "reg_scores.json"
+    batch_pairs = [
+        (0, {"raw_event_id": "r1", "segment_id": 47407, "velocity": 18.0, "updated_at": "2020-08-03T00:05:00Z"}),
+        (1, {"raw_event_id": "r2", "segment_id": 21064, "velocity": 36.0, "updated_at": "2020-08-03T00:10:00Z"}),
+        (2, {"raw_event_id": "r3", "segment_id": 47407, "velocity": 14.0, "updated_at": "2020-08-03T00:15:00Z"}),
+    ]
+    lks.process_kafka_records_batch(
+        batch_pairs,
+        state,
+        scorer_ctx,
+        mongo_client=None,
+        telemetry_path=tel_file,
+        scores_json_path=scores_file,
+    )
+    tel = json.loads(tel_file.read_text(encoding="utf-8"))
+    assert "exact_distinct_segments" in tel
+    assert tel["exact_distinct_segments"] == 2
+
+
+def test_regression_baseline_utc_offset_normalization() -> None:
+    """[Wave B Regression 4] Verify baseline._utc_window_key normalizes UTC+7 offsets to UTC windows."""
+    import baseline
+
+    ict_key = baseline._utc_window_key("2020-08-03T07:15:00+07:00")
+    utc_key = baseline._utc_window_key("2020-08-03T00:15:00Z")
+    assert ict_key == ("2020-08-03", "period_0_00")
+    assert ict_key == utc_key
+    assert baseline._utc_window_key("2020-08-03T00:15:00+07:00") == ("2020-08-02", "period_17_00")

@@ -4,9 +4,9 @@ Implements G01, G02, and M02:
 - Canonical event schema distinguishing raw_event_id (per GPS ping) from event_id (30m window ID)
   so two valid pings in the same segment/slot are never deduplicated away, while injected duplicate
   retries keep the exact same raw_event_id.
-- Supports both raw ping replay (90,938 pings from segment_status.csv) and window-level replay
-  (33,441 windows) with explicit denominator documentation and deterministic RNG (seed=42),
-  without artificial window hand-picking.
+- Supports both raw ping replay (valid GPS pings from segment_status.csv) and window-level replay
+  (aggregated 30m traffic windows) with explicit runtime denominator documentation and deterministic
+  RNG (seed=42), without artificial window hand-picking.
 - Computes real event_ts (UTC) and ingest_ts = event_ts + arrival_delay_seconds.
 - Publishes JSON payloads to Kafka 3-partition topic (key=segment_id) when broker is reachable,
   reporting broker delivery status honestly.
@@ -177,17 +177,25 @@ def generate_raw_ping_replay(
         base.loc[base["lateness_bucket"] == "LATE_OUT_OF_WATERMARK"].groupby(["date", "period"]).ngroups
     )
     part_counts = {str(int(k)): int(v) for k, v in replay_df["kafka_partition"].value_counts().sort_index().items()}
+    valid_unique = int(total_valid)
+    dup_count = int(len(dup_indices))
+    in_wm_count = int(len(in_wm_set))
+    out_wm_count = int(len(out_wm_set))
     summary = {
         "replay_mode": "raw_gps_pings",
+        "denominator_note": (
+            f"G02 Contract: Raw ping replay operates on {valid_unique:,} valid raw GPS pings "
+            f"({dup_count:,} duplicates, {in_wm_count:,} late in-WM, {out_wm_count:,} late out-of-WM)."
+        ),
         "seed": seed,
         "late_every": late_every,
         "watermark_seconds": late_seconds,
         "total_raw_events_emitted": int(len(replay_df)),
-        "valid_unique_raw_pings": int(total_valid),
-        "unique_valid_events": int(total_valid),
-        "injected_duplicate_raw_pings": int(len(dup_indices)),
-        "injected_late_in_watermark_raw_pings": int(len(in_wm_set)),
-        "injected_late_out_of_watermark_raw_pings": int(len(out_wm_set)),
+        "valid_unique_raw_pings": valid_unique,
+        "unique_valid_events": valid_unique,
+        "injected_duplicate_raw_pings": dup_count,
+        "injected_late_in_watermark_raw_pings": in_wm_count,
+        "injected_late_out_of_watermark_raw_pings": out_wm_count,
         "affected_segment_windows_by_late_pings": affected_seg_windows,
         "affected_time_slots_by_late_pings": affected_slot_windows,
         "partition_distribution": part_counts,
@@ -299,13 +307,16 @@ def generate_replay_Batch(
     )
     affected_segment_windows = int(len(out_wm_set))
     part_counts = {str(int(k)): int(v) for k, v in replay_df["kafka_partition"].value_counts().sort_index().items()}
+    valid_unique = int(total_valid)
+    dup_count = int(len(dup_indices))
+    in_wm_count = int(len(in_wm_set))
+    out_wm_count = int(len(out_wm_set))
     summary = {
         "component": "[C1] GPS Probe Fleet & Replay Producer -> [C4] Kafka 4.1.0 KRaft",
         "replay_mode": "window_aggregated_30m",
         "denominator_note": (
-            "G02 Contract: Window-level replay operates on 33,441 aggregated 30m windows "
-            "(1% = 334 duplicates, 3.5% = 1,170 late in-WM, 1.5% = 501 late out-of-WM). "
-            "Raw ping replay operates on 90,938 raw segment_status pings."
+            f"G02 Contract: Window-level replay operates on {valid_unique:,} aggregated 30m windows "
+            f"({dup_count:,} duplicates, {in_wm_count:,} late in-WM, {out_wm_count:,} late out-of-WM)."
         ),
         "seed": seed,
         "topic": DEFAULT_TOPIC,
@@ -313,10 +324,10 @@ def generate_replay_Batch(
         "partition_key": "segment_id",
         "partition_distribution": part_counts,
         "total_events_emitted": int(len(replay_df)),
-        "valid_unique_events": int(total_valid),
-        "injected_duplicate_events": int(len(dup_indices)),
-        "injected_late_in_watermark_events": int(len(in_wm_set)),
-        "injected_late_out_of_watermark_events": int(len(out_wm_set)),
+        "valid_unique_events": valid_unique,
+        "injected_duplicate_events": dup_count,
+        "injected_late_in_watermark_events": in_wm_count,
+        "injected_late_out_of_watermark_events": out_wm_count,
         "affected_late_windows": affected_slot_windows,
         "affected_late_segment_windows": affected_segment_windows,
     }
@@ -650,6 +661,15 @@ def _run_story_cli(args: argparse.Namespace, win_path: Path, used_sample: bool) 
     }
 
 
+def _resolve_summary_output_path(args: argparse.Namespace, used_sample: bool) -> Path:
+    out_path = args.output_summary
+    if out_path == Path("outputs/replay_stream_summary.json") and (
+        used_sample or (0 < args.max_messages < 5000) or args.topic != DEFAULT_TOPIC
+    ):
+        return Path("outputs/live_producer_summary.json")
+    return out_path
+
+
 def main() -> None:
     import sys
 
@@ -685,6 +705,10 @@ def main() -> None:
             summary = dict(raw_summary)
         else:
             summary["raw_ping_replay_summary"] = raw_summary
+            raw_valid = int(raw_summary["valid_unique_raw_pings"])
+            summary["denominator_note"] = (
+                f"{summary['denominator_note']} Raw ping replay operates on {raw_valid:,} valid raw GPS pings."
+            )
 
     summary["data_source_mode"] = "demo_sample_fallback" if used_sample else "full_project_data"
     broker_df = raw_replay_df if args.mode == "raw" and raw_replay_df is not None else replay_df
@@ -696,11 +720,7 @@ def main() -> None:
         max_messages=args.max_messages,
         replay_speed=args.replay_speed,
     )
-    out_path = args.output_summary
-    if out_path == Path("outputs/replay_stream_summary.json") and (
-        used_sample or (0 < args.max_messages < 5000) or args.topic != DEFAULT_TOPIC
-    ):
-        out_path = Path("outputs/live_producer_summary.json")
+    out_path = _resolve_summary_output_path(args, used_sample)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False, indent=2))

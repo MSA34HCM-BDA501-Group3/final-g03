@@ -445,7 +445,7 @@ def _draw_pre_sketches_col(ax: plt.Axes) -> None:
     ax.text(
         12.48,
         4.28,
-        "Bloom Filter (32.0 KiB · 262,144 bits, k = 4) — Lọc tin trùng:",
+        "RotatingBloom (32.0 KiB · 2×16 KiB, k = 10) — Lọc tin trùng:",
         fontsize=8.1,
         fontweight="bold",
         color="#0F172A",
@@ -462,7 +462,7 @@ def _draw_pre_sketches_col(ax: plt.Axes) -> None:
     ax.text(
         15.92,
         3.81,
-        "Cả 4 ô đều = 1\n→ CHẶN TIN TRÙNG!\n(Cố định 32 KiB)",
+        "Cả k=10 ô = 1\n→ CHẶN TIN TRÙNG!\n(Cố định 32 KiB)",
         fontsize=7.6,
         fontweight="bold",
         color="#5B21B6",
@@ -633,7 +633,7 @@ def render_pre_exp_pipeline_walkthrough(out_path: Path) -> Path:
             [
                 "• 32 KiB Bloom + 1 KiB HLL++\n  + EWMA Hotspot bắt điểm kẹt lì.",
                 "• Idempotent Upsert vào MongoDB\n  kèm guard $status_version &\n  Compound Index IXSCAN.",
-                "• Two-Tier Recon & Dual UI\n  (:8000 TOC Web & :8501 Streamlit).",
+                "• Two-Tier Recon & Live TOC UI\n  (ReactJS + FastAPI :8000).",
             ],
         ),
     ]
@@ -1050,11 +1050,11 @@ def _draw_pre_stream_boxes(ax: plt.Axes) -> None:
         0.38,
         3.76,
         1.52,
-        "ZONE F · DUAL LIVE UI",
-        "TOC Web & Streamlit",
+        "ZONE F · LIVE TOC UI",
+        "ReactJS + FastAPI TOC",
         [
-            "• FastAPI :8000 + ReactJS + Leaflet TOC",
-            "• Streamlit :8501 (5-Tab kiểm toán)",
+            "• Web Command Center (:8000) + Leaflet",
+            "• 5-Tab: Forecast, Kafka, Graph, KMeans, Audit",
         ],
         ZONE_F_COLOR,
         "#F0FDF4",

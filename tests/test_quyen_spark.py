@@ -422,11 +422,59 @@ class SparkDataEngineeringTests(unittest.TestCase):
         distinct_values = {r.segment_id: (r.max_velocity, r.vmax_impute_tier) for r in distinct_lookup.collect()}
         self.assertEqual(distinct_values[13], (60.0, "LEVEL_TYPE_MEDIAN"))
 
+    def _assert_urban_los_bands(self) -> None:
+        self.assertIsNot(derive_urban_los, derive_los)
+        standard_rows = [
+            (0, 35.0),
+            (1, 34.99),
+            (2, 30.0),
+            (3, 25.0),
+            (4, 20.0),
+            (5, 15.0),
+            (6, 14.99),
+            (7, 0.0),
+            (8, float("nan")),
+            (9, None),
+        ]
+        std_labels = (
+            self.spark.createDataFrame(standard_rows, "idx int, vel double")
+            .select("idx", derive_urban_los(F.col("vel")).alias("LOS"))
+            .orderBy("idx")
+        )
+        self.assertEqual(
+            [r.LOS for r in std_labels.collect()],
+            ["A", "B", "B", "C", "D", "E", "F", "F", "F", "F"],
+        )
+
+        shifted_rows = [
+            (0, 18.0, 40.0),
+            (1, 39.0, 60.0),
+            (2, 40.0, 60.0),
+            (3, 19.9, 60.0),
+            (4, 44.0, 70.0),
+            (5, 45.0, 70.0),
+            (6, 24.9, 80.0),
+            (7, 25.0, 80.0),
+            (8, 35.0, None),
+            (9, 35.0, float("nan")),
+            (10, 35.0, float("inf")),
+            (11, float("nan"), 60.0),
+        ]
+        shifted_labels = (
+            self.spark.createDataFrame(shifted_rows, "idx int, vel double, raw_vmax double")
+            .select("idx", derive_urban_los("vel", "raw_vmax").alias("LOS"))
+            .orderBy("idx")
+        )
+        self.assertEqual(
+            [r.LOS for r in shifted_labels.collect()],
+            ["E", "B", "A", "F", "B", "A", "F", "E", "A", "A", "A", "F"],
+        )
+
     def test_los_time_and_real_plans(self):
         if not HAS_PYSPARK:
             self.assertIn("test_los_time_and_real_plans", self._container_passed, self._container_log)
             return
-        self.assertIs(derive_urban_los, derive_los)
+        self._assert_urban_los_bands()
         ratios = [0.0, 0.199999, 0.20, 0.35, 0.50, 0.65, 0.80, 1.2]
         labels = (
             self.spark.createDataFrame([(r,) for r in ratios], "ratio double")

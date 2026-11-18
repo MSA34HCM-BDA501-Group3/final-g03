@@ -49,7 +49,7 @@ def build_window_semantics(ict_date: str, vn_hour: float) -> dict[str, str]:
 CURATED_SCENARIOS: list[dict[str, Any]] = [
     {
         "id": "noon_transition",
-        "title": "Kịch bản 1 (TEST): Cao điểm Trưa Quận 1–3 — Nguyễn Bỉnh Khiêm & Trương Định chuyển E ➔ F",
+        "title": "Kịch bản 1 (TEST): Cao điểm Trưa Quận 1–3 — Nguyễn Bỉnh Khiêm & Trương Định (E ➔ F thực tế)",
         "short_label": "Kịch bản 1 · Nguyễn Bỉnh Khiêm & Trương Định (E ➔ F)",
         "split_badge": "TEST",
         "ict_date": "2021-01-05",
@@ -58,10 +58,10 @@ CURATED_SCENARIOS: list[dict[str, Any]] = [
         "hour_max": 15.0,
         "spotlight_segment_id": 21262,
         "description": (
-            "Chuỗi 10 khung 30 phút liên tiếp (10:30–15:00 ICT). Tại khung thu thập [12:00–12:30) chốt lúc "
+            "Chuỗi 10 khung 30 phút liên tiếp (10:30–15:30 ICT). Tại khung thu thập [12:00–12:30) chốt lúc "
             "t = 12:30 ICT, cả 2 trục Nguyễn Bỉnh Khiêm (#21262, 8 pings) và Trương Định (#21263, 12 pings) "
-            "đang ở mức E đều được Random Forest cảnh báo sớm sẽ sập xuống kẹt cứng LOS F ở [12:30–13:00), "
-            "trong khi Persistence đoán sai giữ nguyên E."
+            "đang ở mức E và thực tế đều chuyển sang kẹt cứng LOS F ở [12:30–13:00); Random Forest 23D phát hiện "
+            "xác suất đổi pha cao (so với Persistence dự báo giữ nguyên mức E)."
         ),
     },
     {
@@ -76,8 +76,9 @@ CURATED_SCENARIOS: list[dict[str, Any]] = [
         "spotlight_segment_id": 21064,
         "description": (
             "Case Study trung tâm trên Báo cáo & Slide 14: 4 bản tin GPS thô trong khung [11:30–12:00) giảm gắt "
-            "từ 23 km/h (11:34) xuống 9 km/h và 3 km/h (11:50). Chốt lúc t = 12:00 ICT, cả RF mặc định và RF hiệu "
-            "chỉnh đều phóng nét đứt dự báo [12:00–12:30) chuyển sang LOS F (xác suất đổi pha 73.0%)."
+            "từ 23 km/h (11:34) xuống 9 km/h và 3 km/h (11:50). Chốt lúc t = 12:00 ICT (đang LOS E), Random Forest "
+            "23D phát cảnh báo kẹt nghiêm trọng P(E/F) = 68.7% (vượt ngưỡng VAL 25%) và xác suất đổi pha 48.9% "
+            "(vượt ngưỡng VAL 40%), báo động sớm trước khi đoạn chuyển sang kẹt cứng LOS F ở [12:00–12:30)."
         ),
     },
     {
@@ -91,14 +92,15 @@ CURATED_SCENARIOS: list[dict[str, Any]] = [
         "hour_max": 10.5,
         "spotlight_segment_id": 37420,
         "description": (
-            "Bức tranh toàn đô thị sáng 24/12/2020 (192 đoạn đường hoạt động cùng lúc lúc 07:30 ICT): trục Cộng Hòa "
-            "(#37420) và Hoàng Văn Thụ (#36232) chuyển từ E sang F, trong khi Lý Thường Kiệt (#63481) chuyển B sang D."
+            "Bức tranh toàn đô thị sáng 24/12/2020 (192 đoạn đường hoạt động cùng lúc chốt lúc 07:30 ICT): trục "
+            "Cộng Hòa (#37420) và Hoàng Văn Thụ (#36232) chuyển thực tế từ E sang F, trong khi Lý Thường Kiệt "
+            "(#63481) chuyển từ B sang D ở khung [07:30–08:00)."
         ),
     },
     {
         "id": "mega_city_rush",
-        "title": "Kịch bản 4 (Quy mô Lớn): Toàn Mạng Lưới 3,609 Đoạn Đường Đồng Loạt Chuyển Pha Sáng Sớm",
-        "short_label": "Kịch bản 4 · Toàn TP.HCM Đồng Loạt Chuyển Pha Sáng",
+        "title": "Kịch bản 4 (Quy mô Lớn): Toàn Mạng Lưới 3,596 Đoạn Đường Đồng Loạt Chuyển Pha Sáng Sớm",
+        "short_label": "Kịch bản 4 · Toàn TP.HCM Đồng Loạt Chuyển Pha Sáng (3,596 đoạn)",
         "split_badge": "TRAIN · Đợt Burst Tổng Hợp",
         "ict_date": "2020-08-03",
         "default_vn_hour": 6.5,
@@ -106,8 +108,9 @@ CURATED_SCENARIOS: list[dict[str, Any]] = [
         "hour_max": 7.0,
         "spotlight_segment_id": 47407,
         "description": (
-            "Khung giờ có độ phủ cảm biến dày nhất bộ dữ liệu (3,609 đoạn đường hoạt động đồng thời), minh họa "
-            "làn sóng phương tiện giờ cao điểm sáng lan khắp TP.HCM và trục điểm nóng số 1 Lý Thường Kiệt (#47407)."
+            "Khung giờ có độ phủ cảm biến dày nhất bộ dữ liệu (3,596 đoạn đường cơ giới hoạt động đồng thời "
+            "tại [06:30–07:00) và [07:00–07:30) ICT), minh họa làn sóng phương tiện giờ cao điểm sáng lan khắp "
+            "TP.HCM cùng điểm nóng số 1 Lý Thường Kiệt (#47407)."
         ),
     },
 ]

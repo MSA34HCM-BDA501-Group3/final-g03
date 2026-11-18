@@ -55,6 +55,19 @@ export const TabInfraAudit: React.FC = () => {
   const mc = data.monoid_and_catalyst || {};
   const salting = mc.pillar_i1_monoid_and_salting || {};
   const catalyst = mc.pillar_i2_catalyst_join_optimization || {};
+  const sparkRt = mc.spark_runtime_verification || {};
+  const catSpark = sparkRt.catalyst_join_spark || {};
+  const monoidSpark = sparkRt.monoid_salting_spark || {};
+
+  const mv = data.mongo_verify || {};
+  const mvLat = mv.uc2_arterial_query?.latency_benchmark_ms || mv.latency_benchmark_ms || {};
+  const mongoSpeedup = mvLat.ixscan_vs_collscan_speedup_x ?? mvLat.speedup_vs_collscan_x;
+  const mongoWarmMed = mvLat.warm_median_ms;
+  const mongoWarmP95 = mvLat.warm_p95_ms;
+  const mongoColdMs = mvLat.cold_query_ms;
+  const mongoCollMed = mvLat.collscan_warm_median_ms;
+  const mongoCollP95 = mvLat.collscan_warm_p95_ms;
+  const mongoStats = mv.execution_stats || {};
 
   const sparkRows = data.spark_benchmark || [];
   const baseBench = sparkRows.find((r) => r.run === 'Baseline') || sparkRows[0];
@@ -89,20 +102,22 @@ export const TabInfraAudit: React.FC = () => {
   const coldStartRatioPct = data.cold_start_ratio_pct ?? 0;
 
   const b1Rows = data.card_b1_pit_matrix || [];
+  const b1Origin = b1Rows[0]?.forecast_origin_ict;
   const allB1Pass = b1Rows.length > 0 && b1Rows.every((r) => r.pass_fail === 'PASS');
   const b3Rows = data.card_b3_sketches || [];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
-      <div className="kpi-row">
+      <div className="kpi-row-6">
         <div className="kpi-card">
           <div className="kpi-label">Spark BroadcastHashJoin (B_benchmark)</div>
           <div className="kpi-val" style={{ color: '#2563eb' }}>
             {baseEx ?? '—'} ➔ {v1Ex ?? '—'} Exchanges
           </div>
           <div className="kpi-sub">
-            Giảm {speedupPct ?? '—'}% thời gian ({baseMs != null ? baseMs.toLocaleString() : '—'} ➔{' '}
-            {v1Ms != null ? v1Ms.toLocaleString() : '—'} ms · diff={joinDiff})
+            Combined -{speedupPct ?? '—'}% ({baseMs != null ? baseMs.toLocaleString() : '—'} ➔{' '}
+            {v1Ms != null ? v1Ms.toLocaleString() : '—'} ms) · Isolated{' '}
+            {catSpark.join_speedup_pct != null ? `-${catSpark.join_speedup_pct}%` : '—'} (diff={joinDiff})
           </div>
         </div>
         <div className="kpi-card">
@@ -111,7 +126,17 @@ export const TabInfraAudit: React.FC = () => {
             {unsaltedSkew ?? '—'}x ➔ {saltedSkew ?? '—'}x
           </div>
           <div className="kpi-sub">
-            Triệt tiêu lệch phân vùng giờ cao điểm ({saltingOverhead != null ? `+${saltingOverhead} ms` : '—'})
+            Triệt tiêu lệch phân vùng giờ cao điểm ({saltingOverhead != null ? `+${saltingOverhead} ms` : '—'} · diff=0)
+          </div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-label">MongoDB 8.0 IXSCAN vs COLLSCAN (UC-2)</div>
+          <div className="kpi-val" style={{ color: '#2563eb' }}>
+            {mongoSpeedup != null ? `${mongoSpeedup}x` : '—'} Nhanh Hơn
+          </div>
+          <div className="kpi-sub">
+            Warm median {mongoWarmMed ?? '—'} ms · p95 {mongoWarmP95 ?? '—'} ms vs COLLSCAN {mongoCollMed ?? '—'} ms (
+            {mv.in_memory_sort === false ? '0 SORT' : 'CHECK'})
           </div>
         </div>
         <div className="kpi-card">
@@ -248,16 +273,21 @@ export const TabInfraAudit: React.FC = () => {
       <div className="card">
         <div className="card-header">
           <div>
-            <h2 className="card-title">3. Thực Nghiệm Có Kiểm Soát Trên Apache Spark 3.5.7 (Deliverable B_benchmark · P1)</h2>
-            <p className="card-subtitle">So sánh SortMergeJoin vs BroadcastHashJoin vs 2-Stage {saltBuckets ?? '—'}-Bucket Salted Monoid</p>
+            <h2 className="card-title">
+              3A. Thực Nghiệm Có Kiểm Soát 3-Chiều Trên Apache Spark {sparkRt.spark_version || '3.5.7'} (Session 9 · <code>B_benchmark.csv</code>)
+            </h2>
+            <p className="card-subtitle">
+              Chạy kết hợp Join + Salting: So sánh SortMergeJoin vs BroadcastHashJoin vs 2-Stage {saltBuckets ?? '—'}-Bucket Salted Monoid
+            </p>
           </div>
+          <span className="badge badge-blue">Combined Join + Salting</span>
         </div>
         <div className="table-scroll">
           <table className="toc-table">
             <thead>
               <tr>
                 <th>Cấu hình Thực nghiệm</th>
-                <th>Thời gian chạy</th>
+                <th>Thời gian chạy (Median ± IQR)</th>
                 <th>Tầng trộn mạng Exchange</th>
                 <th>Độ lệch phân vùng (Peak/Median)</th>
                 <th>Sai lệch exceptAll</th>
@@ -271,6 +301,7 @@ export const TabInfraAudit: React.FC = () => {
                   </td>
                   <td>
                     <b>{b.runtime_ms} ms</b>
+                    {b.iqr_ms != null ? <span style={{ color: '#64748b' }}> (±{b.iqr_ms} ms)</span> : null}
                   </td>
                   <td>{b.exchange_shuffle_stages} stages</td>
                   <td>{b.peak_to_median_partition_skew}x</td>
@@ -283,6 +314,167 @@ export const TabInfraAudit: React.FC = () => {
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div className="grid-2">
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <h2 className="card-title">
+                3B. Kiểm Chứng Cô Lập Spark {sparkRt.spark_version || '3.5.7'} Runtime (<code>spark_runtime_evidence.json</code>)
+              </h2>
+              <p className="card-subtitle">
+                Tách riêng phép đo Catalyst BroadcastHashJoin &amp; 2-Stage Salted 5-Tuple Monoid trên cụm Spark thực tế
+              </p>
+            </div>
+            <span className={`badge ${sparkRt.status === 'verified' ? 'badge-green' : 'badge-amber'}`}>
+              {sparkRt.status === 'verified' ? 'Spark Runtime VERIFIED' : 'Spark Runtime CHECK'}
+            </span>
+          </div>
+          <div className="table-scroll">
+            <table className="toc-table">
+              <thead>
+                <tr>
+                  <th>Phép Kiểm Chứng Cô Lập</th>
+                  <th>Baseline / Unsalted</th>
+                  <th>Optimized / Salted</th>
+                  <th>Chênh lệch &amp; Kế hoạch</th>
+                  <th>exceptAll</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <strong>Catalyst Join</strong>
+                    <div style={{ fontSize: '10.5px', color: '#64748b' }}>SortMergeJoin ➔ BroadcastHashJoin</div>
+                  </td>
+                  <td>
+                    <b>{catSpark.baseline_median_ms ?? '—'} ms</b>
+                    <div style={{ fontSize: '10.5px', color: '#64748b' }}>
+                      IQR {catSpark.baseline_iqr_ms ?? '—'} ms · {catSpark.baseline_exchange_stages_measured ?? '—'} Ex /{' '}
+                      {catSpark.baseline_shuffle_joins_measured ?? '—'} SMJ
+                    </div>
+                  </td>
+                  <td>
+                    <b style={{ color: '#2563eb' }}>{catSpark.optimized_median_ms ?? '—'} ms</b>
+                    <div style={{ fontSize: '10.5px', color: '#64748b' }}>
+                      IQR {catSpark.optimized_iqr_ms ?? '—'} ms · {catSpark.optimized_exchange_stages_measured ?? '—'} Ex /{' '}
+                      {catSpark.optimized_broadcast_joins_measured ?? '—'} BHJ
+                    </div>
+                  </td>
+                  <td>
+                    <span className="badge badge-green">
+                      -{catSpark.join_speedup_pct ?? '—'}% tốc độ
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`badge ${(catSpark.two_way_exceptAll_diff ?? 0) === 0 ? 'badge-green' : 'badge-red'}`}>
+                      {catSpark.two_way_exceptAll_diff ?? 0} diff
+                    </span>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <strong>Salted 5-Tuple Monoid</strong>
+                    <div style={{ fontSize: '10.5px', color: '#64748b' }}>
+                      Stage-1 ({(monoidSpark.stage1_salted_groups ?? 0).toLocaleString()}) ➔ Stage-2 (
+                      {(monoidSpark.stage2_reduced_windows ?? 0).toLocaleString()})
+                    </div>
+                  </td>
+                  <td>
+                    <b>{monoidSpark.unsalted_median_ms ?? '—'} ms</b>
+                    <div style={{ fontSize: '10.5px', color: '#64748b' }}>
+                      IQR {monoidSpark.unsalted_iqr_ms ?? '—'} ms · {(monoidSpark.unsalted_windows ?? 0).toLocaleString()} win
+                    </div>
+                  </td>
+                  <td>
+                    <b>{monoidSpark.salted_median_ms ?? '—'} ms</b>
+                    <div style={{ fontSize: '10.5px', color: '#64748b' }}>
+                      IQR {monoidSpark.salted_iqr_ms ?? '—'} ms · 8 buckets
+                    </div>
+                  </td>
+                  <td>
+                    <span className="badge badge-blue">
+                      Giảm phương sai IQR ({monoidSpark.unsalted_iqr_ms ?? '—'} ➔ {monoidSpark.salted_iqr_ms ?? '—'} ms)
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`badge ${(monoidSpark.two_way_exceptAll_diff ?? 0) === 0 ? 'badge-green' : 'badge-red'}`}>
+                      {monoidSpark.two_way_exceptAll_diff ?? 0} diff
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <h2 className="card-title">
+                3C. Kiểm Chứng MongoDB {mv.mongo_server_version || '8.0'} Compound IXSCAN vs COLLSCAN (UC-2)
+              </h2>
+              <p className="card-subtitle">
+                Chỉ mục ESR <code>{mv.index_used || 'level_prob_segment_idx'}</code> trên{' '}
+                {(mv.total_rows_upserted ?? 0).toLocaleString()} tài liệu · <code>in_memory_sort = {String(mv.in_memory_sort ?? false)}</code>
+              </p>
+            </div>
+            <span className={`badge ${mongoSpeedup != null ? 'badge-green' : 'badge-blue'}`}>
+              {mongoSpeedup != null ? `⚡ ${mongoSpeedup}x vs COLLSCAN` : 'IXSCAN Verified'}
+            </span>
+          </div>
+          <div className="table-scroll">
+            <table className="toc-table">
+              <thead>
+                <tr>
+                  <th>Chiến lược Thực thi</th>
+                  <th>Warm Median</th>
+                  <th>Warm p95</th>
+                  <th>Cold / Ghi chú</th>
+                  <th>Kết quả</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <strong>Compound IXSCAN</strong>
+                    <div style={{ fontSize: '10.5px', color: '#64748b' }}>{mv.index_used || 'level_prob_segment_idx'}</div>
+                  </td>
+                  <td>
+                    <b style={{ color: '#059669' }}>{mongoWarmMed != null ? `${mongoWarmMed} ms` : '—'}</b>
+                  </td>
+                  <td>
+                    <b style={{ color: '#2563eb' }}>{mongoWarmP95 != null ? `${mongoWarmP95} ms` : '—'}</b>
+                  </td>
+                  <td>
+                    Cold {mongoColdMs != null ? `${mongoColdMs} ms` : '—'} · Docs {mongoStats.totalDocsExamined ?? '—'}/
+                    {mongoStats.nReturned ?? '—'}
+                  </td>
+                  <td>
+                    <span className="badge badge-green">
+                      {mongoSpeedup != null ? `${mongoSpeedup}x nhanh hơn` : 'SLA < 10 ms'}
+                    </span>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <strong>Full Scan (COLLSCAN)</strong>
+                    <div style={{ fontSize: '10.5px', color: '#64748b' }}>Quét toàn bộ bảng không chỉ mục</div>
+                  </td>
+                  <td>{mongoCollMed != null ? `${mongoCollMed} ms` : '—'}</td>
+                  <td>{mongoCollP95 != null ? `${mongoCollP95} ms` : '—'}</td>
+                  <td>
+                    Chặn ghi đè v1 lỗi thời: <b>{mv.stale_v1_rejected_by_mongo ?? 0}</b> bản ghi
+                  </td>
+                  <td>
+                    <span className="badge badge-amber">Baseline đối chứng</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -372,10 +564,11 @@ export const TabInfraAudit: React.FC = () => {
           <div className="card-header">
             <div>
               <h2 className="card-title">
-                6. Kiểm Toán Chống Rò Rỉ Tương Lai {b1Rows.length} Biến (Card B1 · Future-Shuffle diff = 0.0)
+                6. Kiểm Toán Chống Rò Rỉ Tương Lai {b1Rows.length} Biến ({b1Rows.length}D) (Card B1 · Future-Shuffle diff = 0.0)
               </h2>
               <p className="card-subtitle">
-                Đối chứng <code>raw_data/</code> ↔ <code>data/dataset.csv</code>: 100% đặc trưng khóa trước mốc chốt <code>τ ≤ t</code>
+                Đối chứng <code>raw_data/</code> ↔ <code>data/dataset.csv</code>
+                {b1Origin ? ` (mốc chốt ${b1Origin})` : ''}: 100% đặc trưng khóa trước mốc chốt <code>τ ≤ t</code>
               </p>
             </div>
             <span className={`badge ${allB1Pass ? 'badge-green' : 'badge-red'}`}>

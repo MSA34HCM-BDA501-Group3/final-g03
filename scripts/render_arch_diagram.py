@@ -759,7 +759,7 @@ def _draw_arch_zones_and_components(ax) -> None:
     )
 
     draw_service_icon(
-        ax, 4.675, 1.96, ZONE_F_COLOR, "ui", ["TOC Web & Streamlit", "FastAPI :8000 · UI :8501"], size=0.60
+        ax, 4.675, 1.96, ZONE_F_COLOR, "ui", ["TOC Command Center", "ReactJS + FastAPI (:8000)"], size=0.60
     )
     draw_service_icon(
         ax, 7.80, 1.96, ZONE_F_COLOR, "shield", ["Quarantine & WAL", "Dead-Letter & Checkpoints"], size=0.60
@@ -932,8 +932,8 @@ def _walkthrough_steps(wm: dict[str, str]) -> list[tuple[float, str, str, str, s
             "#7C3AED",
             "#FAF5FF",
             [
-                "• 32KB Bloom + 1KB HLL++\n  + EWMA Hotspot (score = 6.67).",
-                f"• MongoDB 8.0 IXSCAN p95 {wm['p95_ms']};\n  TOC Web (:8000) & UI (:8501).",
+                "• 32 KiB RotatingBloom + 1 KiB HLL++\n  + EWMA Hotspot (score = 6.67).",
+                f"• MongoDB 8.0 IXSCAN p95 {wm['p95_ms']};\n  ReactJS + FastAPI TOC (:8000).",
                 f"• Two-Tier Recon bù {wm['late_cnt']} trễ,\n  heal {wm['heal_cnt']} lag (100%).",
             ],
         ),
@@ -960,7 +960,7 @@ def build_concrete_example_flow_png(out_path: Path) -> None:
     )
     subtitle_txt = (
         "Theo dõi đoạn đường Lý Thường Kiệt (segment_id = 47407, Quận 10) "
-        "từ Raw GPS Ping đến cảnh báo trên MongoDB 8.0, TOC Web (:8000) & Streamlit (:8501)"
+        "từ Raw GPS Ping đến cảnh báo trên MongoDB 8.0 & ReactJS + FastAPI TOC (:8000)"
     )
     ax.text(9.30, 4.48, subtitle_txt, ha="center", va="center", fontsize=10.0, color="#475569")
 

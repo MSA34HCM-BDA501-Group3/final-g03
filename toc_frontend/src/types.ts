@@ -113,7 +113,10 @@ export interface CityFrameResponse {
     mode: string;
     total_docs: number;
     live_query_ms: number | null;
+    benchmark_median_ms?: number | null;
     benchmark_p95_ms: number | null;
+    collscan_warm_median_ms?: number | null;
+    speedup_vs_collscan_x?: number | null;
     top_docs: MongoTopDoc[];
   };
 }
@@ -460,6 +463,38 @@ export interface StreamingMmdsMetrics {
   };
 }
 
+export interface SparkCatalystJoinProof {
+  baseline_median_ms?: number;
+  baseline_iqr_ms?: number;
+  optimized_median_ms?: number;
+  optimized_iqr_ms?: number;
+  join_speedup_pct?: number;
+  baseline_exchange_stages_measured?: number;
+  baseline_shuffle_joins_measured?: number;
+  optimized_exchange_stages_measured?: number;
+  optimized_broadcast_joins_measured?: number;
+  broadcast_hash_join_present?: boolean;
+  two_way_exceptAll_diff?: number;
+}
+
+export interface SparkMonoidSaltingProof {
+  unsalted_windows?: number;
+  stage1_salted_groups?: number;
+  stage2_reduced_windows?: number;
+  unsalted_median_ms?: number;
+  salted_median_ms?: number;
+  unsalted_iqr_ms?: number;
+  salted_iqr_ms?: number;
+  two_way_exceptAll_diff?: number;
+}
+
+export interface SparkRuntimeVerification {
+  status?: string;
+  spark_version?: string;
+  catalyst_join_spark?: SparkCatalystJoinProof;
+  monoid_salting_spark?: SparkMonoidSaltingProof;
+}
+
 export interface MonoidAndCatalystMetrics {
   pillar_i1_monoid_and_salting?: {
     salt_buckets?: number;
@@ -472,6 +507,7 @@ export interface MonoidAndCatalystMetrics {
     optimized_exchange_stages?: number;
     dataframe_vs_sql_exceptAll_diff?: number;
   };
+  spark_runtime_verification?: SparkRuntimeVerification;
 }
 
 export interface AblationResultRow {
@@ -502,6 +538,7 @@ export interface SparkBenchmarkRow {
   configuration: string;
   input_size_partitions?: string;
   runtime_ms: number;
+  iqr_ms?: number;
   exchange_shuffle_stages: number;
   peak_to_median_partition_skew: number;
   two_way_exceptAll_diff: number;
@@ -518,8 +555,10 @@ export interface ReconciliationAuditRow {
 }
 
 export interface CardB1PitRow {
+  forecast_origin_ict?: string;
   feature_idx: number;
   feature_name: string;
+  feature_group?: string;
   source_window_rule: string;
   uses_target_interval_t_to_t30m: string;
   pass_fail: string;
@@ -540,10 +579,40 @@ export interface WalProgressInfo {
   healed_downstream_rescored_windows?: number;
 }
 
+export interface MongoLatencyBenchmark {
+  cold_query_ms?: number | null;
+  warm_min_ms?: number | null;
+  warm_median_ms?: number | null;
+  warm_p95_ms?: number | null;
+  warm_max_ms?: number | null;
+  collscan_warm_median_ms?: number | null;
+  collscan_warm_p95_ms?: number | null;
+  ixscan_vs_collscan_speedup_x?: number | null;
+  speedup_vs_collscan_x?: number | null;
+  sla_under_10ms_verified?: boolean;
+}
+
 export interface MongoVerifyInfo {
   status?: string;
+  verified_against_mongo_8_0?: boolean;
+  mongo_server_version?: string;
+  total_rows_upserted?: number;
+  stale_v1_rejected_by_mongo?: number;
+  idempotent_replay_verified?: boolean;
   index_used?: string;
+  winning_stages?: string[];
   in_memory_sort?: boolean;
+  execution_stats?: {
+    nReturned?: number;
+    totalKeysExamined?: number;
+    totalDocsExamined?: number;
+    executionTimeMillis?: number;
+  };
+  latency_benchmark_ms?: MongoLatencyBenchmark;
+  uc2_arterial_query?: {
+    total_matching_windows?: number;
+    latency_benchmark_ms?: MongoLatencyBenchmark;
+  };
 }
 
 export interface FrozenManifestInfo {

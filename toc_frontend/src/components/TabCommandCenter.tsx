@@ -57,6 +57,9 @@ export const TabCommandCenter: React.FC<Props> = ({
   const sem = frameData?.window_semantics;
   const mb = frameData?.mongo_benchmark;
   const p95Label = mb?.benchmark_p95_ms != null ? `${mb.benchmark_p95_ms} ms` : '—';
+  const medianLabel = mb?.benchmark_median_ms != null ? `${mb.benchmark_median_ms} ms` : '—';
+  const collscanMedianLabel = mb?.collscan_warm_median_ms != null ? `${mb.collscan_warm_median_ms} ms` : '—';
+  const speedupVal = mb?.speedup_vs_collscan_x;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
@@ -92,11 +95,16 @@ export const TabCommandCenter: React.FC<Props> = ({
         </div>
         <div className="kpi-card">
           <div className="kpi-label">⚡ Tốc Độ Truy Vấn MongoDB 8.0 (UC-2)</div>
-          <div className="kpi-val" style={{ color: '#2563eb' }}>
-            {mb?.live_query_ms != null ? `${mb.live_query_ms} ms` : p95Label}
+          <div className="kpi-val" style={{ color: '#2563eb', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span>{mb?.live_query_ms != null ? `${mb.live_query_ms} ms` : p95Label}</span>
+            {speedupVal != null && (
+              <span className="badge badge-green" style={{ fontSize: '10.5px' }}>
+                {speedupVal}x vs COLLSCAN
+              </span>
+            )}
           </div>
           <div className="kpi-sub">
-            {mb?.mode ?? '—'} · Compound Index IXSCAN ({mb?.total_docs.toLocaleString() ?? 0} docs)
+            {mb?.mode ?? '—'} · IXSCAN median {medianLabel} · p95 {p95Label} ({mb?.total_docs.toLocaleString() ?? 0} docs)
           </div>
         </div>
       </div>
@@ -170,7 +178,7 @@ export const TabCommandCenter: React.FC<Props> = ({
               className={`pill-btn ${rightPanelMode === 'mongo' ? 'active' : ''}`}
               onClick={() => setRightPanelMode('mongo')}
             >
-              ⚡ Mongo IXSCAN
+              ⚡ Mongo IXSCAN{speedupVal != null ? ` (${speedupVal}x)` : ''}
             </button>
           </div>
 
@@ -285,7 +293,15 @@ export const TabCommandCenter: React.FC<Props> = ({
             <div className="table-scroll">
               <div style={{ fontSize: '11.5px', color: '#475569', marginBottom: 8 }}>
                 Truy vấn kiểm chứng tốc độ phục vụ trực tiếp trên <code>bda501.traffic_scores</code> với chỉ mục ESR{' '}
-                <code>{'{street_level: 1, severe_prob: -1, segment_id: 1}'}</code> (0 SORT trên RAM, warm p95 = {p95Label}):
+                <code>{'{street_level: 1, severe_prob: -1, segment_id: 1}'}</code> (0 SORT trên RAM · warm median ={' '}
+                <b>{medianLabel}</b> · warm p95 = <b>{p95Label}</b>
+                {speedupVal != null ? (
+                  <>
+                    {' '}
+                    · tăng tốc <b style={{ color: '#059669' }}>{speedupVal}x</b> so với COLLSCAN {collscanMedianLabel}
+                  </>
+                ) : null}
+                ):
               </div>
               <table className="toc-table">
                 <thead>

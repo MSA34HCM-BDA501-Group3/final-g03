@@ -504,21 +504,44 @@ def _parse_event_timestamp(row: dict[str, Any]) -> pd.Timestamp | None:
     return None if pd.isna(parsed) else parsed
 
 
-def _record_bloom_audit(row: dict[str, Any], state: dict[str, Any]) -> None:
-    """Audit-only counter executed strictly AFTER Bloom filter already dropped the event."""
-    dup_val = row.get("is_duplicate")
-    if dup_val is None:
-        return
+def _parse_optional_bool(val: Any) -> bool | None:
+    if val is None:
+        return None
     try:
-        if pd.isna(dup_val):
-            return
+        if pd.isna(val):
+            return None
     except Exception:
         pass
-    is_dup = dup_val.strip().lower() == "true" if isinstance(dup_val, str) else bool(dup_val)
+    if isinstance(val, str):
+        cleaned = val.strip().lower()
+        return None if not cleaned else cleaned == "true"
+    return bool(val)
+
+
+def _resolve_row_raw_eid(row: dict[str, Any], ev_ts: pd.Timestamp | None) -> str:
+    eid_raw = _pick_first_present(row, ("raw_event_id", "event_id"))
+    return str(eid_raw) if eid_raw is not None else f"{row['segment_id']}_{ev_ts}"
+
+
+def _record_bloom_audit(row: dict[str, Any], state: dict[str, Any], raw_eid: str | None = None) -> None:
+    """Audit-only counter executed strictly AFTER Bloom filter already dropped the event."""
+    is_dup = _parse_optional_bool(row.get("is_duplicate"))
+    seen_exact: set[str] = state.setdefault("seen_exact_ids", set())
+    if is_dup is None:
+        if raw_eid is None:
+            return
+        if raw_eid in seen_exact:
+            state["true_duplicates_caught"] += 1
+        else:
+            state["bloom_false_positives_eval"] += 1
+            seen_exact.add(raw_eid)
+        return
     if is_dup:
         state["true_duplicates_caught"] += 1
     else:
         state["bloom_false_positives_eval"] += 1
+    if raw_eid is not None:
+        seen_exact.add(raw_eid)
 
 
 def _append_sample_window_id(state: dict[str, Any], row: dict[str, Any], raw_eid: str) -> None:
@@ -540,12 +563,13 @@ def _process_accepted_row_sink2(row: dict[str, Any], state: dict[str, Any]) -> N
     if ev_ts is not None and (state["max_event_ts"] is None or ev_ts > state["max_event_ts"]):
         state["max_event_ts"] = ev_ts
 
-    eid_raw = _pick_first_present(row, ("raw_event_id", "event_id"))
-    raw_eid = str(eid_raw) if eid_raw is not None else f"{row['segment_id']}_{ev_ts}"
+    raw_eid = _resolve_row_raw_eid(row, ev_ts)
+    seen_exact: set[str] = state.setdefault("seen_exact_ids", set())
     if rotating_bloom_check_and_add(state["rotating_bloom"], raw_eid):
         state["bloom_duplicates_flagged"] += 1
-        _record_bloom_audit(row, state)
+        _record_bloom_audit(row, state, raw_eid=raw_eid)
         return
+    seen_exact.add(raw_eid)
 
     max_ts = state["max_event_ts"]
     if max_ts is not None and ev_ts is not None and ev_ts < (max_ts - timedelta(minutes=30)):
@@ -695,6 +719,20 @@ def _restore_wal_into_state(state: dict[str, Any], raw_data: dict[str, Any], agg
         }
 
 
+def _extract_parquet_seen_ids(pq_df: pd.DataFrame) -> set[str]:
+    """Rehydrate audit-only exact event keys from committed Sink 1 Bronze batches without bloating WAL."""
+    if pq_df.empty:
+        return set()
+    for id_col in ("raw_event_id", "event_id"):
+        if id_col in pq_df.columns and pq_df[id_col].notna().all():
+            return set(pq_df[id_col].astype(str).tolist())
+    ts_col = next((c for c in ("event_ts", "updated_at", "slot_ts") if c in pq_df.columns), None)
+    if ts_col is not None and "segment_id" in pq_df.columns and pq_df[ts_col].notna().all():
+        ts_parsed = pd.to_datetime(pq_df[ts_col], utc=True, errors="coerce")
+        return {f"{seg}_{None if pd.isna(ts) else ts}" for seg, ts in zip(pq_df["segment_id"], ts_parsed)}
+    return {_resolve_row_raw_eid(row, _parse_event_timestamp(row)) for row in pq_df.to_dict(orient="records")}
+
+
 def _init_or_restore_stream_state(checkpoint_dir: Path | None) -> dict[str, Any]:
     state: dict[str, Any] = {
         "checkpoint_dir": str(checkpoint_dir) if checkpoint_dir is not None else None,
@@ -708,6 +746,7 @@ def _init_or_restore_stream_state(checkpoint_dir: Path | None) -> dict[str, Any]
         "sink1_batch_counts": {},
         "sink1_bronze_total": 0,
         "sample_window_ids": [],
+        "seen_exact_ids": set(),
         "sink2_in_wm_events_count": 0,
         "dropped_by_watermark_sink2": 0,
         "bloom_duplicates_flagged": 0,
@@ -727,7 +766,9 @@ def _init_or_restore_stream_state(checkpoint_dir: Path | None) -> dict[str, Any]
         for bid in sorted(state["committed_batch_ids"]):
             pq_path = sink1_dir / f"batch_{bid:04d}.parquet"
             if pq_path.is_file():
-                state["sink1_batch_counts"][bid] = int(len(pd.read_parquet(pq_path)))
+                pq_df = pd.read_parquet(pq_path)
+                state["sink1_batch_counts"][bid] = int(len(pq_df))
+                state["seen_exact_ids"].update(_extract_parquet_seen_ids(pq_df))
         state["sink1_bronze_total"] = sum(state["sink1_batch_counts"].values())
     return state
 
@@ -824,6 +865,8 @@ def run_stream_with_restart_recovery(
         "post_restart_sink2_in_wm_events": state_after_restart["sink2_in_wm_events_count"],
         "post_restart_dropped_by_watermark": state_after_restart["dropped_by_watermark_sink2"],
         "dropped_by_event_time_watermark": state_after_restart["dropped_by_watermark_sink2"],
+        "bloom_duplicates_flagged": state_after_restart["bloom_duplicates_flagged"],
+        "true_duplicates_caught": state_after_restart["true_duplicates_caught"],
         "bloom_false_positives_eval": state_after_restart["bloom_false_positives_eval"],
         "total_bronze_sink1_events_landed": total_bronze_recovered,
         "sink1_bronze_parquet_dir": str(_sink1_bronze_dir(checkpoint_dir)),

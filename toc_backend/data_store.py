@@ -38,6 +38,73 @@ def _read_csv_records(path: Path, limit: int = 50) -> list[dict[str, Any]]:
     return df.to_dict(orient="records")
 
 
+def _clean_street_name(val: Any, segment_id: int) -> str:
+    """Return a clean street display name, falling back to `Segment #<id>` on NaN or blank."""
+    if pd.notna(val):
+        text = str(val).strip()
+        if text and text.lower() != "nan":
+            return text
+    return f"Segment #{int(segment_id)}"
+
+
+def _read_card_b1_pit_matrix(path: Path) -> list[dict[str, Any]]:
+    """Read strictly the unique 23D feature rows from the first forecast origin in Card B1."""
+    if not path.is_file():
+        return []
+    df = pd.read_csv(path)
+    if df.empty:
+        return []
+    if "forecast_origin_ict" in df.columns:
+        origins = df["forecast_origin_ict"].dropna()
+        if not origins.empty:
+            df = df[df["forecast_origin_ict"] == origins.iloc[0]]
+    if "feature_idx" in df.columns:
+        df = df.drop_duplicates(subset=["feature_idx"]).sort_values("feature_idx")
+    return df.replace({np.nan: None}).to_dict(orient="records")
+
+
+def _opt_round(val: Any, digits: int = 3) -> float | None:
+    return round(float(val), digits) if val is not None else None
+
+
+def _extract_mongo_latency_summary(mv: dict[str, Any]) -> dict[str, Any]:
+    """Extract IXSCAN vs COLLSCAN latency benchmark stats with consistent field names."""
+    lat = mv.get("uc2_arterial_query", {}).get("latency_benchmark_ms", {})
+    speedup = lat.get("ixscan_vs_collscan_speedup_x", lat.get("speedup_vs_collscan_x"))
+    speedup_r = _opt_round(speedup, 2)
+    return {
+        "cold_query_ms": _opt_round(lat.get("cold_query_ms"), 3),
+        "warm_min_ms": _opt_round(lat.get("warm_min_ms"), 3),
+        "warm_median_ms": _opt_round(lat.get("warm_median_ms"), 3),
+        "warm_p95_ms": _opt_round(lat.get("warm_p95_ms"), 3),
+        "warm_max_ms": _opt_round(lat.get("warm_max_ms"), 3),
+        "collscan_warm_median_ms": _opt_round(lat.get("collscan_warm_median_ms"), 3),
+        "collscan_warm_p95_ms": _opt_round(lat.get("collscan_warm_p95_ms"), 3),
+        "ixscan_vs_collscan_speedup_x": speedup_r,
+        "speedup_vs_collscan_x": speedup_r,
+        "sla_under_10ms_verified": bool(lat.get("sla_under_10ms_verified", False)),
+    }
+
+
+def _build_mongo_verify_payload(mv: dict[str, Any]) -> dict[str, Any]:
+    """Merge IXSCAN explain verification with UC-2 IXSCAN vs COLLSCAN latency benchmark."""
+    ix = dict(mv.get("ixscan_explain_verification", {}))
+    lat_summary = _extract_mongo_latency_summary(mv)
+    uc2 = mv.get("uc2_arterial_query", {})
+    return {
+        **ix,
+        "mongo_server_version": mv.get("mongo_server_version"),
+        "total_rows_upserted": mv.get("total_rows_upserted"),
+        "stale_v1_rejected_by_mongo": mv.get("stale_v1_rejected_by_mongo"),
+        "idempotent_replay_verified": mv.get("idempotent_replay_verified"),
+        "latency_benchmark_ms": lat_summary,
+        "uc2_arterial_query": {
+            "total_matching_windows": uc2.get("total_matching_windows"),
+            "latency_benchmark_ms": lat_summary,
+        },
+    }
+
+
 def _static_lifecycle_status(split_set: Any) -> str:
     split_str = str(split_set or "").upper()
     if split_str == "TRAIN":
@@ -68,6 +135,8 @@ def _enrich_mongo_doc_ict(doc: dict[str, Any]) -> dict[str, Any]:
     out = dict(doc)
     if not out.get("ict_date"):
         out["ict_date"] = _derive_ict_date_from_utc(out.get("date"), out.get("period"))
+    if out.get("segment_id") is not None:
+        out["street_name"] = _clean_street_name(out.get("street_name"), int(out["segment_id"]))
     return out
 
 
@@ -147,6 +216,10 @@ def _index_raw_pings(raw_stat_df: pd.DataFrame) -> dict[int, pd.DataFrame]:
     if raw_stat_df.empty:
         return {}
     work = raw_stat_df.dropna(subset=["segment_id", "velocity", "updated_at"]).copy()
+    if "_id" in work.columns:
+        work["ping_id"] = pd.to_numeric(work["_id"], errors="coerce").fillna(0).astype(int)
+    elif "ping_id" not in work.columns:
+        work["ping_id"] = 0
     work["segment_id"] = work["segment_id"].astype(int)
     work["velocity"] = work["velocity"].astype(float)
     work["dt_utc"] = pd.to_datetime(work["updated_at"], utc=True, errors="coerce")
@@ -155,15 +228,16 @@ def _index_raw_pings(raw_stat_df: pd.DataFrame) -> dict[int, pd.DataFrame]:
     return {int(sid): grp for sid, grp in work.groupby("segment_id")}
 
 
-def _read_benchmark_p95_ms(mongo_verify: dict[str, Any]) -> float | None:
-    raw_val = mongo_verify.get("uc2_arterial_query", {}).get("latency_benchmark_ms", {}).get("warm_p95_ms")
-    return round(float(raw_val), 3) if raw_val is not None else None
-
-
 def _query_mongo_benchmark_live(limit: int = 25, root: Path = ROOT) -> dict[str, Any]:
     """Query live MongoDB 8.0 `bda501.traffic_scores` with pooled client and dynamic p95 fallback."""
     mv = _read_json(root / "outputs" / "mongo_verify.json")
-    benchmark_p95 = _read_benchmark_p95_ms(mv)
+    lat = _extract_mongo_latency_summary(mv)
+    benchmark_fields = {
+        "benchmark_median_ms": lat["warm_median_ms"],
+        "benchmark_p95_ms": lat["warm_p95_ms"],
+        "collscan_warm_median_ms": lat["collscan_warm_median_ms"],
+        "speedup_vs_collscan_x": lat["speedup_vs_collscan_x"],
+    }
     env_uri = os.environ.get("MONGO_URI", "").strip()
     uris = [env_uri] if env_uri else ["mongodb://127.0.0.1:27017", "mongodb://mongo:27017"]
     for uri in dict.fromkeys(uris):
@@ -185,7 +259,7 @@ def _query_mongo_benchmark_live(limit: int = 25, root: Path = ROOT) -> dict[str,
                     "mode": "LIVE_MONGODB_8.0",
                     "total_docs": total,
                     "live_query_ms": elapsed_ms,
-                    "benchmark_p95_ms": benchmark_p95,
+                    **benchmark_fields,
                     "top_docs": [_enrich_mongo_doc_ict(d) for d in docs[:12]],
                 }
         except Exception:
@@ -195,7 +269,7 @@ def _query_mongo_benchmark_live(limit: int = 25, root: Path = ROOT) -> dict[str,
         "mode": "SAVED_BENCHMARK_FALLBACK",
         "total_docs": int(mv.get("total_rows_upserted", 0)),
         "live_query_ms": None,
-        "benchmark_p95_ms": benchmark_p95,
+        **benchmark_fields,
         "top_docs": [_enrich_mongo_doc_ict(d) for d in top_fallback],
     }
 
@@ -255,7 +329,7 @@ class TOCDataStore:
             sid = int(r[0])
             sn = int(r[1]) if pd.notna(r[1]) else -1
             en = int(r[2]) if pd.notna(r[2]) else -1
-            sname = str(r[3]) if pd.notna(r[3]) else f"Segment #{sid}"
+            sname = _clean_street_name(r[3], sid)
             self.seg_nodes[sid] = (sn, en, sname)
             self.node_to_segs.setdefault(sn, []).append(sid)
             self.node_to_segs.setdefault(en, []).append(sid)
@@ -375,7 +449,7 @@ class TOCDataStore:
             polylines.append(
                 {
                     "segment_id": sid,
-                    "street_name": str(r.street_name or f"Segment #{sid}"),
+                    "street_name": _clean_street_name(r.street_name, sid),
                     "street_level": int(r.street_level),
                     "coords": coords,
                     "mean_velocity": round(float(r.mean_velocity), 1),
@@ -406,7 +480,7 @@ class TOCDataStore:
         return [
             {
                 "segment_id": int(r.segment_id),
-                "street_name": str(r.street_name or "N/A"),
+                "street_name": _clean_street_name(r.street_name, int(r.segment_id)),
                 "street_level": int(r.street_level),
                 "obs_count": int(r.obs_count),
                 "mean_velocity": round(float(r.mean_velocity), 1),
@@ -502,7 +576,7 @@ class TOCDataStore:
         def _fmt(rows: pd.DataFrame, bucket: str) -> list[dict[str, Any]]:
             return [
                 {
-                    "ping_id": int(r._id) if hasattr(r, "_id") and pd.notna(r._id) else 0,
+                    "ping_id": int(r.ping_id) if pd.notna(r.ping_id) else 0,
                     "time_ict": r.dt_ict.strftime("%H:%M:%S"),
                     "minutes_from_issue": round(float((r.dt_utc - issue_utc).total_seconds() / 60.0), 2),
                     "velocity_kmh": round(float(r.velocity), 1),
@@ -512,6 +586,25 @@ class TOCDataStore:
             ]
 
         return _fmt(past_sub.tail(35), "PAST_OBSERVED"), _fmt(fut_sub.head(20), "FUTURE_ACTUAL")
+
+    def _expand_corridor_node(
+        self,
+        nid: int,
+        target_street: str,
+        seen_sids: set[int],
+        visited_nodes: set[int],
+        corridor_sids: list[int],
+    ) -> set[int]:
+        """Collect unseen same-street segments adjacent to `nid`."""
+        next_nodes: set[int] = set()
+        for cand in self.node_to_segs.get(nid, []):
+            if cand in seen_sids or self.seg_nodes[cand][2] != target_street:
+                continue
+            seen_sids.add(cand)
+            corridor_sids.append(cand)
+            csn, cen, _ = self.seg_nodes[cand]
+            next_nodes.update({csn, cen} - visited_nodes)
+        return next_nodes
 
     def _trace_same_corridor(
         self, segment_id: int, target_street: str, max_hops: int = 12
@@ -525,13 +618,9 @@ class TOCDataStore:
         for _ in range(max_hops):
             next_nodes: set[int] = set()
             for nid in frontier:
-                for cand in self.node_to_segs.get(nid, []):
-                    if cand in seen_sids or self.seg_nodes[cand][2] != target_street:
-                        continue
-                    seen_sids.add(cand)
-                    corridor_sids.append(cand)
-                    csn, cen, _ = self.seg_nodes[cand]
-                    next_nodes.update({csn, cen} - visited_nodes)
+                next_nodes.update(
+                    self._expand_corridor_node(nid, target_street, seen_sids, visited_nodes, corridor_sids)
+                )
             visited_nodes.update(next_nodes)
             frontier = next_nodes
             if not frontier or len(corridor_sids) >= 28:
@@ -643,7 +732,7 @@ class TOCDataStore:
         return {
             "segment_id": int(segment_id),
             "is_cold_start": True,
-            "street_name": str(s_info["street_name"] or f"Segment #{segment_id}"),
+            "street_name": _clean_street_name(s_info["street_name"], segment_id),
             "street_level": int(s_info["street_level"]),
             "split_set": "COLD_START_STRUCTURAL_PRIOR",
             "max_velocity": round(vmax, 1),
@@ -676,6 +765,31 @@ class TOCDataStore:
             },
         }
 
+    @staticmethod
+    def _select_timeline_focus_row(
+        seg_rows: pd.DataFrame, ict_date: str | None, vn_hour: float | None
+    ) -> pd.Series:
+        if ict_date is not None and vn_hour is not None:
+            exact = seg_rows[
+                (seg_rows["ict_date"] == ict_date) & (np.isclose(seg_rows["vn_hour"], float(vn_hour), atol=0.05))
+            ]
+            if not exact.empty:
+                return exact.iloc[0]
+        return seg_rows.iloc[-1]
+
+    @staticmethod
+    def _build_timeline_feature_drivers(focus_row: pd.Series) -> dict[str, Any]:
+        lag1_raw = focus_row.get("lag1_los_ordinal")
+        nb_raw = focus_row.get("neighbor_los_ordinal")
+        return {
+            "obs_count_in_window": int(focus_row["obs_count"]),
+            "lag1_los": ORD_TO_LOS.get(int(lag1_raw), "N/A") if pd.notna(lag1_raw) else "Gap >30m",
+            "neighbor_los": ORD_TO_LOS.get(int(round(float(nb_raw))), "N/A") if pd.notna(nb_raw) else "N/A",
+            "pagerank_score": round(float(focus_row["pagerank_score"]), 4),
+            "cluster_id": int(focus_row["cluster_id"]),
+            "street_severe_prior": round(float(focus_row.get("street_causal_prior_sev", 0.0)), 3),
+        }
+
     def get_segment_timeline(
         self,
         segment_id: int,
@@ -691,14 +805,7 @@ class TOCDataStore:
                 return self._build_cold_start_timeline(seg_id, static_rows.iloc[[0]], ict_date, vn_hour)
             raise KeyError(f"Segment #{seg_id} not found in windows or static store")
 
-        focus_row = seg_rows.iloc[-1]
-        if ict_date is not None and vn_hour is not None:
-            exact = seg_rows[
-                (seg_rows["ict_date"] == ict_date) & (np.isclose(seg_rows["vn_hour"], float(vn_hour), atol=0.05))
-            ]
-            if not exact.empty:
-                focus_row = exact.iloc[0]
-
+        focus_row = self._select_timeline_focus_row(seg_rows, ict_date, vn_hour)
         f_dt = focus_row["slot_dt"]
         f_date = str(focus_row["ict_date"])
         f_hour = float(focus_row["vn_hour"])
@@ -733,7 +840,7 @@ class TOCDataStore:
         return {
             "segment_id": seg_id,
             "is_cold_start": False,
-            "street_name": str(focus_row["street_name"] or f"Segment #{seg_id}"),
+            "street_name": _clean_street_name(focus_row["street_name"], seg_id),
             "street_level": int(focus_row["street_level"]),
             "split_set": str(focus_row.get("split_set", "TEST")),
             "max_velocity": round(vmax, 1),
@@ -756,18 +863,7 @@ class TOCDataStore:
                 "severe_prob": float(focus_row["rf_severe_prob"]),
                 "change_prob": float(focus_row["rf_change_prob"]),
             },
-            "feature_drivers": {
-                "obs_count_in_window": int(focus_row["obs_count"]),
-                "lag1_los": ORD_TO_LOS.get(int(focus_row["lag1_los_ordinal"]), "N/A")
-                if pd.notna(focus_row.get("lag1_los_ordinal"))
-                else "Gap >30m",
-                "neighbor_los": ORD_TO_LOS.get(int(round(float(focus_row["neighbor_los_ordinal"]))), "N/A")
-                if pd.notna(focus_row.get("neighbor_los_ordinal"))
-                else "N/A",
-                "pagerank_score": round(float(focus_row["pagerank_score"]), 4),
-                "cluster_id": int(focus_row["cluster_id"]),
-                "street_severe_prior": round(float(focus_row.get("street_causal_prior_sev", 0.0)), 3),
-            },
+            "feature_drivers": self._build_timeline_feature_drivers(focus_row),
         }
 
     def get_overview(self) -> dict[str, Any]:
@@ -775,6 +871,7 @@ class TOCDataStore:
         hotspots = _read_csv_records(self.root / "outputs" / "hotspot_alerts.csv", limit=25)
         for h in hotspots:
             sid = int(h["segment_id"])
+            h["street_name"] = _clean_street_name(h.get("street_name"), sid)
             h["coords"] = self.coord_map.get(sid)
         los_counts = {lbl: int((self.win_df["LOS"] == lbl).sum()) for lbl in LOS_ORDER}
         return {
@@ -793,6 +890,7 @@ class TOCDataStore:
         st_map = self.static_df.set_index("segment_id")
         for r in pr_rows:
             sid = int(r["segment_id"])
+            r["street_name"] = _clean_street_name(r.get("street_name"), sid)
             r["coords"] = self.coord_map.get(sid)
             if sid in st_map.index:
                 s_row = st_map.loc[sid]
@@ -856,7 +954,7 @@ class TOCDataStore:
         map_points = [
             {
                 "segment_id": int(r.segment_id),
-                "street_name": str(r.street_name or "N/A"),
+                "street_name": _clean_street_name(r.street_name, int(r.segment_id)),
                 "cluster_id": int(r.cluster_id),
                 "is_cold_start": bool(r.is_cold_start),
                 "pagerank_score": round(float(r.pagerank_score), 3),
@@ -866,6 +964,10 @@ class TOCDataStore:
         ]
 
         model_info = self.metrics.get("model", {})
+        peers_records = peers_df.replace({np.nan: None}).to_dict(orient="records")
+        for peer in peers_records:
+            if peer.get("segment_id") is not None:
+                peer["street_name"] = _clean_street_name(peer.get("street_name"), int(peer["segment_id"]))
         return {
             "total_network_segments": int(len(self.static_df)),
             "observed_segments_count": int((~self.static_df["is_cold_start"]).sum()),
@@ -877,7 +979,7 @@ class TOCDataStore:
             "cold_start_candidates": [
                 {
                     "segment_id": int(r.segment_id),
-                    "street_name": str(r.street_name or f"Segment #{int(r.segment_id)}"),
+                    "street_name": _clean_street_name(r.street_name, int(r.segment_id)),
                     "street_level": int(r.street_level),
                     "cluster_id": int(r.cluster_id),
                     "pagerank_score": round(float(r.pagerank_score), 3),
@@ -886,7 +988,7 @@ class TOCDataStore:
             ],
             "selected_segment": {
                 "segment_id": chosen_sid,
-                "street_name": str(target_row.iloc[0]["street_name"] or "N/A"),
+                "street_name": _clean_street_name(target_row.iloc[0]["street_name"], chosen_sid),
                 "street_level": int(target_row.iloc[0]["street_level"]),
                 "cluster_id": int(target_row.iloc[0]["cluster_id"]),
                 "is_cold_start": bool(target_row.iloc[0]["is_cold_start"]),
@@ -897,7 +999,7 @@ class TOCDataStore:
                 "badge": "COLD_START_STRUCTURAL_PRIOR" if bool(target_row.iloc[0]["is_cold_start"]) else "GPS_OBSERVED",
                 "coords": self.coord_map.get(chosen_sid),
             },
-            "peers": peers_df.replace({np.nan: None}).to_dict(orient="records"),
+            "peers": peers_records,
             "map_sample": map_points,
         }
 
@@ -905,10 +1007,16 @@ class TOCDataStore:
         """Return P1 Quality Funnel, UC-6 Spark 3.5.7, ML Ablation, Reconciliation & Card B1/B3 Audits."""
         ev_dir = self.root / "evidence" / "session9"
         static_info = self.metrics.get("static_feature_store_c13b", {})
+        monoid_cat = dict(self.metrics.get("monoid_and_catalyst_c9", {}))
+        if "spark_runtime_verification" not in monoid_cat:
+            monoid_cat["spark_runtime_verification"] = _read_json(
+                self.root / "outputs" / "spark_runtime_evidence.json"
+            )
+        mv_full = _read_json(self.root / "outputs" / "mongo_verify.json")
         return {
             "dataset": self.metrics.get("dataset", {}),
             "evaluation": self.metrics.get("evaluation", {}),
-            "monoid_and_catalyst": self.metrics.get("monoid_and_catalyst_c9", {}),
+            "monoid_and_catalyst": monoid_cat,
             "cold_start_ratio_pct": float(static_info.get("cold_start_ratio_pct", 0.0)),
             "streaming_mmds": self.metrics.get("streaming_mmds", {}),
             "quality_funnel": self.metrics.get("quality_funnel_c5", {}),
@@ -917,12 +1025,10 @@ class TOCDataStore:
             "transition_evaluation": _read_csv_records(self.root / "outputs" / "transition_evaluation.csv", limit=15),
             "spark_benchmark": _read_csv_records(ev_dir / "B_benchmark.csv", limit=10),
             "reconciliation_audit": _read_csv_records(self.root / "outputs" / "reconciliation_audit.csv", limit=12),
-            "card_b1_pit_matrix": _read_csv_records(ev_dir / "H_B1_point_in_time_matrix.csv", limit=25),
+            "card_b1_pit_matrix": _read_card_b1_pit_matrix(ev_dir / "H_B1_point_in_time_matrix.csv"),
             "card_b3_sketches": _read_csv_records(ev_dir / "H_B3_missingness_sketches.csv", limit=12),
             "wal_progress": _read_json(self.root / "outputs" / "query_progress.json"),
-            "mongo_verify": _read_json(self.root / "outputs" / "mongo_verify.json").get(
-                "ixscan_explain_verification", {}
-            ),
+            "mongo_verify": _build_mongo_verify_payload(mv_full),
             "frozen_manifest": _read_json(self.root / "outputs" / "model_registry_manifest.json"),
         }
 

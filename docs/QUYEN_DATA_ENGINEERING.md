@@ -105,7 +105,7 @@ ICT date rollover (`date` + `date_utc`), and actual Spark `BroadcastHashJoin`/Pa
 - Historical PR-integration test record (08–09/11/2026): **5 Spark tests** (`test_quyen_spark.py`) passed in the Spark container alongside early Platform V3 tests (`test_platform_v3.py`). Following Wave 2 unification (`pipeline.py` now also enforces clean motorized roads: `84,206` segments, `52,181` active nodes, `90,787` accepted pings, `33,394` windows), `pipeline.py` and `spark_batch.py` share identical motorized counts and Lakehouse Parquet compatibility (`bronze_raw_events`, `stream_replay_windows`, `curated_gold/year_month=*`).
 - Full raw snapshot using exclusive warmup cutoff `2020-08-01T00:00:00Z`, `local[2]`, 4 shuffle partitions:
 - 90,938 input deliveries = 90,787 accepted unique + 151 quarantined + 0 retries.
-  All 151 are `E4_UNKNOWN_SEGMENT` after 427 non-road GIS entities (`S3_NON_ROAD_TYPE`) were excluded (accounting for exactly `33,441 - 33,394 = 47` windows).
+  All 151 are `E4_UNKNOWN_SEGMENT` after 427 non-road GIS entities (`S3_NON_ROAD_TYPE`) were excluded (removing exactly `47` non-road windows to yield `33,394` clean motorized windows).
 - 33,394 accepted windows, 52,181 active nodes (pruned `525,786` / `90.97%` from `577,967` raw nodes).
 - 580 GIS quarantine records use first-failure accounting (`154` `S2_NONPOSITIVE_LENGTH` + `426` `S3_NON_ROAD_TYPE`, with 1 overlapping segment).
 - Independent raw Python fold: **0 mismatches in all five monoid fields and mean**;

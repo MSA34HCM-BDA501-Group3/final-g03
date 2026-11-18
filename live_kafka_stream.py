@@ -41,11 +41,15 @@ DEFAULT_RESET_SIGNAL_PATH = Path("outputs/live_reset_signal.json")
 DEFAULT_BRONZE_WAL_PATH = Path("outputs/live_bronze_wal.jsonl")
 
 
-def _derive_los_from_ratio(ratio: float) -> str:
-    if math.isnan(ratio) or ratio < 0.20:
+def derive_urban_los(mean_velocity: float, raw_max_velocity: float | None = None) -> str:
+    """Derive HCMC urban speed-band LOS (A..F) matching BkTraffic 5 km/h physical thresholds."""
+    if not _is_valid_value(mean_velocity):
         return "F"
-    for thresh, label in ((0.80, "A"), (0.65, "B"), (0.50, "C"), (0.35, "D"), (0.20, "E")):
-        if ratio >= thresh:
+    vel = float(mean_velocity)
+    raw_v = float(raw_max_velocity) if _is_valid_value(raw_max_velocity) else 0.0
+    shift = 10.0 if raw_v >= 70.0 else (5.0 if raw_v >= 60.0 else 0.0)
+    for base_thresh, label in ((35.0, "A"), (30.0, "B"), (25.0, "C"), (20.0, "D"), (15.0, "E")):
+        if vel >= base_thresh + shift:
             return label
     return "F"
 
@@ -139,18 +143,44 @@ def load_readonly_scorer_context(
             default=0.30,
         )
     )
+    selected_val_threshold = float(
+        _pick_valid(
+            bundle.get("selected_val_threshold"),
+            default=0.25,
+        )
+    )
     return {
         "rf_model": bundle["rf_multiclass"],
         "imputer": bundle["ml_imputer"],
         "features": list(bundle["full_features"]),
         "static_map": static_map,
         "change_threshold": change_threshold,
+        "selected_val_threshold": selected_val_threshold,
     }
 
 
-def _resolve_los_ordinal(row: dict[str, Any], v_ratio: float) -> float:
+def _resolve_raw_max_velocity(row: dict[str, Any], static_info: dict[str, Any]) -> float | None:
+    raw_vmax = _pick_valid(row.get("raw_max_velocity"), static_info.get("raw_max_velocity"), default=None)
+    if raw_vmax is not None:
+        return float(raw_vmax)
+    for src in (static_info, row):
+        if src.get("vmax_impute_tier") == "TIER_1_SEGMENT_OBSERVED":
+            obs_v = _pick_valid(src.get("max_velocity"), default=None)
+            if obs_v is not None:
+                return float(obs_v)
+    return None
+
+
+def _resolve_los_ordinal(
+    row: dict[str, Any],
+    mean_velocity: float,
+    raw_max_velocity: float | None = None,
+) -> float:
     raw_los = _pick_valid(row.get("LOS"), default=None)
-    los_str = str(raw_los) if raw_los is not None and str(raw_los) in LOS_LABELS else _derive_los_from_ratio(v_ratio)
+    if raw_los is not None and str(raw_los) in LOS_LABELS:
+        los_str = str(raw_los)
+    else:
+        los_str = derive_urban_los(mean_velocity, raw_max_velocity=raw_max_velocity)
     fallback_ord = float(LOS_LABELS.index(los_str)) if los_str in LOS_LABELS else 0.0
     return float(_pick_valid(row.get("current_los_ordinal"), row.get("los_ordinal"), default=fallback_ord))
 
@@ -163,7 +193,8 @@ def _build_feature_row(row: dict[str, Any], static_info: dict[str, Any], feature
     vmax = max(float(_pick_valid(row.get("max_velocity"), static_info.get("max_velocity"), default=40.0)), 5.0)
     raw_ratio = float(_pick_valid(row.get("velocity_ratio"), vel / vmax, default=vel / vmax))
     v_ratio = float(np.clip(raw_ratio, 0.0, 1.5))
-    los_ord = _resolve_los_ordinal(row, v_ratio)
+    raw_vmax = _resolve_raw_max_velocity(row, static_info)
+    los_ord = _resolve_los_ordinal(row, vel, raw_max_velocity=raw_vmax)
     ict_cal = _compute_ict_calendar_features(row)
 
     defaults: dict[str, float] = {
@@ -283,6 +314,7 @@ def init_live_state(topic: str = "hcmc-traffic-events", reset_epoch: int = 0) ->
         "max_event_ts": None,
         "rotating_bloom": create_rotating_bloom(),
         "hll_registers": np.zeros(HLL_NUM_REGISTERS, dtype=np.uint8),
+        "exact_segments_seen": set(),
         "unique_seen_flag": False,
         "decay_scores": {},
         "decay_last_ts": {},
@@ -365,6 +397,7 @@ def reset_live_stream_state(
         "quarantined_count": 0,
         "sink1_bronze_total": 0,
         "duplicates_caught_bloom": 0,
+        "bloom_false_positives_eval": 0,
         "late_dropped_for_tier2": 0,
         "sink2_scored_v1": 0,
         "severe_alerts_v1_count": 0,
@@ -372,6 +405,7 @@ def reset_live_stream_state(
         "bloom_memory_kb": 32.0,
         "hll_memory_kb": 1.0,
         "hll_estimated_segments": 0.0,
+        "exact_distinct_segments": 0,
         "story_cursor": None,
         "mongo_connected": False,
         "last_updated_ict": datetime.now(tz=ICT_TZ).strftime("%H:%M:%S"),
@@ -480,6 +514,7 @@ def _persist_batch_to_mongo_and_files(
 
     has_hll_items = bool(state.get("unique_seen_flag", False) or np.any(state["hll_registers"] > 0))
     hll_est = round(hll_estimate(state["hll_registers"]), 1) if has_hll_items else 0.0
+    exact_seg_count = len(state.get("exact_segments_seen", ()))
     max_ts = state.get("max_event_ts")
     wm_iso = (pd.Timestamp(max_ts) - timedelta(minutes=30)).isoformat() if max_ts is not None else None
     snap = {
@@ -501,6 +536,7 @@ def _persist_batch_to_mongo_and_files(
         "bloom_memory_kb": round(state["rotating_bloom"].nbytes / 1024.0, 1),
         "hll_memory_kb": round(state["hll_registers"].nbytes / 1024.0, 1),
         "hll_estimated_segments": hll_est,
+        "exact_distinct_segments": exact_seg_count,
         "active_decay_segments_in_ram": len(state["decay_scores"]),
         "story_cursor": state.get("story_cursor"),
         "mongo_connected": mongo_ok,
@@ -570,10 +606,14 @@ def _process_live_accepted_row(
 
     seg_id = int(float(str(row["segment_id"])))
     hll_add(state["hll_registers"], str(seg_id), p_bits=HLL_P_BITS)
+    state.setdefault("exact_segments_seen", set()).add(seg_id)
     state["unique_seen_flag"] = True
 
     vel = float(_pick_valid(row.get("mean_velocity"), row.get("velocity"), default=25.0))
-    is_sev = int(_pick_valid(row.get("is_severe"), default=(1 if vel < 15.0 else 0)))
+    static_info = scorer_ctx["static_map"].get(seg_id, {})
+    raw_vmax = _resolve_raw_max_velocity(row, static_info)
+    default_sev = int(derive_urban_los(vel, raw_max_velocity=raw_vmax) in ("E", "F"))
+    is_sev = int(_pick_valid(row.get("is_severe"), default=default_sev))
     update_bounded_decay_state(
         state["decay_scores"],
         seg_id,
@@ -585,7 +625,8 @@ def _process_live_accepted_row(
     doc = _score_single_event(row, scorer_ctx, state["decay_scores"].get(seg_id, 0.0), int(part_key))
     state["sink2_scored_v1"] += 1
     doc["seq_id"] = int(state["sink2_scored_v1"])
-    if doc["severe_prob"] >= 0.50 or doc["predicted_next_los"] in ("E", "F"):
+    severe_threshold = float(_pick_valid(scorer_ctx.get("selected_val_threshold"), default=0.25))
+    if doc["severe_prob"] >= severe_threshold or doc["predicted_next_los"] in ("E", "F"):
         state["severe_alerts_v1_count"] += 1
     return doc
 

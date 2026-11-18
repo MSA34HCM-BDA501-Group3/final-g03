@@ -619,8 +619,8 @@ def _add_slide_04_system_architecture(prs: Presentation, arch_img: Path, t: dict
         "SECTION 03 · SYSTEM ARCHITECTURE — KIẾN TRÚC TỔNG THỂ (ZONES A–F · 4 PIPELINES) & 3-PHASE MLOPS",
         "3. System Architecture: Kiến Trúc Hybrid Batch–Speed & Vòng Đời 3-Phase MLOps",
         (
-            "Kiến trúc nền tảng 6 dịch vụ Docker giải quyết đồng thời vùng mù, dự báo sớm +30m & Dual-UI "
-            "(:8000 / :8501)"
+            "Kiến trúc nền tảng 5 dịch vụ Docker mặc định giải quyết vùng mù, dự báo sớm +30m & ReactJS + FastAPI "
+            "TOC (:8000)"
         ),
     )
     s4.add_image(0.55, 2.00, 10.55, 6.38, arch_img)
@@ -637,7 +637,7 @@ def _add_slide_04_system_architecture(prs: Presentation, arch_img: Path, t: dict
             "Phase B (Speed Layer): Chỉ đọc .predict_proba() phát cảnh báo tạm thời v1 (< 1 ms IXSCAN).",
             f"Phase C (Recon): Cuối ngày bù {rc['affected_late_segment_windows_recomputed']} cửa sổ trễ, "
             f"hàn {rc['healed_downstream_lag_windows']} lag, re-score {rc['healed_downstream_rescored_windows']} "
-            "→ chuẩn v2 (12.0 / 16.0 GB RAM).",
+            "→ chuẩn v2 (11.0 / 16.0 GB RAM).",
         ],
         badge="0 Write Conflict",
         theme="sky",
@@ -650,8 +650,8 @@ def _add_slide_04_system_architecture(prs: Presentation, arch_img: Path, t: dict
         3.12,
         "Limitations & Risks (Arch)",
         [
-            "Single-Host Contention: 6 container (Kafka 1.5G, Spark 6G, Mongo 2G, FastAPI+React :8000 & "
-            "Streamlit :8501) dùng chung I/O trong 12.0 / 16 GB RAM.",
+            "Single-Host Contention: 5 container mặc định (Kafka 1.5G, Spark 6G, Mongo 2G, ReactJS+FastAPI TOC "
+            ":8000 1G, live-consumer 0.5G) dùng chung I/O trong 11.0 / 16 GB RAM.",
             "Eventual Consistency Gap: Cảnh báo luồng (v1) phản hồi tức thì, nhưng biến trễ từ các gói tin "
             "đến muộn > 30m phải chờ Phase C cuối ngày.",
         ],
@@ -844,8 +844,8 @@ def _add_slide_07_method_explainer_graph_sketches(
         1.74,
         "Vì Sao Dùng Bộ Đếm Luồng O(1) Sketches?",
         [
-            "Ở quy mô tỷ bản tin/ngày, lưu danh sách mã tin để lọc trùng sẽ tràn RAM. Dùng dãy bit Bloom Filter "
-            "(32 KiB), HLL++ (1 KiB) và điểm nóng EWMA giúp xử lý tức thời trong bộ nhớ cố định cực nhỏ.",
+            "Ở quy mô tỷ bản tin/ngày, lưu danh sách mã tin để lọc trùng sẽ tràn RAM. Dùng RotatingBloomFilter "
+            "(32 KiB · 2×16 KiB), HLL++ (1 KiB) và điểm nóng EWMA giúp xử lý tức thời trong bộ nhớ cố định cực nhỏ.",
         ],
         badge="33.0 KiB RAM",
         theme="sky_strong",
@@ -926,6 +926,7 @@ def _add_slide_09_modeling(prs: Presentation, t: dict | None = None) -> DualSlid
     ta = ev["transition_analysis"]
     imps = tr_d["imps"]
     rf23_val = next(c for c in vg["candidates"] if "Random Forest (+Graph" in c["candidate_model"])
+    dt23_val = next(c for c in vg["candidates"] if "Decision Tree (+Graph" in c["candidate_model"])
     rf14_val = next(c for c in vg["candidates"] if "Random Forest (Local" in c["candidate_model"])
     s9 = DualSlide(prs)
     s9.add_chrome(
@@ -983,9 +984,9 @@ def _add_slide_09_modeling(prs: Presentation, t: dict | None = None) -> DualSlid
         3.08,
         "Live VAL Gate Selection & Cold-Start Scoring",
         [
-            f"Champion (#5 RF 23D): 250 cây, max_depth=14, clean sqrt cls_w (0.65), thắng Live VAL Gate "
-            f"({rf23_val['val_composite_score']:.4f} vs RF 14D {rf14_val['val_composite_score']:.4f}; τ = 0.25) "
-            "→ khóa SHA-256.",
+            f"Champion (#5 RF 23D): Thắng Live VAL Gate (Acc+PR+ROC)/3 đạt {rf23_val['val_composite_score']:.4f} "
+            f"(vs DT 23D {dt23_val['val_composite_score']:.4f}, RF 14D {rf14_val['val_composite_score']:.4f}; "
+            "τ_sev=0.25, τ_chg=0.40) → khóa SHA-256.",
             f"Cold-Start Coverage: Static Feature Store (PageRank + 7D K-Means + Priors) phủ đủ "
             f"{ds['cold_start_segments_count']:,} đoạn 0 GPS (100% trên {ds['segments_count']:,} đoạn cơ giới).",
         ],
@@ -1004,7 +1005,7 @@ def _add_slide_09_modeling(prs: Presentation, t: dict | None = None) -> DualSlid
             f"({ta['rf_23d_transition_6class_acc']*100:.2f}%); tăng lên "
             f"{int(round(ta['rf_23d_val_calibrated_transition_6class_acc']*61))}/61 "
             f"({ta['rf_23d_val_calibrated_transition_6class_acc']*100:.2f}%) ở τ = 0.40 trên VAL "
-            f"(McNemar p = {ta['statistical_significance_test']['mcnemar_transition_p_value']:.4f}).",
+            f"(McNemar p = {ta['statistical_significance_test']['mcnemar_transition_p_value']:.6f}).",
             "Exogenous Blindness & Imbalance: Chưa có biến mưa ngập/tai nạn; lớp trung gian B–E thưa nên "
             f"Macro-F1 đạt {ev['macro_f1_6class']:.4f} (dù Severe F1 = {ev['severe_f1']:.4f}).",
         ],
@@ -1112,19 +1113,21 @@ def _add_slide_11_stream_processing(
         2.10,
         "Kết Quả Luồng O(1), Đối Soát & Phục Vụ < 1 ms",
         [
-            f"O(1) Sketches & WAL: Bloom ({bl['memory_kb']:.1f} KiB) chặn {sm['duplicates_removed_exact']}/"
-            f"{sm['injected_duplicate_events']} trùng (FPR {bl['empirical_fp_rate']*100:.3f}%); HLL++ "
+            f"O(1) Sketches & WAL: RotatingBloom ({bl['memory_kb']:.1f} KiB · 2×16 KiB) chặn "
+            f"{sm['duplicates_removed_exact']}/{sm['injected_duplicate_events']} trùng "
+            f"({bl['false_positives']} FPs, FPR {bl['empirical_fp_rate']*100:.4f}%); HLL++ "
             f"({hll['memory_kb']:.1f} KiB) ≈ {hll['hll_estimated_segments']:.1f}/{hll['exact_distinct_segments']:,} "
             f"({hll['relative_error_pct']:.2f}% err); EWMA #1 #47407 Lý Thường Kiệt (6.6652); WAL 0 dupes.",
             f"Two-Tier Recon & MongoDB 8.0: Tier 1 diff=0; Tier 2 bù {rc['affected_late_segment_windows_recomputed']} "
             f"trễ, hàn {rc['healed_downstream_lag_windows']} lag & re-score {rc['healed_downstream_rescored_windows']} "
-            f"({rc['pre_reconciliation_completeness_pct']:.1f}%→{rc['post_reconciliation_completeness_pct']:.1f}%); "
-            f"$status_version chặn {mv['stale_v1_rejected_by_mongo']}/25 v1; IXSCAN warm {lat['warm_median_ms']:.3f} / "
+            f"({rc['rescore_prob_changed_windows_count']} đổi prob, {rc['pre_reconciliation_completeness_pct']:.1f}%→"
+            f"{rc['post_reconciliation_completeness_pct']:.1f}%); $status_version chặn "
+            f"{mv['stale_v1_rejected_by_mongo']}/25 v1; IXSCAN warm {lat['warm_median_ms']:.3f} / "
             f"p95 {lat['warm_p95_ms']:.3f} ms ({lat['ixscan_vs_collscan_speedup_x']:.2f}x).",
         ],
         badge=f"33.0 KiB · {lat['warm_median_ms']:.3f} ms",
         theme="sky",
-        body_size=7.7,
+        body_size=7.6,
     )
     s11.add_card(
         8.10,
@@ -1133,8 +1136,8 @@ def _add_slide_11_stream_processing(
         2.10,
         "Limitations & Risks (Stream Processing)",
         [
-            "Rủi ro bão hòa bit Bloom Filter: Mảng cố định 32.0 KiB (262,144 bits) sẽ tăng FPR nếu chạy liên tục "
-            "nhiều ngày ở quy mô 1.5–3.0 TB/ngày mà không xoay vòng (Ring-Buffer Rotation) theo cửa sổ.",
+            "Giới hạn cửa sổ xoay vòng RotatingBloomFilter (2×16 KiB): Đã khử bão hòa bit (FPR 0.0389%), nhưng bản "
+            "tin trùng đến muộn > 2 thế hệ (16k tin) sẽ cần chỉ mục event_id duy nhất trên MongoDB để chống ghi lặp.",
             f"Độ trễ cập nhật của sự kiện quá muộn (> 30m Watermark): {rc['affected_late_segment_windows_recomputed']} "
             "cửa sổ trễ hơn 30 phút phải đợi tiến trình Tier-2 Reconciliation cuối ngày.",
         ],
@@ -1172,6 +1175,7 @@ def _add_slide_12_experiments_ablation(prs: Presentation, t: dict | None = None)
     ev = tr["evaluation"]
     vg = ev["validation_gate_selection"]
     rf23_val = next(c for c in vg["candidates"] if "Random Forest (+Graph" in c["candidate_model"])
+    dt23_val = next(c for c in vg["candidates"] if "Decision Tree (+Graph" in c["candidate_model"])
     rf14_val = next(c for c in vg["candidates"] if "Random Forest (Local" in c["candidate_model"])
     cm_diag = [int(ev["confusion_matrix_6class"][i][i]) for i in range(6)]
     cj = sp["catalyst_join_spark"]
@@ -1225,8 +1229,8 @@ def _add_slide_12_experiments_ablation(prs: Presentation, t: dict | None = None)
         3.08,
         "VAL Gate, Confusion Matrix & Tính Trung Thực 23D",
         [
-            f"VAL Composite Gate: RF 23D thắng {rf23_val['val_composite_score']:.4f} vs RF 14D "
-            f"{rf14_val['val_composite_score']:.4f} (acc={rf23_val['val_accuracy_6class']:.4f}); "
+            f"VAL Composite Gate (Acc+PR+ROC)/3: RF 23D thắng {rf23_val['val_composite_score']:.4f} vs DT 23D "
+            f"{dt23_val['val_composite_score']:.4f} (RF 14D {rf14_val['val_composite_score']:.4f}); "
             f"TEST 6-Class diag {cm_diag} đủ 6 mức A–F.",
             f"Trên {ev['train_samples']:,} organic TRAIN: ROC-AUC = {ev['roc_auc']:.4f}, "
             f"PR-AUC = {ev['average_precision']:.4f}, Severe F1 = {ev['severe_f1']:.4f}; "
@@ -1304,8 +1308,9 @@ def _add_slide_13_experiments_persistence_defense(
             f"Detect AUC = {ta['rf_23d_transition_detect_roc_auc']:.4f}\n"
             f"Acc: {cal_chg}/{n_tr} ({cal_pct:.2f}% ở τ={ta['val_selected_change_threshold']:.2f}; "
             f"{def_chg}/{n_tr} mặc định)\nTop-1 mới: {top1_chg}/{n_tr} ({top1_pct:.2f}%)",
-            f"McNemar p = {st['mcnemar_transition_p_value']:.4f} (7 vs 0);\nRF bắt biến động sớm & giảm "
-            f"{brier_drop:.1f}% sai số Brier.",
+            f"McNemar p = {st['mcnemar_transition_p_value']:.6f} "
+            f"({st['mcnemar_transition_rf_wins_only']} vs {st['mcnemar_transition_pers_wins_only']});\n"
+            f"RF bắt biến động sớm & giảm {brier_drop:.1f}% sai số Brier.",
         ],
         [
             f"2. Thoáng (A–D) đột ngột\nhóa kẹt cứng (E–F)\n"
@@ -1351,7 +1356,7 @@ def _add_slide_13_experiments_persistence_defense(
             f"({ta['steady_state_samples']:,} / {ta['test_samples']:,} cặp giữ nhãn), mù 100% (0 / "
             f"{ta['transition_samples']}) khi chuyển pha.",
             f"RF 23D bắt sớm tín hiệu đổi pha (Detect AUC = {ta['rf_23d_transition_detect_roc_auc']:.4f}, "
-            f"McNemar p = {st['mcnemar_transition_p_value']:.4f}, Lift {ta['rf_23d_onset_risk_lift_ratio']:.2f}x) "
+            f"McNemar p = {st['mcnemar_transition_p_value']:.6f}, Lift {ta['rf_23d_onset_risk_lift_ratio']:.2f}x) "
             f"và phủ 100% {cs['total_network_segments']:,} đoạn cơ giới.",
         ],
         badge="Key Finding",
@@ -1364,33 +1369,37 @@ def _add_slide_13_experiments_persistence_defense(
 def _add_slide_14_demonstration(
     prs: Presentation, ui_tab2: Path, ui_tab4: Path, t: dict | None = None
 ) -> DualSlide:
-    """Slide 14 (Section 10): Demonstration (Dual-UI TOC Web :8000 & Streamlit :8501 Case Studies)."""
-    tr = (t or _load_slide_truth())["m"]
+    """Slide 14 (Section 10): Demonstration (ReactJS + FastAPI TOC Command Center :8000 Case Studies)."""
+    tr_d = t or _load_slide_truth()
+    tr = tr_d["m"]
+    mv = tr_d["mv"]
     ds = tr["dataset"]
     gp = tr["graph_and_patterns"]
+    lat = mv["uc2_arterial_query"]["latency_benchmark_ms"]
     s14 = DualSlide(prs)
     s14.add_chrome(
         14,
         TOTAL_SLIDES,
         5,
-        "SECTION 10 · DEMONSTRATION — DUAL-UI TOC WEB (:8000) & STREAMLIT (:8501) · CASE STUDIES",
-        "10. Demonstration: Cận Cảnh Dự Báo E → F (Tab 2) & Tra Cứu Cold-Start (Tab 4)",
-        f"Trình diễn Dual-UI: FastAPI TOC Web (:8000) & Streamlit (:8501 ↔ MongoDB 8.0 · "
-        f"{ds['labeled_windows_count']:,} docs)",
+        "SECTION 10 · DEMONSTRATION — REACTJS + FASTAPI TOC COMMAND CENTER (:8000) · CASE STUDIES",
+        "10. Demonstration: Cận Cảnh Dự Báo +30p, IXSCAN (Tab 01) & Cold-Start (Tab 04)",
+        f"Trung tâm Điều hành 5-Tab ReactJS + FastAPI TOC (:8000 ↔ MongoDB 8.0 · "
+        f"{ds['labeled_windows_count']:,} docs · IXSCAN {lat['ixscan_vs_collscan_speedup_x']:.2f}x)",
     )
     s14.add_card(
         0.55,
         2.00,
         7.35,
         1.58,
-        "Case Study 1 (Tab 2): Bắt Đúng E → F",
+        "Case Study 1 (Tab 01): #21064 & IXSCAN",
         [
-            "Đoạn 21064 — Công Trường Quốc Tế (2021-04-22 11:30 ICT, đang LOS E · 12.0 km/h): Baseline giữ mức E "
-            "(sai), còn Random Forest 23D dự báo đúng chuyển sang LOS F (severe_prob = 72.4%, thực tế 12:00 là F).",
+            "Công Trường Quốc Tế #21064 (2021-04-22, [11:30–12:00), chốt 12:00 ICT, LOS E · 12.0 km/h): RF 23D báo "
+            "P(E/F)=68.7% (>25%) & đổi pha 48.9% (>40%) trước thực tế LOS F; bảng Mongo IXSCAN "
+            f"({lat['ixscan_vs_collscan_speedup_x']:.2f}x, p95 {lat['warm_p95_ms']:.3f} ms).",
         ],
-        badge="Tab 2 · Forecast",
+        badge="Tab 01 · Forecast",
         theme="sky",
-        body_size=8.2,
+        body_size=8.0,
     )
     s14.add_image(0.55, 3.68, 7.35, 3.14, ui_tab2)
 
@@ -1399,13 +1408,14 @@ def _add_slide_14_demonstration(
         2.00,
         7.35,
         1.58,
-        "Case Study 2 (Tab 4): Vùng Cold-Start",
+        "Case Study 2 (Tab 04): Vùng Cold-Start",
         [
-            f"Chọn đoạn 61781 — Phú Định (0 GPS, PR = 2.2141, Cluster 5 trong {ds['cold_start_segments_count']:,} "
-            f"Cold-Start; #1 mạng lưới: #{gp['top_bottleneck_segment_id']} {gp['top_bottleneck_street']} = "
-            f"{gp['top_bottleneck_pagerank']:.4f}), đối chiếu ngay nhóm cảm biến đồng dạng (Nguyễn Kiệm, Song Hành).",
+            f"Chọn #37345 — Cầu vượt Ngã tư Gò Dưa (0 GPS, PR = 2.7196, Cụm #4 trong "
+            f"{ds['cold_start_segments_count']:,} Cold-Start; #1 mạng lưới: #{gp['top_bottleneck_segment_id']} "
+            f"{gp['top_bottleneck_street']} = {gp['top_bottleneck_pagerank']:.4f}), đối chiếu nhóm đồng dạng "
+            "(Song Hành XLHN, Nguyễn Kiệm).",
         ],
-        badge="Tab 4 · Cold-Start",
+        badge="Tab 04 · Cold-Start",
         theme="white",
         body_size=8.0,
     )
@@ -1416,14 +1426,15 @@ def _add_slide_14_demonstration(
         6.94,
         14.90,
         1.44,
-        "Kiến Trúc Dual-UI: TOC Web (:8000) & Streamlit 5 Tab (:8501)",
+        "Trung Tâm Điều Hành 5-Tab ReactJS + FastAPI TOC (:8000)",
         [
-            f"TOC Web (FastAPI :8000 + ReactJS + Leaflet): Bản đồ {ds['segments_count']:,} đoạn cơ giới theo LOS/PR, "
-            "cảnh báo trực tuyến < 1 ms & mô phỏng sự cố. (Ảnh minh họa giao diện :8501 truy vấn trực tiếp MongoDB).",
-            "Streamlit 5 Tab (:8501): Tab 1 EWMA Hotspots (UC-1) · Tab 2 Forecast +30m (UC-2) · Tab 3 PageRank & "
-            "Luật SON (UC-3/4) · Tab 4 7D K-Means Cold-Start (UC-5) · Tab 5 Tier-2 Recon & SHA-256 Registry (UC-6).",
+            f"ReactJS + Leaflet + FastAPI (:8000): Bản đồ tương tác {ds['segments_count']:,} đoạn cơ giới, phát "
+            "Story qua Kafka 4.1 KRaft, truy vấn MongoDB 8.0 (< 1 ms) và trực quan hóa dữ liệu thời gian thực.",
+            "5 Tab hợp nhất: Tab 01 Điều hành & Dự báo +30p (UC-1, UC-2) · Tab 02 Live Kafka & 33 KiB Sketches · "
+            "Tab 03 PageRank & Luật SON (UC-3/4) · Tab 04 6 Cụm K-Means Cold-Start (UC-5) · Tab 05 Spark 3.5.7 / "
+            "Ablation / Đối soát (UC-6).",
         ],
-        badge="Dual-UI Live",
+        badge="ReactJS + FastAPI :8000",
         theme="sky_strong",
         body_size=8.0,
     )
@@ -1462,7 +1473,10 @@ def _add_slide_15_limitations_and_risks_summary(prs: Presentation, t: dict | Non
     comp_rows = [
         [
             "3. System Architecture",
-            "6 dịch vụ chạy chung 1 máy Docker (12.0/16 GB RAM);\nđộ trễ đồng bộ biến trễ giữa Phase B và Phase C",
+            (
+                "5 dịch vụ mặc định chạy chung 1 máy Docker (11.0/16 GB RAM);\n"
+                "độ trễ đồng bộ biến trễ giữa Phase B và Phase C"
+            ),
             "Giới hạn mem_limit từng container;\nkhóa phân quyền đọc/ghi 3-Phase MLOps",
         ],
         [
@@ -1476,7 +1490,7 @@ def _add_slide_15_limitations_and_risks_summary(prs: Presentation, t: dict | Non
             f"Đổi pha mặc định {def_chg}/{ta['transition_samples']}; lớp B–E thưa kéo\n"
             f"Macro-F1={ev['macro_f1_6class']:.4f} & thiếu biến mưa/tai nạn",
             f"VAL τ={ta['val_selected_change_threshold']:.2f} ({cal_chg}/61, "
-            f"McNemar p={ta['statistical_significance_test']['mcnemar_transition_p_value']:.4f});\n"
+            f"McNemar p={ta['statistical_significance_test']['mcnemar_transition_p_value']:.6f});\n"
             f"lọc {ds['synthetic_burst_windows_flagged']:,} burst & Lift {ta['rf_23d_onset_risk_lift_ratio']:.2f}x",
         ],
         [
@@ -1487,9 +1501,9 @@ def _add_slide_15_limitations_and_risks_summary(prs: Presentation, t: dict | Non
         ],
         [
             "8. Stream Processing",
-            "Bloom 32.0 KiB đầy bit nếu chạy dài ngày;\ntin trễ >30m phải chờ đối soát cuối ngày",
-            f"Tier-2 Recon bù {rc['affected_late_segment_windows_recomputed']} trễ & "
-            f"{rc['healed_downstream_lag_windows']} lag;\nMongoDB $status_version chặn 25/25 v1",
+            "RotatingBloom 32.0 KiB (2×16 KiB) giải phóng sau 2 thế hệ;\ntin trễ >30m phải chờ đối soát cuối ngày",
+            f"MongoDB event_id unique + Tier-2 bù {rc['affected_late_segment_windows_recomputed']} trễ & "
+            f"{rc['healed_downstream_lag_windows']} lag;\n$status_version chặn 25/25 v1",
         ],
     ]
     s15.add_table(0.55, 2.00, 8.55, 6.38, comp_headers, comp_rows, [0.22, 0.43, 0.35], font_size=7.9)
@@ -1510,8 +1524,8 @@ def _add_slide_15_limitations_and_risks_summary(prs: Presentation, t: dict | Non
             f"3. Rare Sudden-Onset Scarcity: Ca thoáng sang kẹt cứng chiếm 0.81% ({ta['congestion_onset_samples']}/"
             f"{ta['non_severe_t_samples']}, Hard Recall = 0/8; Onset ROC = {ta['rf_23d_onset_roc_auc']:.4f}, Lift "
             f"{ta['rf_23d_onset_risk_lift_ratio']:.2f}x).",
-            "4. Single-Host Proof-of-Scale & Human-in-the-Loop: Cụm 6 container (12.0/16 GB RAM) & Dual-UI "
-            "(:8000 / :8501) chỉ hỗ trợ khuyến nghị, chưa đóng vòng điều khiển đèn SCATS.",
+            "4. Single-Host Proof-of-Scale & Human-in-the-Loop: Cụm 5 container mặc định (11.0/16 GB RAM) & "
+            "ReactJS + FastAPI TOC (:8000) chỉ hỗ trợ khuyến nghị, chưa đóng vòng điều khiển đèn SCATS.",
         ],
         badge="System-Wide Risks",
         theme="navy",
@@ -1559,19 +1573,21 @@ def _add_slide_16_plan_and_roadmap(prs: Presentation, t: dict | None = None) -> 
         [
             "2. Nguyễn Thành Đạt\n(MSSV: 25MS23306)",
             "Mục 2, 6, 7B & 9:\nLiterature, Modeling,\nGraph & Experiments",
-            f"Hoàn thành 100%: Line-Graph PageRank ({ds['segments_count']:,}.0, 92,453 cạnh), FPGrowth (335) & SON, "
-            f"7D K-Means (Sil={tr['model']['silhouette_score']:.4f}) phủ {ds['cold_start_segments_count']:,} "
-            f"Cold-Start, lọc {ds['synthetic_burst_windows_flagged']:,} burst → {ev['train_samples']:,} organic "
-            f"TRAIN & RF 23D (ROC={ev['roc_auc']:.4f}, PR={ev['average_precision']:.4f}, "
+            f"Hoàn thành 100%: Line-Graph PageRank ({ds['segments_count']:,}.0, 92,453 cạnh), FPGrowth "
+            f"({sp['spark_fpgrowth_rules_count']}) & SON, 7D K-Means (Sil={tr['model']['silhouette_score']:.4f}) "
+            f"phủ {ds['cold_start_segments_count']:,} Cold-Start, lọc {ds['synthetic_burst_windows_flagged']:,} burst "
+            f"→ {ev['train_samples']:,} organic TRAIN & RF 23D (ROC={ev['roc_auc']:.4f}, "
+            f"PR={ev['average_precision']:.4f}, "
             f"Detect={ev['transition_analysis']['rf_23d_transition_detect_roc_auc']:.4f}).",
         ],
         [
             "3. Phạm Công Minh\n(MSSV: 25MS23310)",
             "Mục 3, 8, 10, 11 & 12:\nArch, Stream, Demo,\nLimitations & Plan",
-            f"Hoàn thành 100%: Docker 6 dịch vụ (12.0/16 GB RAM), Kafka 4.1 KRaft, Sketches 33.0 KiB, WAL + Spark "
-            f"watermark thật, Recon ({rc['affected_late_segment_windows_recomputed']} trễ, "
-            f"{rc['healed_downstream_lag_windows']} lag, {rc['healed_downstream_rescored_windows']} rescore), "
-            f"MongoDB IXSCAN ({lat['warm_median_ms']:.3f}/{lat['warm_p95_ms']:.3f} ms) & Dual-UI (:8000 & :8501).",
+            f"Hoàn thành 100%: Docker 5 dịch vụ mặc định (11.0/16 GB RAM), Kafka 4.1 KRaft, RotatingBloom 32.0 KiB "
+            f"(0.0389% FPR) + HLL++ 1.0 KiB, WAL + Spark watermark thật, Recon "
+            f"({rc['affected_late_segment_windows_recomputed']} trễ, {rc['healed_downstream_lag_windows']} lag, "
+            f"{rc['healed_downstream_rescored_windows']} rescore), MongoDB IXSCAN "
+            f"({lat['warm_median_ms']:.3f}/{lat['warm_p95_ms']:.3f} ms) & ReactJS + FastAPI TOC (:8000).",
         ],
     ]
     s16.add_table(0.55, 2.00, 14.90, 3.82, t_headers, t_rows, [0.19, 0.22, 0.59], font_size=7.9)
@@ -1583,8 +1599,8 @@ def _add_slide_16_plan_and_roadmap(prs: Presentation, t: dict | None = None) -> 
         2.40,
         "Kế Hoạch Ngắn & Trung Hạn (Phase 1 & 2)",
         [
-            "Phase 1 (Ngắn hạn — Mô hình & Sketch): Áp dụng Cost-Sensitive Focal Loss bắt ca đột ngột hóa kẹt "
-            "(A–D → E–F) và Ring-Buffer Sliding Bloom Filter tự xoay vòng mỗi 30 phút.",
+            "Phase 1 (Ngắn hạn — Mô hình & Cảnh báo): Áp dụng Cost-Sensitive Focal Loss bắt ca đột ngột hóa kẹt "
+            "(A–D → E–F) và ngưỡng động theo cấp đường (đã hoàn tất RotatingBloomFilter 2×16 KiB).",
             "Phase 2 (Trung hạn — Đa nguồn & Chống Drift): Đấu nối GPS xe buýt/taxi thực tế (1.5–3.0 TB/ngày) + API "
             "Mưa ngập/Sự cố; tự động chạy lại Phase A hàng tuần khi phát hiện Concept Drift (PSI).",
         ],
@@ -1613,18 +1629,24 @@ def _add_slide_16_plan_and_roadmap(prs: Presentation, t: dict | None = None) -> 
 
 def _add_slide_17_session9_readiness_summary(prs: Presentation, t: dict | None = None) -> DualSlide:
     """Slide 17 (Session 9 Readiness): Technical Readiness Audit Summary & Live Wave-2 Parity."""
-    tr = (t or _load_slide_truth())["m"]
-    sp = (t or _load_slide_truth())["sp"]
-    mv = (t or _load_slide_truth())["mv"]
+    tr_d = t or _load_slide_truth()
+    tr = tr_d["m"]
+    sp = tr_d["sp"]
+    mv = tr_d["mv"]
     ds = tr["dataset"]
     ev = tr["evaluation"]
+    vg = ev["validation_gate_selection"]
+    rf23_val = next(c for c in vg["candidates"] if "Random Forest (+Graph" in c["candidate_model"])
+    dt23_val = next(c for c in vg["candidates"] if "Decision Tree (+Graph" in c["candidate_model"])
     ta = ev["transition_analysis"]
     cj = sp["catalyst_join_spark"]
     ms = sp["monoid_salting_spark"]
     salt = tr["monoid_and_catalyst_c9"]["pillar_i1_monoid_and_salting"]
     sm = tr["streaming_mmds"]
+    bl = sm["bloom_filter"]
     gp = tr["graph_and_patterns"]
     lat = mv["uc2_arterial_query"]["latency_benchmark_ms"]
+    gen_ts = str(tr["generated_at_utc"])[:16] + "Z"
 
     s17 = DualSlide(prs)
     s17.add_chrome(
@@ -1640,10 +1662,11 @@ def _add_slide_17_session9_readiness_summary(prs: Presentation, t: dict | None =
         2.00,
         14.90,
         1.78,
-        "1. Architecture Truth: Ranh Giới [I] Đã Triển Khai vs [P] Đề Xuất & Dual-UI Stack",
+        "1. Architecture Truth: Ranh Giới [I] vs [P] & ReactJS + FastAPI TOC (:8000)",
         [
-            "[I] Implemented: Cụm 6 dịch vụ Docker (12.0/16 GB RAM: Kafka 4.1 KRaft 3 phân vùng → Spark 3.5.7 → "
-            "Parquet + MongoDB 8.0 → FastAPI :8000 + ReactJS/Leaflet TOC Web & Streamlit :8501) kèm data/demo_sample/.",
+            "[I] Implemented: Cụm 5 dịch vụ Docker mặc định (11.0/16 GB RAM: Kafka 4.1 KRaft 3 phân vùng → Spark "
+            "3.5.7 → Parquet + MongoDB 8.0 → live-consumer & ReactJS + FastAPI TOC 5-Tab :8000) kèm batch/stream "
+            "profiles & data/demo_sample/.",
             "[P] Proposed & Card B Fixes: Luồng viễn thông 8–17 tỷ tin/ngày, K8s đa nút & đèn SCATS gắn nhãn [P]. "
             "Chuẩn hóa thuật ngữ Predictive ML (Past-Only Priors τ < t) & 7D Behavioral Archetypes.",
         ],
@@ -1663,8 +1686,8 @@ def _add_slide_17_session9_readiness_summary(prs: Presentation, t: dict | None =
             f"{cj['baseline_median_ms']:.2f} → {cj['optimized_median_ms']:.2f} ms (+{cj['join_speedup_pct']:.2f}%; "
             "exceptAll_diff = 0).",
             f"8-Bucket Salted Monoid kéo lệch slot {salt['temporal_slot_peak_to_median_ratio']:.2f}x → "
-            f"{salt['peak_slot_salted_bucket_skew_ratio']:.3f}x (giảm IQR {ms['unsalted_iqr_ms']:.2f} → "
-            f"{ms['salted_iqr_ms']:.2f} ms; tradeoff {ms['unsalted_median_ms']:.2f} → {ms['salted_median_ms']:.2f} ms) "
+            f"{salt['peak_slot_salted_bucket_skew_ratio']:.3f}x (tradeoff {ms['unsalted_median_ms']:.2f} → "
+            f"{ms['salted_median_ms']:.2f} ms, IQR {ms['unsalted_iqr_ms']:.2f} → {ms['salted_iqr_ms']:.2f} ms) "
             "& cắt 9/10 phân vùng Parquet.",
         ],
         badge=f"+{cj['join_speedup_pct']:.2f}% Join Speedup",
@@ -1679,13 +1702,15 @@ def _add_slide_17_session9_readiness_summary(prs: Presentation, t: dict | None =
         "3. Data & Predictive ML Validation (Burst Filter & VAL Gate)",
         [
             f"B1 Point-in-Time: Tách {ds['synthetic_burst_windows_flagged']:,} burst windows → {ev['train_samples']:,} "
-            f"organic TRAIN (cls_w=0.65); RF 23D thắng Live VAL Gate (0.8990 vs 0.5343); Future-Shuffle = 0.0.",
+            f"organic TRAIN; RF 23D thắng VAL Gate ({rf23_val['val_composite_score']:.4f} vs DT 23D "
+            f"{dt23_val['val_composite_score']:.4f}); Spark MLlib RF (1,885 train) "
+            f"acc={sp['spark_rf_test_accuracy_6class']:.4f}.",
             f"B2 Falsification: #{gp['top_bottleneck_segment_id']} {gp['top_bottleneck_street']} có PageRank #1 "
             f"({gp['top_bottleneck_pagerank']:.4f}) nhưng không mặc định kẹt → PageRank đo nút phễu hình học.",
         ],
-        badge="VAL Gate 0.8990",
+        badge=f"VAL Gate {rf23_val['val_composite_score']:.4f}",
         theme="soft",
-        body_size=8.1,
+        body_size=8.0,
     )
     s17.add_card(
         0.55,
@@ -1694,10 +1719,10 @@ def _add_slide_17_session9_readiness_summary(prs: Presentation, t: dict | None =
         2.16,
         "4. Live Streaming, Spark Watermark & MongoDB 8.0",
         [
-            f"Spark Streaming WAL + watermark thật ({sp['spark_sink2_watermark']}, 10 dòng bị loại hết hạn); "
-            f"Bloom 32.0 KiB lọc {sm['duplicates_removed_exact']}/{sm['injected_duplicate_events']} trùng; "
-            f"HLL++ 1.0 KiB ≈ {sm['hyperloglog']['hll_estimated_segments']:.1f}/"
-            f"{sm['hyperloglog']['exact_distinct_segments']:,}.",
+            f"Spark Streaming WAL + watermark thật ({sp['spark_sink2_watermark']}, 10 dòng hết hạn); RotatingBloom "
+            f"32.0 KiB lọc {sm['duplicates_removed_exact']}/{sm['injected_duplicate_events']} trùng "
+            f"({bl['empirical_fp_rate']*100:.4f}% FPR); HLL++ 1.0 KiB ≈ "
+            f"{sm['hyperloglog']['hll_estimated_segments']:.1f}/{sm['hyperloglog']['exact_distinct_segments']:,}.",
             f"MongoDB 8.0.34 ({mv['total_rows_upserted']:,} docs, 69 batch): atomic $status_version chặn "
             f"{mv['stale_v1_rejected_by_mongo']}/25 v1; IXSCAN warm {lat['warm_median_ms']:.3f} / "
             f"p95 {lat['warm_p95_ms']:.3f} ms ({lat['ixscan_vs_collscan_speedup_x']:.2f}x).",
@@ -1717,8 +1742,8 @@ def _add_slide_17_session9_readiness_summary(prs: Presentation, t: dict | None =
             f"({tr['static_feature_store_c13b']['cold_start_ratio_pct']:.2f}%) Cold-Start; TEST "
             f"Macro-F1 = {ev['macro_f1_6class']:.4f} (B–E chỉ 10–20 mẫu); khởi phát kẹt 8/993 "
             f"(Onset ROC = {ta['rf_23d_onset_roc_auc']:.4f}, Lift {ta['rf_23d_onset_risk_lift_ratio']:.2f}x).",
-            "Truy xuất Nguồn sự thật: 100% số liệu đồng bộ từ outputs/metrics.json, spark_runtime_evidence.json "
-            "& mongo_verify.json (Wave 2 · 2026-11-18T20:07Z).",
+            f"Truy xuất Nguồn sự thật: 100% số liệu đồng bộ từ outputs/metrics.json, spark_runtime_evidence.json "
+            f"& mongo_verify.json ({gen_ts}).",
         ],
         badge="100% Metric Parity",
         theme="navy",

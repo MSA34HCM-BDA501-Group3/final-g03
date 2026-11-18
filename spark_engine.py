@@ -418,16 +418,24 @@ def _run_spark_catalyst_and_monoid(spark: Any, raw_dir: Path, lakehouse_dir: Pat
 
 
 def _filter_spark_train_split(df: Any) -> Any:
-    """Filter Spark DataFrame strictly to the timestamp-purged TRAIN split (D02/D07/D08)."""
+    """Filter Spark DataFrame strictly to organic non-burst timestamp-purged TRAIN rows (D02/D07/D08)."""
     from pyspark.sql import functions as F
 
     cols = set(df.columns)
     if "split_set" in cols:
-        return df.filter(F.col("split_set") == "TRAIN")
-    if "slot_ts" in cols and "target_ts" in cols:
+        train_df = df.filter(F.col("split_set") == "TRAIN")
+    elif "slot_ts" in cols and "target_ts" in cols:
         cutoff = F.to_timestamp(F.lit("2020-12-12T08:00:00Z"))
-        return df.filter((F.to_timestamp(F.col("slot_ts")) <= cutoff) & (F.to_timestamp(F.col("target_ts")) <= cutoff))
-    return df.filter(F.col("date") <= "2020-12-12")
+        train_df = df.filter(
+            (F.to_timestamp(F.col("slot_ts")) <= cutoff) & (F.to_timestamp(F.col("target_ts")) <= cutoff)
+        )
+    else:
+        train_df = df.filter(F.col("date") <= "2020-12-12")
+    if "is_synthetic_burst" in cols:
+        non_burst = train_df.filter(F.coalesce(F.col("is_synthetic_burst").cast("int"), F.lit(0)) == 0)
+        if non_burst.limit(1).count() > 0:
+            return non_burst
+    return train_df
 
 
 def run_spark_structured_streaming_dual_sink(
@@ -539,12 +547,18 @@ def _verify_kmeans_fit(
     cost = float(km_stage.summary.trainingCost)
     converged = len(km_stage.clusterCenters()) == 6 and clusters_found == 6 and math.isfinite(cost) and cost > 0.0
 
+    no_bursts = (
+        train_cluster_df.filter(F.coalesce(F.col("is_synthetic_burst").cast("int"), F.lit(0)) != 0).limit(1).count()
+        == 0
+        if "is_synthetic_burst" in train_cluster_df.columns
+        else True
+    )
     if "split_set" in df.columns:
         has_non_train = df.filter(F.col("split_set") != "TRAIN").limit(1).count() > 0
         train_pure = train_cluster_df.filter(F.col("split_set") != "TRAIN").limit(1).count() == 0
-        train_only_verified = bool(has_non_train and train_pure and converged)
+        train_only_verified = bool(has_non_train and train_pure and no_bursts and converged)
     else:
-        train_only_verified = bool(train_cluster_df.count() < df.count() and converged)
+        train_only_verified = bool(train_cluster_df.count() < df.count() and no_bursts and converged)
 
     stds = list(scaler_stage.std)
     scaler_verified = (
@@ -595,6 +609,34 @@ def _evaluate_spark_rf_test(fitted_pipe: Any, test_spark: Any) -> dict[str, Any]
     }
 
 
+_ADMIN_STREET_REGEX = r"(?iu)^(phường|quận|xã|huyện|thị trấn|khu phố|ấp|tp\.?|thành phố)(?:$|[^\p{L}\p{N}_])"
+
+
+def _run_spark_fpgrowth(train_organic_df: Any) -> int:
+    """Mine severe co-congestion rules strictly on organic TRAIN rows with valid non-admin streets."""
+    from pyspark.ml.fpm import FPGrowth
+    from pyspark.sql import functions as F
+
+    street_clean = F.trim(F.col("street_name"))
+    valid_street = (
+        F.col("street_name").isNotNull()
+        & (street_clean != "")
+        & ~F.lower(street_clean).isin("nan", "none", "unknown")
+        & ~street_clean.rlike(_ADMIN_STREET_REGEX)
+    )
+    sev_baskets = (
+        train_organic_df.filter((F.col("is_severe") == 1) & valid_street)
+        .groupBy("date", "period")
+        .agg(F.collect_set(street_clean).alias("items"))
+        .filter(F.size("items") >= 2)
+    )
+    if sev_baskets.limit(1).count() == 0:
+        return 0
+    fp_model = FPGrowth(itemsCol="items", minSupport=0.05, minConfidence=0.5).fit(sev_baskets)
+    pairwise_rules = fp_model.associationRules.filter((F.size("antecedent") == 1) & (F.size("consequent") == 1))
+    return int(pairwise_rules.count())
+
+
 def _run_spark_mllib_and_streaming(
     spark: Any,
     dataset_path: Path,
@@ -611,21 +653,14 @@ def _run_spark_mllib_and_streaming(
         StringIndexer,
         VectorAssembler,
     )
-    from pyspark.ml.fpm import FPGrowth
     from pyspark.sql import functions as F
 
     df = spark.read.option("header", "true").option("inferSchema", "true").csv(dataset_path.as_posix())
     if "current_los_ordinal" not in df.columns:
         df = df.withColumn("current_los_ordinal", F.col("los_ordinal").cast("double"))
 
-    sev_baskets = (
-        df.filter((F.col("is_severe") == 1) & F.col("street_name").isNotNull())
-        .groupBy("date", "period")
-        .agg(F.collect_set("street_name").alias("items"))
-        .filter(F.size("items") >= 2)
-    )
-    fp_model = FPGrowth(itemsCol="items", minSupport=0.02, minConfidence=0.5).fit(sev_baskets)
-    fp_rules_count = int(fp_model.associationRules.count())
+    train_cluster_df = _filter_spark_train_split(df)
+    fp_rules_count = _run_spark_fpgrowth(train_cluster_df)
 
     cluster_cols = [
         "segment_train_prior_los",
@@ -636,7 +671,6 @@ def _run_spark_mllib_and_streaming(
         "max_velocity",
         "pagerank_score",
     ]
-    train_cluster_df = _filter_spark_train_split(df)
     seg_df = (
         train_cluster_df.groupBy("segment_id")
         .agg(*[F.avg(F.col(c).cast("double")).alias(c) for c in cluster_cols])

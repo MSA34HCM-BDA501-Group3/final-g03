@@ -38,8 +38,11 @@ def _load_flow_stats() -> dict[str, str]:
         "late_win": f"{rec['affected_late_segment_windows_recomputed']:,}",
         "heal_lag": f"{rec['healed_downstream_lag_windows']:,}",
         "rescore": f"{rec['healed_downstream_rescored_windows']:,}",
+        "fp_rules": str(m["spark_runtime_verification"]["spark_fpgrowth_rules_count"]),
+        "co_rules": str(m["graph_and_patterns"]["co_congestion_rules_found"]),
         "ix_med": f"{lat['warm_median_ms']:.3f}",
         "ix_p95": f"{lat['warm_p95_ms']:.3f}",
+        "ix_speedup": f"{lat['ixscan_vs_collscan_speedup_x']:.2f}",
     }
 
 ZONE_A_COLOR = "#334155"  # Slate — External Sources
@@ -303,7 +306,7 @@ def _draw_batch_boxes(ax: plt.Axes) -> None:
         "",
         "SON / FPGrowth & 7D K-Means",
         [
-            "• Khai phá 335 luật FPGrowth / 12 đồng kẹt",
+            f"• Khai phá {st['fp_rules']} luật FPGrowth / {st['co_rules']} đồng kẹt",
             "• Phân cụm 7D K-Means (k = 6) Organic TRAIN",
             "• Suy diễn hành vi cho 74,211 đoạn Cold-Start",
         ],
@@ -541,7 +544,7 @@ def _draw_stream_boxes(ax: plt.Axes) -> None:
         body_fs=8.0,
     )
 
-    # Column 3: MongoDB Serving Store & Dual Web Dashboards (Zone F)
+    # Column 3: MongoDB Serving Store & Live ReactJS + FastAPI TOC UI (Zone F)
     _comp_card(
         ax,
         14.04,
@@ -554,7 +557,7 @@ def _draw_stream_boxes(ax: plt.Axes) -> None:
             "• Nhận cả cảnh báo v1 & bản chuẩn v2",
             "• Guard $status_version (chặn 25 tin v1)",
             f"• IXSCAN med {st['ix_med']} / p95 {st['ix_p95']} ms",
-            "• Tăng tốc 23.55x so với COLLSCAN",
+            f"• Tăng tốc {st['ix_speedup']}x so với COLLSCAN",
         ],
         ZONE_F_COLOR,
         "#F0FDF4",
@@ -566,11 +569,11 @@ def _draw_stream_boxes(ax: plt.Axes) -> None:
         0.38,
         3.76,
         1.52,
-        "ZONE F · DUAL LIVE UI",
-        "TOC Web & Streamlit",
+        "ZONE F · LIVE TOC UI",
+        "ReactJS + FastAPI TOC",
         [
-            "• FastAPI :8000 + ReactJS + Leaflet TOC",
-            "• Streamlit :8501 (5-Tab kiểm toán)",
+            "• Web Command Center (:8000) + Leaflet",
+            "• 5-Tab: Forecast, Kafka, Graph, KMeans, Audit",
         ],
         ZONE_F_COLOR,
         "#F0FDF4",
@@ -606,7 +609,7 @@ def _draw_stream_connectors(ax: plt.Axes) -> None:
     )
     _ortho_arrow(ax, [(9.84, 0.92), (10.26, 0.92)], color=PIPE_MLOPS_COLOR, lw=1.9, ls="--")
 
-    # 5. Upsert v1 (Speed) & Upsert v2 (Recon) -> MongoDB Serving Store -> Streamlit Dashboard
+    # 5. Upsert v1 (Speed) & Upsert v2 (Recon) -> MongoDB Serving Store -> TOC Command Center
     _ortho_arrow(ax, [(13.22, 3.48), (14.04, 3.48)], color=PIPE_STORAGE_COLOR, lw=2.1)
     _ortho_arrow(
         ax,

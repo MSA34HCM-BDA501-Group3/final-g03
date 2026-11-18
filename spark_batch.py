@@ -25,6 +25,7 @@ try:
         differences,
         enrich_windows,
         fit_velocity_lookup,
+        flag_synthetic_burst_events,
         physical_nodes,
         prune_nodes,
         read_strings,
@@ -131,7 +132,10 @@ def execute(args):
         rejected = rejected.unionByName(conflicts, allowMissingColumns=True)
         rejected.write.mode("error").parquet(str(root / "quarantine" / "events"))
         bad_segments.write.mode("error").parquet(str(root / "quarantine" / "segments"))
-        lookup = fit_velocity_lookup(events, segments, args.train_end).cache()
+        train_events = flag_synthetic_burst_events(
+            events.filter(F.col("event_ts") < F.to_timestamp(F.lit(args.train_end)))
+        )
+        lookup = fit_velocity_lookup(train_events, segments, args.train_end).cache()
         lookup.write.mode("error").parquet(str(root / "preprocessing" / "velocity_lookup"))
         nodes.write.mode("error").parquet(str(root / "active_nodes"))
         segments.write.mode("error").parquet(str(root / "segments"))
