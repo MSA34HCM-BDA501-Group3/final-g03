@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import matplotlib
@@ -9,6 +10,37 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch, Rectangle
+
+REPO_DIR = Path(__file__).resolve().parent.parent
+OUTPUTS_DIR = REPO_DIR / "outputs"
+
+
+def _load_flow_stats() -> dict[str, str]:
+    m = json.loads((OUTPUTS_DIR / "metrics.json").read_text(encoding="utf-8"))
+    mv = json.loads((OUTPUTS_DIR / "mongo_verify.json").read_text(encoding="utf-8"))
+    ds = m["dataset"]
+    mc = m["monoid_and_catalyst_c9"]
+    p1 = mc["pillar_i1_monoid_and_salting"]
+    sp = m["spark_runtime_verification"]["catalyst_join_spark"]
+    rec = m["streaming_mmds"]["reconciliation"]
+    lat = mv["uc2_arterial_query"]["latency_benchmark_ms"]
+    pruned_pct = ds["pruned_orphan_nodes_count"] / ds["nodes_count"] * 100.0
+    return {
+        "segs": f"{ds['segments_count']:,}",
+        "edges": f"{ds['line_graph_transition_edges']:,}",
+        "dangling": f"{ds['dangling_nodes_count']:,}",
+        "pruned_pct": f"{pruned_pct:.2f}%",
+        "ex_base": str(sp["baseline_exchange_stages_measured"]),
+        "ex_opt": str(sp["optimized_exchange_stages_measured"]),
+        "join_pct": f"{sp['join_speedup_pct']:.2f}%",
+        "skew_raw": f"{p1['temporal_slot_peak_to_median_ratio']:.2f}x",
+        "skew_salt": f"{p1['peak_slot_salted_bucket_skew_ratio']:.3f}x",
+        "late_win": f"{rec['affected_late_segment_windows_recomputed']:,}",
+        "heal_lag": f"{rec['healed_downstream_lag_windows']:,}",
+        "rescore": f"{rec['healed_downstream_rescored_windows']:,}",
+        "ix_med": f"{lat['warm_median_ms']:.3f}",
+        "ix_p95": f"{lat['warm_p95_ms']:.3f}",
+    }
 
 ZONE_A_COLOR = "#334155"  # Slate — External Sources
 ZONE_B_COLOR = "#D97706"  # Amber — Ingestion & Quality Gate
@@ -143,6 +175,7 @@ def _draw_legend(ax: plt.Axes, items: list[tuple[float, str, str, str]]) -> None
 
 
 def _draw_batch_boxes(ax: plt.Axes) -> None:
+    st = _load_flow_stats()
     ax.text(
         0.20,
         4.76,
@@ -172,8 +205,8 @@ def _draw_batch_boxes(ax: plt.Axes) -> None:
         "ZONE A · EXTERNAL SOURCES",
         "GPS Logs & OSM Topology",
         [
-            "• Bản tin vận tốc GPS hành trình",
-            "• Danh mục đường, đoạn & nút giao",
+            "• 90,938 bản tin GPS hành trình",
+            "• 84,633 đoạn & 577,967 tọa độ",
             "• Cửa sổ đối chứng kiểm chuẩn",
         ],
         ZONE_A_COLOR,
@@ -189,8 +222,8 @@ def _draw_batch_boxes(ax: plt.Axes) -> None:
         "Quality Funnel",
         [
             "• Ép kiểu an toàn ANSI try_cast",
-            "• Chuẩn hóa dấu NFC & giờ UTC+7",
-            "• Tách bản ghi hỏng → Quarantine",
+            "• Chuẩn hóa NFC (695→641) & UTC+7",
+            "• Tách 427 POI / 151 ping → Quarantine",
         ],
         ZONE_B_COLOR,
         "#FFFBEB",
@@ -201,7 +234,7 @@ def _draw_batch_boxes(ax: plt.Axes) -> None:
     ax.text(
         8.55,
         4.24,
-        "ZONE D · APACHE SPARK BATCH LAYER (XỬ LÝ LÔ PHÂN TÁN & KHAI PHÁ ĐỒ THỊ)",
+        "ZONE D · APACHE SPARK 3.5.7 BATCH LAYER (XỬ LÝ LÔ PHÂN TÁN & KHAI PHÁ ĐỒ THỊ)",
         fontsize=8.6,
         fontweight="bold",
         color=ZONE_D_COLOR,
@@ -221,7 +254,7 @@ def _draw_batch_boxes(ax: plt.Axes) -> None:
         [
             "• Ghép bảng danh mục đường trong bộ nhớ",
             "• Tra cứu Vmax 3 tầng khóa trên tập TRAIN",
-            "• Giảm trộn mạng lớn (10 → 2 Shuffle Stages)",
+            f"• Giảm Exchange ({st['ex_base']} → {st['ex_opt']}) · +{st['join_pct']} Join",
         ],
         ZONE_D_COLOR,
         "#FFFFFF",
@@ -238,7 +271,7 @@ def _draw_batch_boxes(ax: plt.Axes) -> None:
         [
             "• Salting: Gắn đuôi 0..7 chia 8 giỏ chống nghẽn",
             "• Un-salt: Cộng bộ 5 số (cnt, sum, min, max, sev)",
-            "• Giảm lệch tải 687.43x → 1.023x · Sai số = 0.0",
+            f"• Giảm lệch tải {st['skew_raw']} → {st['skew_salt']} · Sai số = 0.0",
         ],
         ZONE_D_COLOR,
         "#FFFFFF",
@@ -253,9 +286,9 @@ def _draw_batch_boxes(ax: plt.Axes) -> None:
         "",
         "Shape-Point Pruner & Line-Graph",
         [
-            "• Cắt tỉa 90.93% điểm uốn cong trên bản đồ",
-            "• Đảo mỗi đoạn đường một chiều thành 1 đỉnh",
-            "• Tính PageRank có hướng & bù nút đường cụt",
+            f"• Cắt tỉa {st['pruned_pct']} điểm uốn cong (52,181 nút)",
+            f"• {st['edges']} cạnh rẽ (loại U-turn) · {st['dangling']} cụt",
+            "• Tính PageRank có hướng (#1 Nguyễn Kiệm)",
         ],
         ZONE_D_COLOR,
         "#EFF6FF",
@@ -270,9 +303,9 @@ def _draw_batch_boxes(ax: plt.Axes) -> None:
         "",
         "SON / FPGrowth & 7D K-Means",
         [
-            "• Khai phá tập phổ biến & luật đường đồng kẹt",
-            "• Phân cụm 7D K-Means (k = 6) học trên TRAIN",
-            "• Suy diễn nhóm hành vi cho vùng mù Cold-Start",
+            "• Khai phá 335 luật FPGrowth / 12 đồng kẹt",
+            "• Phân cụm 7D K-Means (k = 6) Organic TRAIN",
+            "• Suy diễn hành vi cho 74,211 đoạn Cold-Start",
         ],
         ZONE_D_COLOR,
         "#EFF6FF",
@@ -289,9 +322,9 @@ def _draw_batch_boxes(ax: plt.Axes) -> None:
         "ZONE F · MEDALLION STORAGE",
         "Curated Gold Parquet",
         [
-            "• Lưu trữ phân vùng theo year_month",
-            "• Cắt tỉa phân vùng khi đọc lịch sử",
-            "• Cấp dữ liệu chuẩn cho ML & Đối soát",
+            "• Lưu 33,394 cửa sổ theo year_month",
+            "• Cắt tỉa phân vùng (7,268 dòng 2020-08)",
+            "• Cấp dữ liệu sạch & 7,192 cờ Burst",
         ],
         ZONE_F_COLOR,
         "#F0FDF4",
@@ -306,7 +339,7 @@ def _draw_batch_boxes(ax: plt.Axes) -> None:
         "Static Feature Store",
         [
             "• Lưu PageRank, bậc nút, cụm K-Means",
-            "• Phủ kín 100% mạng lưới (84,633 đoạn)",
+            f"• Phủ kín 100% mạng lưới ({st['segs']} đoạn)",
             "• Cấp biến tĩnh cho Modeling & Luồng",
         ],
         ZONE_E_COLOR,
@@ -472,6 +505,7 @@ def _draw_stream_boxes(ax: plt.Axes) -> None:
         header_h=0.54,
         body_fs=8.0,
     )
+    st = _load_flow_stats()
     _comp_card(
         ax,
         6.84,
@@ -482,7 +516,7 @@ def _draw_stream_boxes(ax: plt.Axes) -> None:
         "ML Model & Static Store",
         [
             "• Mô hình Random Forest đóng băng",
-            "• Kho biến tĩnh 84,633 đoạn (chỉ đọc)",
+            f"• Kho biến tĩnh {st['segs']} đoạn (chỉ đọc)",
         ],
         ZONE_E_COLOR,
         "#F0FDFA",
@@ -498,8 +532,8 @@ def _draw_stream_boxes(ax: plt.Axes) -> None:
         "ZONE D · LATE BACKFILL",
         "Two-Tier Reconciliation",
         [
-            "• Gom bù cửa sổ trễ > 30m cuối ngày",
-            "• Tính lại biến lag & re-score chuẩn v2",
+            f"• Gom bù {st['late_win']} cửa sổ trễ > 30m",
+            f"• Heal {st['heal_lag']} lag & re-score {st['rescore']} (v2)",
         ],
         ZONE_D_COLOR,
         "#EFF6FF",
@@ -507,7 +541,7 @@ def _draw_stream_boxes(ax: plt.Axes) -> None:
         body_fs=8.0,
     )
 
-    # Column 3: MongoDB Serving Store & Streamlit Dashboard (Zone F)
+    # Column 3: MongoDB Serving Store & Dual Web Dashboards (Zone F)
     _comp_card(
         ax,
         14.04,
@@ -515,12 +549,12 @@ def _draw_stream_boxes(ax: plt.Axes) -> None:
         3.76,
         1.94,
         "ZONE F · SERVING STORE",
-        "MongoDB Serving Store",
+        "MongoDB 8.0 Serving",
         [
             "• Nhận cả cảnh báo v1 & bản chuẩn v2",
-            "• Bulk Upsert kèm khóa version_ts",
-            "  (chặn tin cũ v1 ghi đè bản chuẩn v2)",
-            "• Compound Index IXSCAN (< 1 ms)",
+            "• Guard $status_version (chặn 25 tin v1)",
+            f"• IXSCAN med {st['ix_med']} / p95 {st['ix_p95']} ms",
+            "• Tăng tốc 23.55x so với COLLSCAN",
         ],
         ZONE_F_COLOR,
         "#F0FDF4",
@@ -532,11 +566,11 @@ def _draw_stream_boxes(ax: plt.Axes) -> None:
         0.38,
         3.76,
         1.52,
-        "ZONE F · LIVE OPERATIONS UI",
-        "Streamlit Dashboard",
+        "ZONE F · DUAL LIVE UI",
+        "TOC Web & Streamlit",
         [
-            "• Cổng điều hành 5 Tab làm mới mỗi 5s",
-            "• Bản đồ điểm nóng, dự báo & kiểm toán",
+            "• FastAPI :8000 + ReactJS + Leaflet TOC",
+            "• Streamlit :8501 (5-Tab kiểm toán)",
         ],
         ZONE_F_COLOR,
         "#F0FDF4",

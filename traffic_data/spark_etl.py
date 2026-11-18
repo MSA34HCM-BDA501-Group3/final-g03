@@ -10,7 +10,6 @@ import unicodedata
 
 from pyspark.sql import Column, DataFrame, SparkSession
 from pyspark.sql import functions as F
-from pyspark.sql.types import StringType
 
 if not hasattr(Column, "try_cast"):
 
@@ -60,9 +59,57 @@ def _first_rule(frame: DataFrame, rules: list[tuple]) -> DataFrame:
     return frame.withColumn("first_failing_rule", rule)
 
 
-@F.udf(returnType=StringType())
-def normalize_name(value: str | None) -> str:
-    return " ".join(unicodedata.normalize("NFC", value or "").replace("Ð", "Đ").replace("ð", "đ").split())
+def _build_nfc_pairs() -> tuple[tuple[str, str], ...]:
+    """Precompute static Vietnamese decomposed-to-NFC substitution table for pure Spark SQL."""
+    vowel_mod = [
+        ("a\u0302", "â"),
+        ("A\u0302", "Â"),
+        ("a\u0306", "ă"),
+        ("A\u0306", "Ă"),
+        ("e\u0302", "ê"),
+        ("E\u0302", "Ê"),
+        ("o\u0302", "ô"),
+        ("O\u0302", "Ô"),
+        ("o\u031b", "ơ"),
+        ("O\u031b", "Ơ"),
+        ("u\u031b", "ư"),
+        ("U\u031b", "Ư"),
+    ]
+    tones = ("\u0300", "\u0301", "\u0303", "\u0309", "\u0323")
+    bases = "aâăeêioôơuưyAÂĂEÊIOÔƠUƯY"
+    tone_pairs = []
+    for base in bases:
+        for tone in tones:
+            composed = unicodedata.normalize("NFC", base + tone)
+            if len(composed) == 1:
+                tone_pairs.append((base + tone, composed))
+    return tuple(vowel_mod + tone_pairs)
+
+
+_NFC_PAIRS = _build_nfc_pairs()
+
+
+def normalize_name(value: Column | str) -> Column:
+    """Normalize Vietnamese street names in pure Spark SQL (NFC, Eth, whitespace, prefix, admin suffix)."""
+    col = F.col(value) if isinstance(value, str) else value
+    text = F.translate(F.coalesce(col.cast("string"), F.lit("")), "Ðð", "Đđ")
+    composed = F.regexp_replace(text, "\u0323([\u0302\u0306])", "$1\u0323")
+    for pat, rep in _NFC_PAIRS:
+        composed = F.regexp_replace(composed, pat, rep)
+    text = F.when(text.rlike("[\u0300-\u036f]"), composed).otherwise(text)
+    text = F.trim(F.regexp_replace(text, r"\s+", " "))
+    text = F.regexp_replace(
+        text,
+        r"(?iu)^đường\s+(?!số(?:$|[^\p{L}\p{N}_])|(?-i:[A-Z0-9]{1,4})(?:$|[^\p{L}\p{N}_]))",
+        "",
+    )
+    text = F.regexp_replace(text, r"^Xa\s+[lL]ộ\s+", "Xa Lộ ")
+    text = F.regexp_replace(
+        text,
+        r"(?iu)(?:\s*[-–,]+\s*)(?:phường|quận|xã|huyện|thị trấn|khu phố|ấp|tp\.?|thành phố)(?:$|[^\p{L}\p{N}_]).*$",
+        "",
+    )
+    return F.trim(text)
 
 
 def clean_segments(raw: DataFrame) -> tuple[DataFrame, DataFrame]:
@@ -92,7 +139,8 @@ def clean_segments(raw: DataFrame) -> tuple[DataFrame, DataFrame]:
                 F.col("segment_id").isNull()
                 | F.col("s_node_id").isNull()
                 | F.col("e_node_id").isNull()
-                | F.col("street_id").isNull(),
+                | F.col("street_id").isNull()
+                | (F.col("s_node_id") == F.col("e_node_id")),
             ),
             (
                 "S2_NONPOSITIVE_LENGTH",
@@ -120,6 +168,7 @@ def clean_segments(raw: DataFrame) -> tuple[DataFrame, DataFrame]:
             & F.col("s_node_id").isNotNull()
             & F.col("e_node_id").isNotNull()
             & F.col("street_id").isNotNull()
+            & (F.col("s_node_id") != F.col("e_node_id"))
             & F.col("street_type").isin(ROAD_TYPES)
             & F.col("street_level").isin(1, 2, 3, 4)
         )
@@ -232,24 +281,30 @@ def fit_velocity_lookup(
     events: DataFrame,
     segments: DataFrame,
     train_end: str,
-    use_observed_gis_vmax: bool = False,
+    use_observed_gis_vmax: bool = True,
+    min_p85_obs: int = 5,
 ) -> DataFrame:
-    """Exclusive cutoff. Segment P85 and road-level medians use TRAIN GPS only.
+    """Exclusive cutoff. Segment P85 (>= min_p85_obs pings) and road medians use TRAIN data only.
 
-    Lookup must be fitted on a warmup prefix before supervised rows to avoid
-    intra-TRAIN leakage. By default (use_observed_gis_vmax=False), observed GIS
-    vmax is retained as segment metadata and imputation uses SEGMENT_P85 ->
-    LEVEL_TYPE_MEDIAN -> LEVEL_PRIOR {1: 80, 2: 60, 3: 50, 4: 40}.
+    Lookup fits strictly before train_end UTC to avoid leakage and resolves 3 tiers:
+    SEGMENT_OBSERVED_VMAX (when use_observed_gis_vmax=True and in (0, 200]) ->
+    SEGMENT_P85 (count >= min_p85_obs and > 0) -> LEVEL_TYPE_MEDIAN (distinct segments) ->
+    LEVEL_PRIOR {1: 80, 2: 60, 3: 50, 4: 40}.
     """
     train = events.filter(F.col("event_ts") < F.to_timestamp(F.lit(train_end)))
-    p85 = train.groupBy("segment_id").agg(F.percentile_approx("velocity", 0.85, 10000).alias("segment_p85"))
-    p85 = p85.filter("segment_p85 > 0")
-    profiles = segments.join(p85, "segment_id", "left")
-    medians = profiles.groupBy("street_level", "street_type").agg(
-        F.percentile_approx("segment_p85", 0.5, 10000).alias("road_median")
+    if "is_synthetic_burst" in train.columns:
+        train = train.filter(~F.coalesce(F.col("is_synthetic_burst").cast("boolean"), F.lit(False)))
+    p85 = (
+        train.groupBy("segment_id")
+        .agg(
+            F.count("velocity").alias("ping_count"),
+            F.percentile_approx("velocity", 0.85, 10000).alias("segment_p85"),
+        )
+        .filter((F.col("ping_count") >= min_p85_obs) & (F.col("segment_p85") > 0))
+        .drop("ping_count")
     )
-    lookup = profiles.join(medians, ["street_level", "street_type"], "left")
-    prior = F.create_map(*[F.lit(x) for pair in [(1, 80.0), (2, 60.0), (3, 50.0), (4, 40.0)] for x in pair])
+    distinct_segments = segments.dropDuplicates(["segment_id"])
+    profiles = distinct_segments.join(p85, "segment_id", "left")
     if use_observed_gis_vmax:
         obs_col = F.when(
             F.col("observed_max_velocity").isNotNull()
@@ -258,26 +313,24 @@ def fit_velocity_lookup(
             & (F.col("observed_max_velocity") <= 200),
             F.col("observed_max_velocity"),
         )
-        lookup = lookup.withColumn(
-            "max_velocity",
-            F.coalesce(obs_col, "segment_p85", "road_median", prior[F.col("street_level")]),
-        ).withColumn(
-            "vmax_impute_tier",
-            F.when(obs_col.isNotNull(), "SEGMENT_OBSERVED_VMAX")
-            .when(F.col("segment_p85").isNotNull(), "SEGMENT_P85")
-            .when(F.col("road_median").isNotNull(), "LEVEL_TYPE_MEDIAN")
-            .otherwise("LEVEL_PRIOR"),
-        )
     else:
-        lookup = lookup.withColumn(
-            "max_velocity",
-            F.coalesce("segment_p85", "road_median", prior[F.col("street_level")]),
-        ).withColumn(
-            "vmax_impute_tier",
-            F.when(F.col("segment_p85").isNotNull(), "SEGMENT_P85")
-            .when(F.col("road_median").isNotNull(), "LEVEL_TYPE_MEDIAN")
-            .otherwise("LEVEL_PRIOR"),
-        )
+        obs_col = F.lit(None).cast("double")
+    profiles = profiles.withColumn("_tier1_vmax", F.coalesce(obs_col, F.col("segment_p85")))
+    medians = profiles.groupBy("street_level", "street_type").agg(
+        F.percentile_approx("_tier1_vmax", 0.5, 10000).alias("road_median")
+    )
+    lookup = profiles.join(medians, ["street_level", "street_type"], "left")
+    prior = F.create_map(*[F.lit(x) for pair in [(1, 80.0), (2, 60.0), (3, 50.0), (4, 40.0)] for x in pair])
+    lookup = lookup.withColumn(
+        "max_velocity",
+        F.coalesce(obs_col, "segment_p85", "road_median", prior[F.col("street_level")]),
+    ).withColumn(
+        "vmax_impute_tier",
+        F.when(obs_col.isNotNull(), "SEGMENT_OBSERVED_VMAX")
+        .when(F.col("segment_p85").isNotNull(), "SEGMENT_P85")
+        .when(F.col("road_median").isNotNull(), "LEVEL_TYPE_MEDIAN")
+        .otherwise("LEVEL_PRIOR"),
+    )
     return lookup.withColumn("fit_before_utc", F.lit(train_end)).select(
         "segment_id", "max_velocity", "vmax_impute_tier", "fit_before_utc"
     )
@@ -290,6 +343,9 @@ def derive_los(ratio):
     return F.when(ratio.isNull(), F.lit(None).cast("string")).otherwise(result)
 
 
+derive_urban_los = derive_los
+
+
 def enrich_windows(
     windows: DataFrame,
     segments: DataFrame,
@@ -297,6 +353,7 @@ def enrich_windows(
     broadcast: bool = True,
     streets: DataFrame | None = None,
 ) -> DataFrame:
+    """Enrich 30m windows with topology, velocity lookup, LOS, and UTC + ICT temporal contract."""
     dim = segments.join(F.broadcast(lookup) if broadcast else lookup, "segment_id")
     result = windows.join(F.broadcast(dim) if broadcast else dim, "segment_id")
     if streets is not None:
@@ -307,14 +364,33 @@ def enrich_windows(
         .withColumn("date_utc", F.date_format("window_start", "yyyy-MM-dd"))
         .withColumn("local_ts", F.from_utc_timestamp("window_start", "Asia/Ho_Chi_Minh"))
     )
-    slot = F.hour("local_ts") * 2 + (F.minute("local_ts") / 30).cast("int")
+    utc_slot = F.hour("window_start") * 2 + (F.minute("window_start") / 30).cast("int")
+    ict_slot = F.hour("local_ts") * 2 + (F.minute("local_ts") / 30).cast("int")
+    utc_period = F.concat(
+        F.lit("period_"),
+        F.hour("window_start").cast("string"),
+        F.lit("_"),
+        F.when(F.minute("window_start") < 30, F.lit("00")).otherwise(F.lit("30")),
+    )
+    ict_period = F.concat(
+        F.lit("period_"),
+        F.hour("local_ts").cast("string"),
+        F.lit("_"),
+        F.when(F.minute("local_ts") < 30, F.lit("00")).otherwise(F.lit("30")),
+    )
     return (
-        result.withColumn("date", F.date_format("local_ts", "yyyy-MM-dd"))
-        .withColumn("period_idx", slot)
+        result.withColumn("date", F.col("date_utc"))
+        .withColumn("year_month", F.date_format("window_start", "yyyy-MM"))
+        .withColumn("period", utc_period)
+        .withColumn("period_idx", utc_slot)
+        .withColumn("ict_date", F.date_format("local_ts", "yyyy-MM-dd"))
+        .withColumn("ict_year_month", F.date_format("local_ts", "yyyy-MM"))
+        .withColumn("ict_period", ict_period)
+        .withColumn("ict_period_idx", ict_slot)
+        .withColumn("ict_weekday", F.weekday("local_ts"))
         .withColumn("weekday", F.weekday("local_ts"))
-        .withColumn("period_sin", F.sin(slot * (2 * math.pi / 48)))
-        .withColumn("period_cos", F.cos(slot * (2 * math.pi / 48)))
-        .withColumn("year_month", F.date_format("local_ts", "yyyy-MM"))
+        .withColumn("period_sin", F.sin(ict_slot * (2 * math.pi / 48)))
+        .withColumn("period_cos", F.cos(ict_slot * (2 * math.pi / 48)))
         .withColumn("window_id", F.sha2(F.concat_ws("|", "segment_id", F.col("window_start").cast("string")), 256))
     )
 

@@ -1,32 +1,33 @@
-# Thiết Kế Khung Giao Diện 5 Tab Điều Hành (5-Tab Dashboard Wireframe Specification)
+# Thiết Kế Khung Giao Diện 5 Tab Điều Hành (`Web TOC :8000` & `Streamlit :8501`)
 
 ```text
 +---------------------------------------------------------------------------------------------------+
-| 🚦 HCMC Smart Traffic Big Data Platform (V3 — Zones A–F · [C1]–[C17] · Zero-Conflict MLOps)       |
+| 🚦 HCMC Smart Traffic Platform (V3 Wave 2 — Zones A–F · [C1]–[C17] · Web TOC :8000 & Streamlit :8501) |
 +-------------------+-------------------+-------------------+-------------------+-------------------+
-| Active / Raw Nodes| Directed Segments | GPS Velocity Pings| 30m Gold Windows  | Severe E/F PR-AUC |
-| 52,425 / 577,967  | 84,633 (151,929 E)| 90,938 GPS Pings  | 33,441 (7,898 +30)| 0.9471 (F1=0.9409)|
+| Active / Raw Nodes| Clean Motorized   | Accepted GPS Pings| 30m Gold Windows  | Severe E/F PR-AUC |
+| 52,181 / 577,967  | 84,206 (92,453 E) | 90,787 / 90,938   | 33,394 (7,885 +30)| 0.9595 (F1=0.9301)|
 +-------------------+-------------------+-------------------+-------------------+-------------------+
-| [Tab 1: Overview & Hotspots] [Tab 2: Forecast & IXSCAN] [Tab 3: PageRank & Rules]                 |
-| [Tab 4: 7D K-Means & Peer Search] [Tab 5: O(1) Sketches, Recon & Execution Evidence]              |
+| Web TOC (:8000):  [01 Điều Hành +30p] [02 Live Kafka & 33KiB] [03 PageRank & Rules] [04 KMeans] [05 Spark/Audit]
+| Streamlit (:8501):[Tab 1: Bản đồ & Hotspots] [Tab 2: Dự báo & MongoDB] [Tab 3: PageRank & Rules]  |
+|                   [Tab 4: 6 Nhóm & Cold-Start] [Tab 5: Luồng 33 KiB, Đối soát & Spark/Mongo Audit] |
 +---------------------------------------------------------------------------------------------------+
-| TAB CONTENT AREA:                                                                                 |
-| - Interactive Controls (Segment / Corridor Selector, Cold-Start Toggle, Similarity K-Slider)      |
-| - KPI Metric Cards (Real-time STREAM_PROVISIONAL vs Reconciled Status, Velocity Ratio, PageRank)  |
-| - Analytical Dataframes & Visual Charts (ROC Curve, Confusion Matrix, Quarantine & Recon Tables)  |
+| CONTENT AREA:                                                                                     |
+| - Web TOC Clock Bar (4 Rush-Hour Scenarios, 🎬 Story Replay, ⚡ Stress-Test 200, Leaflet Map)     |
+| - KPI Cards (STREAM_PROVISIONAL v1 vs BATCH_RECONCILED v2 vs BATCH_VERIFIED v2, Velocity Ratio)   |
+| - Analytical Tables & Charts (ROC Curve, 6x6 Confusion Matrix, Ablation, Recon & IXSCAN Explain)  |
 +---------------------------------------------------------------------------------------------------+
 ```
 
-## Bố Cục Chi Tiết Từng Tab (`[C17] Streamlit Gateway :8501`)
+## 1. Bố Cục 5 Tab Trên `Web TOC` (`ReactJS + TypeScript + FastAPI :8000`, dịch vụ `toc-web`)
+1. **`01 · Điều Hành & Dự Báo +30p (UC-1, UC-2)`:** Bản đồ Leaflet động TP.HCM, thanh Đồng hồ TOC `[t-30m, t) ➔ t ➔ [t, t+30p)`, biểu đồ GPS thô $\to$ dự báo `t+30p`, danh sách cảnh báo chuyển pha và `Top-25 EWMA Hotspots` (`#1 47407 Lý Thường Kiệt = 6.6652`).
+2. **`02 · Live Kafka & Sketches 33 KiB (P4)`:** Telemetry trực tiếp từ `Kafka 4.1 KRaft` (`3` partitions), bộ đếm **`32.0 KiB RotatingBloom` (`2 × 16 KiB`)** & **`1.0 KiB 64-bit HLL`**, bảng bản ghi `STREAM_PROVISIONAL (v1)` vừa ghi vào `MongoDB 8.0`.
+3. **`03 · PageRank & Luật Đồng Kẹt (UC-3, UC-4)`:** Top nút cổ chai `PageRank` không U-turn (`#1 21969 Nguyễn Kiệm PR=2.7799`), `12` luật đồng kẹt (`Nguyễn Thị Minh Khai ↔ Cống Quỳnh`, `Lift = 15.23`) & `14` luật trễ (`Lê Quang Định → Trần Quang Khải`, `Lift = 24.0`, `persistence_controlled=True`).
+4. **`04 · 6 Cụm K-Means & Cold-Start (UC-5)`:** Phân bổ `6` cụm trên `84,206` đoạn cơ giới (`9,995` có GPS + `74,211` Cold-Start `88.13%`) và công cụ tìm đoạn đường tương đồng.
+5. **`05 · Spark 3.5.7, Ablation & Đối Soát (UC-6)`:** Bằng chứng `Spark 3.5.7 BroadcastHashJoin` (`5 → 1` Exchange, `145.24 → 120.45 ms`), bảng `Ablation` 7 cấu hình sạch, `Two-Tier Reconciliation` (`tier1 = 0`, bù `500` trễ, hàn gắn `609`, chấm lại `384`, đổi `185`), `WAL = 73.7 KB` & `MongoDB IXSCAN` (`0.389 / 0.692 ms`).
 
-1. **`Tab 1` (`Overview, Quality Funnel & Decaying Hotspots — UC-1, UC-6`):**
-   - Hiển thị sơ đồ kiến trúc `Zone A–F` (`system_architecture_v4.png`), bảng kiểm kê 5 bảng gốc (`file_inventory.csv`), bảng phân loại quy tắc lỗi đầu tiên (`quarantine_summary.csv` — bao gồm `R4_UNICODE_NFD_AND_PREFIX_DRIFT = 2,071` cửa sổ), và bảng cảnh báo `Top-25 Exponentially Decaying Hotspots` (`hotspot_alerts.csv`).
-2. **`Tab 2` (`Live Congestion Forecast, Ablation & MongoDB IXSCAN Serving — UC-2, P3`):**
-   - Cho phép lọc theo tuyến đường (bao gồm cả tuyến thưa 1 quan sát) và chọn cửa sổ dự báo đúng chân trời `t + 30m`.
-   - Hiển thị bảng truy vấn trục đường chính (`street_level IN [1,2]`, $\hat{p}_{\text{severe}} \ge 0.70$) từ `[C16]` `MongoDB 8.0` kèm phân bố vòng đời đầy đủ (`STREAM_PROVISIONAL`, `BATCH_RECONCILED`, `BATCH_VERIFIED`), bảng `Ablation Study` (`ablation_results.csv`), đường cong `ROC` (`roc_curve.png`) và `model_registry_manifest.json`.
-3. **`Tab 3` (`Directed Line-Graph PageRank & SON/FP-Growth Rules — UC-3, UC-4`):**
-   - Hiển thị `Top-50 Structural Bottlenecks` (`road_pagerank_top.csv`), `Top-30 Co-Congestion Association Rules` hai chiều (`co_congestion_rules.csv`), và `Top-20 Lagged Street Propagation Rules` (`lagged_congestion_rules.csv`).
-4. **`Tab 4` (`Train-Only 7D K-Means Regimes & Cold-Start Peer Search — UC-5`):**
-   - Hiển thị hồ sơ `6` cụm hành vi `7D K-Means` (`Silhouette = 0.2853`, `Davies-Bouldin = 1.1181` trên `6,926` đoạn `TRAIN`), và công cụ tìm `Top-K` đoạn đường tương đồng trên toàn bộ `84,633` đoạn đường (hỗ trợ cả `74,606` đoạn vùng mù cảm biến `Cold-Start` từ `[C13b]` `segment_static_features.parquet`).
-5. **`Tab 5` (`O(1) Stream Sketches, Two-Tier Reconciliation & Execution Evidence — UC-6, P4`):**
-   - Hiển thị chỉ số `32.0 KiB Bit-Packed Bloom Filter` (`32,768 B`), `1.0 KiB HyperLogLog++` (`1,024 B`), bảng kiểm toán `reconciliation_audit.csv`, bằng chứng `Catalyst BroadcastHashJoin` (`join_plan_evidence.json`), bằng chứng thực thi trực tiếp trên `PySpark 3.5.7` (`spark_runtime_evidence.json`), `MongoDB 8.0 IXSCAN Explain` (`mongo_verify.json`) và `WAL Recovery` (`query_progress.json`).
+## 2. Bố Cục 5 Tab Trên `Streamlit Gateway` (`app.py :8501`, dịch vụ `app`)
+1. **`Tab 1` (`Bản đồ Điểm nóng & Dữ liệu — UC-1, UC-6`):** Bản đồ TP.HCM (`map_hcmc_hotspots_coldstart.png`), `Top-25 EWMA Hotspots` (`hotspot_alerts.csv`), bảng kiểm kê 5 bảng gốc (`file_inventory.csv`), bảng quy tắc kiểm định (`quarantine_summary.csv` — `R4 = 2,247` cửa sổ), và sơ đồ kiến trúc (`outputs/system_architecture.png`).
+2. **`Tab 2` (`Dự báo +30 Phút & MongoDB — UC-2, P3`):** Dự báo đơn điểm (`#21064 Công Trường Quốc Tế`), truy vấn trục chính `MongoDB 8.0 IXSCAN` (`1,202` cửa sổ, `warm_p95 = 0.692 ms`), phân bố vòng đời (`32,405` `BATCH_VERIFIED v2` / `500` `BATCH_RECONCILED v2` / `489` `STREAM_PROVISIONAL v1`), `Live Kafka Monitor`, `ablation_results.csv`, `transition_evaluation.csv` và `roc_curve.png`.
+3. **`Tab 3` (`Nút cổ chai & Cặp đường hay kẹt — UC-3, UC-4`):** `Top-50 PageRank` (`road_pagerank_top.csv`), `12` co-congestion rules (`co_congestion_rules.csv`) và `14` lagged rules (`lagged_congestion_rules.csv`).
+4. **`Tab 4` (`6 Nhóm Đường & Vùng thiếu GPS — UC-5`):** Bản đồ `6` cụm (`map_hcmc_clusters_7d.png`), hồ sơ `6` cụm trên `3,609` đoạn `TRAIN` hữu cơ (`Silhouette = 0.2197, DBI = 1.3592`) và công cụ tìm `Top-K` đoạn tương đồng phủ đủ `84,206` đoạn cơ giới (`74,211` `Cold-Start`).
+5. **`Tab 5` (`Luồng 33 KiB & Đối soát tin trễ — UC-6, P4`):** Chỉ số `32.0 KiB Bloom` (`32,768 B`, `FPR = 0.611%`), `1.0 KiB HLL` (`9,620.2 / 9,995`, sai số `3.75%`), bảng `reconciliation_audit.csv` (`tier1_exceptAll_diff = 0`, `500` trễ, `609` hàn gắn), `join_plan_evidence.json`, `spark_runtime_evidence.json`, `mongo_verify.json` và `query_progress.json` (`WAL = 73.7 KB`).

@@ -18,7 +18,27 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-MONOID_IDENTITY: tuple[int, float, float, float, int] = (0, 0.0, math.inf, 0.0, 0)
+MONOID_IDENTITY: tuple[int, float, float, float, int] = (0, 0.0, math.inf, -math.inf, 0)
+VALID_ROAD_TYPES = frozenset(
+    {
+        "motorway",
+        "motorway_link",
+        "trunk",
+        "trunk_link",
+        "primary",
+        "primary_link",
+        "secondary",
+        "secondary_link",
+        "tertiary",
+        "tertiary_link",
+        "residential",
+        "unclassified",
+        "service",
+        "living_street",
+        "pedestrian",
+        "bridge",
+    }
+)
 WINDOW_AGG_FIELDS = [
     "obs_count",
     "sum_velocity",
@@ -44,12 +64,17 @@ def _parse_accepted_raw_ping(row: dict[str, Any]) -> tuple[str, tuple[int, datet
     return str(raw_id), (int(row["segment_id"]), ts, velocity)
 
 
-def _fold_expected_raw_windows(raw_rows: Any) -> dict[tuple[int, datetime], list[float]]:
+def _fold_expected_raw_windows(
+    raw_rows: Any,
+    valid_segment_ids: set[int] | None = None,
+) -> dict[tuple[int, datetime], list[float]]:
     """Fold accepted ping-level raw rows into 30-minute UTC window monoid states."""
     expected: dict[tuple[int, datetime], list[float]] = {}
     seen: dict[str, tuple[int, datetime, float]] = {}
     for row in raw_rows:
         identity, payload = _parse_accepted_raw_ping(row)
+        if payload[0] < 0 or (valid_segment_ids is not None and payload[0] not in valid_segment_ids):
+            continue
         if identity in seen:
             if seen[identity] != payload:
                 raise ValueError("Conflicting raw event identity")
@@ -82,14 +107,19 @@ def _index_actual_window_rows(actual_rows: Any) -> tuple[dict[tuple[int, datetim
     return actual, duplicate_keys
 
 
-def compare_window_aggregates(raw_rows: Any, actual_rows: Any, tolerance: float = 1e-9) -> dict[str, Any]:
+def compare_window_aggregates(
+    raw_rows: Any,
+    actual_rows: Any,
+    tolerance: float = 1e-9,
+    valid_segment_ids: set[int] | None = None,
+) -> dict[str, Any]:
     """Independent raw fold; detects missing/extra keys and every monoid field.
 
-    Input raw rows must already follow the shared acceptance policy. Raw identity
-    is ping-level, not segment/window-level. Unlike the legacy CSV verifier this
-    comparator never clips velocity and never skips unmatched keys.
+    Input raw rows follow the shared acceptance policy (optional valid_segment_ids
+    filter lets callers pass unfiltered raw rows). Raw identity is ping-level,
+    not segment/window-level, and never clips mean_velocity.
     """
-    expected = _fold_expected_raw_windows(raw_rows)
+    expected = _fold_expected_raw_windows(raw_rows, valid_segment_ids=valid_segment_ids)
     actual, duplicate_keys = _index_actual_window_rows(actual_rows)
     mismatches = {field: 0 for field in WINDOW_AGG_FIELDS}
     for key in expected.keys() & actual.keys():
@@ -119,7 +149,15 @@ def compute_raw_event_id(
     velocity: Any,
 ) -> str:
     """Compute canonical raw ping ID (G01), distinct from 30m window ID."""
-    payload = f"{raw_row_id}|{segment_id}|{updated_at_text.strip()}|{velocity}".encode("utf-8")
+    try:
+        norm_seg = str(int(float(str(segment_id))))
+    except (TypeError, ValueError):
+        norm_seg = str(segment_id)
+    try:
+        norm_vel = f"{float(velocity):.6f}"
+    except (TypeError, ValueError):
+        norm_vel = str(velocity)
+    payload = f"{raw_row_id}|{norm_seg}|{updated_at_text.strip()}|{norm_vel}".encode("utf-8")
     return hashlib.sha256(payload).hexdigest()[:24]
 
 
@@ -156,8 +194,30 @@ def monoid_combine(
     )
 
 
+def _parse_csv_monoid_row(
+    row: dict[str, str],
+    row_idx: int,
+    valid_segment_ids: set[int] | None,
+) -> tuple[str, int, str, str, float] | None:
+    try:
+        raw_id_val = row.get("_id", row_idx)
+        seg_id = int(float(str(row["segment_id"])))
+        velocity = float(row["velocity"])
+        updated_at = str(row["updated_at"])
+        date_str, period_str = _utc_window_key(updated_at)
+    except (KeyError, TypeError, ValueError):
+        return None
+    if seg_id < 0 or (valid_segment_ids is not None and seg_id not in valid_segment_ids):
+        return None
+    if math.isnan(velocity) or math.isinf(velocity) or velocity < 0.0 or velocity > 200.0:
+        return None
+    raw_eid = row.get("raw_event_id") or compute_raw_event_id(raw_id_val, seg_id, updated_at, velocity)
+    return str(raw_eid), seg_id, date_str, period_str, velocity
+
+
 def accumulate_raw_monoid(
     status_csv_path: Path,
+    valid_segment_ids: set[int] | None = None,
 ) -> tuple[dict[tuple[int, str, str], list[float]], int, int]:
     """Fold raw GPS pings into 5-tuple Commutative Monoid state with exact raw_event_id dedup."""
     monoid_map: dict[tuple[int, str, str], list[float]] = {}
@@ -166,22 +226,12 @@ def accumulate_raw_monoid(
     dedup_dropped = 0
 
     with status_csv_path.open("r", encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle)
-        for row_idx, row in enumerate(reader):
-            try:
-                raw_id_val = row.get("_id", row_idx)
-                seg_id = int(row["segment_id"])
-                velocity = float(row["velocity"])
-                updated_at = str(row["updated_at"])
-                date_str, period_str = _utc_window_key(updated_at)
-            except (KeyError, TypeError, ValueError):
+        for row_idx, row in enumerate(csv.DictReader(handle)):
+            parsed = _parse_csv_monoid_row(row, row_idx, valid_segment_ids)
+            if parsed is None:
                 rejected += 1
                 continue
-            if math.isnan(velocity) or math.isinf(velocity) or velocity < 0.0 or velocity > 200.0:
-                rejected += 1
-                continue
-
-            raw_eid = row.get("raw_event_id") or compute_raw_event_id(raw_id_val, seg_id, updated_at, velocity)
+            raw_eid, seg_id, date_str, period_str, velocity = parsed
             if raw_eid in seen_raw_ids:
                 dedup_dropped += 1
                 continue
@@ -191,26 +241,18 @@ def accumulate_raw_monoid(
             key = (seg_id, date_str, period_str)
             prev = monoid_map.get(key)
             if prev is None:
-                monoid_map[key] = [
-                    float(lifted[0]),
-                    lifted[1],
-                    lifted[2],
-                    lifted[3],
-                    float(lifted[4]),
-                ]
+                monoid_map[key] = [float(lifted[0]), lifted[1], lifted[2], lifted[3], float(lifted[4])]
             else:
-                combined = monoid_combine(
-                    (int(prev[0]), prev[1], prev[2], prev[3], int(prev[4])),
-                    lifted,
-                )
-                monoid_map[key] = [
-                    float(combined[0]),
-                    combined[1],
-                    combined[2],
-                    combined[3],
-                    float(combined[4]),
-                ]
+                combined = monoid_combine((int(prev[0]), prev[1], prev[2], prev[3], int(prev[4])), lifted)
+                monoid_map[key] = [float(combined[0]), combined[1], combined[2], combined[3], float(combined[4])]
     return monoid_map, rejected, dedup_dropped
+
+
+def _fold_velocity_chunk(chunk: list[float]) -> tuple[int, float, float, float, int]:
+    state = MONOID_IDENTITY
+    for val in chunk:
+        state = monoid_combine(state, monoid_lift(val))
+    return state
 
 
 def verify_unequal_partition_associativity(
@@ -229,9 +271,7 @@ def verify_unequal_partition_associativity(
         c3 = max(0, n - c1 - c2)
         partition_sizes = [sz for sz in (c1, c2, c3) if sz > 0]
 
-    single_fold = MONOID_IDENTITY
-    for v in velocities:
-        single_fold = monoid_combine(single_fold, monoid_lift(v))
+    single_fold = _fold_velocity_chunk(velocities)
     true_mean = single_fold[1] / max(single_fold[0], 1)
 
     offset = 0
@@ -242,9 +282,7 @@ def verify_unequal_partition_associativity(
         offset += sz
         if not chunk:
             continue
-        p_state = MONOID_IDENTITY
-        for v in chunk:
-            p_state = monoid_combine(p_state, monoid_lift(v))
+        p_state = _fold_velocity_chunk(chunk)
         partial_states.append(p_state)
         partial_means.append(p_state[1] / p_state[0])
 
@@ -275,41 +313,41 @@ def verify_unequal_partition_associativity(
     }
 
 
+def _check_optional_float_field(row: dict[str, Any], field: str, expected: float, tol: float = 1e-5) -> int:
+    val = row.get(field)
+    if val in ("", None):
+        return 0
+    return int(abs(float(val) - expected) > tol)
+
+
 def _compare_single_window_row(
     row: dict[str, Any],
     state: list[float],
     counters: dict[str, float],
 ) -> None:
-    ref_cnt = int(state[0])
-    ref_sum_v = float(state[1])
-    ref_min_v = float(state[2])
-    ref_max_v = float(state[3])
-    ref_sev = int(state[4])
-    ref_mean_v = max(ref_sum_v / max(ref_cnt, 1), 1.0)
+    ref_cnt, ref_sum_v, ref_min_v, ref_max_v, ref_sev = (
+        int(state[0]),
+        float(state[1]),
+        float(state[2]),
+        float(state[3]),
+        int(state[4]),
+    )
+    ref_mean_v = ref_sum_v / max(ref_cnt, 1)
 
-    pipe_cnt = int(float(row["obs_count"]))
-    pipe_mean_v = float(row["mean_velocity"])
-    if pipe_cnt != ref_cnt:
+    if int(float(row["obs_count"])) != ref_cnt:
         counters["count_discrepancies"] += 1
 
-    mean_diff = abs(ref_mean_v - pipe_mean_v)
-    if mean_diff > counters["max_abs_diff"]:
-        counters["max_abs_diff"] = mean_diff
+    mean_diff = abs(ref_mean_v - float(row["mean_velocity"]))
+    counters["max_abs_diff"] = max(counters["max_abs_diff"], mean_diff)
     if mean_diff > 1e-6:
         counters["velocity_discrepancies"] += 1
 
-    if "sum_velocity" in row and row["sum_velocity"] not in ("", None):
-        if abs(float(row["sum_velocity"]) - ref_sum_v) > 1e-5:
-            counters["sum_discrepancies"] += 1
-    if "min_velocity" in row and row["min_velocity"] not in ("", None):
-        if abs(float(row["min_velocity"]) - ref_min_v) > 1e-5:
-            counters["min_discrepancies"] += 1
-    if "max_velocity_obs" in row and row["max_velocity_obs"] not in ("", None):
-        if abs(float(row["max_velocity_obs"]) - ref_max_v) > 1e-5:
-            counters["max_discrepancies"] += 1
-    if "severe_ping_count" in row and row["severe_ping_count"] not in ("", None):
-        if int(float(row["severe_ping_count"])) != ref_sev:
-            counters["severe_discrepancies"] += 1
+    counters["sum_discrepancies"] += _check_optional_float_field(row, "sum_velocity", ref_sum_v)
+    counters["min_discrepancies"] += _check_optional_float_field(row, "min_velocity", ref_min_v)
+    counters["max_discrepancies"] += _check_optional_float_field(row, "max_velocity_obs", ref_max_v)
+    sev_val = row.get("severe_ping_count")
+    if sev_val not in ("", None) and int(float(sev_val)) != ref_sev:
+        counters["severe_discrepancies"] += 1
 
 
 def audit_records_against_monoid(
@@ -375,12 +413,31 @@ def audit_records_against_monoid(
     }
 
 
+def _load_valid_road_segment_ids(raw_dir: Path) -> set[int] | None:
+    seg_path = raw_dir / "segments.csv"
+    if not seg_path.is_file():
+        return None
+    valid_ids: set[int] = set()
+    with seg_path.open("r", encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            if str(row.get("street_type", "")).strip() in VALID_ROAD_TYPES:
+                try:
+                    valid_ids.add(int(float(str(row["_id"]))))
+                except (KeyError, TypeError, ValueError):
+                    continue
+    return valid_ids
+
+
 def verify_against_medallion(
     raw_dir: Path,
     dataset_path: Path,
     output_path: Path,
 ) -> dict[str, Any]:
-    monoid_map, rejected_raw, dedup_dropped = accumulate_raw_monoid(raw_dir / "segment_status.csv")
+    valid_seg_ids = _load_valid_road_segment_ids(raw_dir)
+    monoid_map, rejected_raw, dedup_dropped = accumulate_raw_monoid(
+        raw_dir / "segment_status.csv",
+        valid_segment_ids=valid_seg_ids,
+    )
     total_severe_pings = int(sum(st[4] for st in monoid_map.values()))
 
     with dataset_path.open("r", encoding="utf-8", newline="") as handle:
@@ -395,10 +452,10 @@ def verify_against_medallion(
     report = {
         "pillar": "BDA501 Pillar I1 — 5-Tuple Commutative Monoid Combiner vs. Independent Reference Baseline",
         "monoid_tuple": "(cnt, sum_v, min_v, max_v, severe_cnt)",
-        "identity_element": "(0, 0.0, +inf, 0.0, 0)",
+        "identity_element": "(0, 0.0, +inf, -inf, 0)",
         **audit,
         "total_severe_pings_accumulated": total_severe_pings,
-        "rejected_malformed_pings": rejected_raw,
+        "rejected_malformed_or_nonroad_pings": rejected_raw,
         "dedup_dropped_raw_pings": dedup_dropped,
         "unequal_partition_associativity_check": assoc_demo,
     }

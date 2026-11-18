@@ -7,27 +7,32 @@
   "replayed_batch_skipped_by_wal": true,
   "restart_recovery_verified": true,
   "duplicate_side_effects_on_restart": 0,
-  "pre_kill_sink2_in_wm_events": 16648,
-  "post_restart_sink2_in_wm_events": 32940,
-  "post_restart_dropped_by_watermark": 501,
-  "total_bronze_sink1_events_landed": 33775,
+  "pre_kill_sink2_in_wm_events": 45364,
+  "post_restart_sink2_in_wm_events": 90741,
+  "post_restart_dropped_by_watermark": 0,
+  "dropped_by_event_time_watermark": 0,
+  "bloom_false_positives_eval": 0,
+  "total_bronze_sink1_events_landed": 90787,
+  "sink1_bronze_parquet_dir": "outputs\\stream_sink1_bronze",
+  "wal_state_bytes": 73713,
   "quarantined_malformed_events": 0,
   "bloom_memory_bytes": 32768,
   "hll_memory_bytes": 1024,
-  "hll_estimated_segments": 9551.82,
-  "active_decay_segments_in_ram": 4556,
+  "hll_estimated_segments": 9620.23,
+  "active_decay_segments_in_ram": 77,
   "committed_offsets": {
-    "0": 11064,
-    "1": 11207,
-    "2": 11504
+    "0": 90787,
+    "1": 0,
+    "2": 0
   },
   "frozen_registry_integrity": {
     "verified": true,
     "model_version": "rf_full_23d_v3",
-    "model_sha256": "86195ec9e1a882f10946b35d0ea9eb74c06f6856fba8740e19d3f601c0c2410d",
-    "vmax_lookup_sha256": "d00c68e39a3cbe78d2cba8d2c26fcf1de5523f5d396c8298a7bced97501ab94e",
-    "static_feature_store_sha256": "2877a4dd11022e353c6d7277e6e7e87a049e6e585c33a0ece7d2d430308b0251",
-    "manifest_sha256": "2692abb8b5ad1f5d2464bb769ac5547a3a63e915d22c4478879ee7da0647de7d",
+    "model_sha256": "a2e12b7c032acff65b2285d50499cc8a142cbfa1d4549c4f888ce473aac264de",
+    "vmax_lookup_sha256": "41577e2ecb960133c1836da323e3e1a7c8e8e3939bf06315e4f388e90404257f",
+    "static_feature_store_sha256": "71a5565e272f0b5cd71440f752ab7a80d1240c43838c315a95d3cb6535de3ac2",
+    "static_store_mode": "full",
+    "manifest_sha256": "cc5c5c0a3950eb63663b00e293c7b997df8c23f28aa1bf178367945c8fb63e22",
     "read_only_enforced": true,
     "pre_post_sha256_identical": true,
     "probe_classes_count": 6
@@ -43,21 +48,21 @@
       "phase": "PRE_KILL",
       "batch_id": 0,
       "status": "COMMITTED",
-      "accepted_rows": 8444,
+      "accepted_rows": 22697,
       "quarantined_rows": 0,
-      "current_watermark_utc": "2020-11-18T11:00:00+00:00",
-      "sink1_bronze_total": 8444,
-      "sink2_in_wm_total": 8317
+      "current_watermark_utc": "2020-08-02T23:44:29.452000+00:00",
+      "sink1_bronze_total": 22697,
+      "sink2_in_wm_total": 22684
     },
     {
       "phase": "PRE_KILL",
       "batch_id": 1,
       "status": "COMMITTED",
-      "accepted_rows": 8444,
+      "accepted_rows": 22697,
       "quarantined_rows": 0,
-      "current_watermark_utc": "2020-12-07T13:30:00+00:00",
-      "sink1_bronze_total": 16888,
-      "sink2_in_wm_total": 16648
+      "current_watermark_utc": "2020-11-29T12:45:40.231000+00:00",
+      "sink1_bronze_total": 45394,
+      "sink2_in_wm_total": 45364
     },
     {
       "phase": "POST_RESTART_REPLAY_CHECK",
@@ -68,25 +73,28 @@
       "phase": "POST_RESTART",
       "batch_id": 2,
       "status": "COMMITTED",
-      "accepted_rows": 8444,
+      "accepted_rows": 22697,
       "quarantined_rows": 0,
-      "current_watermark_utc": "2020-12-26T09:00:00+00:00",
-      "sink1_bronze_total": 8444,
-      "sink2_in_wm_total": 24958
+      "current_watermark_utc": "2020-12-23T14:17:50.999000+00:00",
+      "sink1_bronze_total": 68091,
+      "sink2_in_wm_total": 68052
     },
     {
       "phase": "POST_RESTART",
       "batch_id": 3,
       "status": "COMMITTED",
-      "accepted_rows": 8443,
+      "accepted_rows": 22696,
       "quarantined_rows": 0,
-      "current_watermark_utc": "2021-04-22T06:00:00+00:00",
-      "sink1_bronze_total": 16887,
-      "sink2_in_wm_total": 32940
+      "current_watermark_utc": "2021-04-22T06:23:27.300000+00:00",
+      "sink1_bronze_total": 90787,
+      "sink2_in_wm_total": 90741
     }
   ],
-  "healed_downstream_rescored_windows": 377,
-  "rescore_prob_changed_windows_count": 100,
-  "Phase_B_in_flight_provisional_retained": 488,
-  "Phase_C_reconciled_backfilled": 501
+  "Phase_B_provisional_scored": 32894,
+  "Phase_B_in_flight_provisional_retained": 489,
+  "Phase_C_reconciled_backfilled": 500,
+  "healed_downstream_rescored_windows": 384,
+  "rescore_prob_changed_windows_count": 185,
+  "total_serving_documents": 33394,
+  "post_train_online_windows_scored": 13988
 }

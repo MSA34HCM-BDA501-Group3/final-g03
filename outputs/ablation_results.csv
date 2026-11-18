@@ -1,8 +1,8 @@
 model,task_type,feature_set,accuracy_6class,macro_f1_6class,weighted_f1_6class,severe_ef_precision,severe_ef_recall,severe_ef_f1,severe_roc_auc,severe_pr_auc
 Persistence Baseline (t -> t+30m),MULTICLASS_6CLASS_LOS,Local (Lag-0),0.9484,0.5654,0.9461,0.9365,0.9568,0.9465,0.9867,0.9367
-Decision Tree (Local Only),MULTICLASS_6CLASS_LOS,Local Features (14D),0.9425,0.3794,0.9305,0.9362,0.9514,0.9437,0.9856,0.9482
-"Decision Tree (+Graph PageRank, Causal Priors & K-Means)",MULTICLASS_6CLASS_LOS,Local + Graph + Cluster (23D),0.9425,0.3772,0.9299,0.9362,0.9514,0.9437,0.9844,0.9327
-Random Forest (Local Only),MULTICLASS_6CLASS_LOS,Local Features (14D),0.9425,0.5455,0.9425,0.9409,0.9459,0.9434,0.9866,0.963
-"Random Forest (+Graph PageRank, Causal Priors & K-Means)",MULTICLASS_6CLASS_LOS,Local + Graph + Cluster (23D),0.945,0.5543,0.9439,0.9358,0.9459,0.9409,0.9882,0.9471
-GBT Binary Alerting (Local Only),BINARY_SEVERE_EF_ONLY,Local Features (14D),,,,0.6667,0.9514,0.784,0.9812,0.9328
-"GBT Binary Alerting (+Graph PageRank, Causal Priors & K-Means)",BINARY_SEVERE_EF_ONLY,Local + Graph + Cluster (23D),,,,0.9365,0.9568,0.9465,0.9843,0.9419
+Decision Tree (Local Only),MULTICLASS_6CLASS_LOS,Local Features (14D),0.8832,0.3767,0.9058,0.9467,0.8649,0.904,0.9833,0.9296
+"Decision Tree (+Graph PageRank, Causal Priors & K-Means)",MULTICLASS_6CLASS_LOS,Local + Graph + Cluster (23D),0.8748,0.3817,0.9006,0.9459,0.7568,0.8408,0.9799,0.9263
+Random Forest (Local Only),MULTICLASS_6CLASS_LOS,Local Features (14D),0.9239,0.4372,0.929,0.9429,0.8919,0.9167,0.9898,0.9557
+"Random Forest (+Graph PageRank, Causal Priors & K-Means)",MULTICLASS_6CLASS_LOS,Local + Graph + Cluster (23D),0.9289,0.4475,0.9304,0.9251,0.9351,0.9301,0.99,0.9595
+GBT Binary Alerting (Local Only),BINARY_SEVERE_EF_ONLY,Local Features (14D),,,,0.9362,0.9514,0.9437,0.9849,0.9534
+"GBT Binary Alerting (+Graph PageRank, Causal Priors & K-Means)",BINARY_SEVERE_EF_ONLY,Local + Graph + Cluster (23D),,,,0.9259,0.9459,0.9358,0.9822,0.9454

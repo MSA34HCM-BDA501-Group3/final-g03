@@ -18,6 +18,8 @@ services:
       KAFKA_HEAP_OPTS: "-Xms512M -Xmx512M"
     ports:
       - "127.0.0.1:9092:9092"
+    volumes:
+      - kafka_data:/tmp/kraft-combined-logs
     deploy:
       resources:
         limits:
@@ -52,14 +54,13 @@ services:
       - bda501-net
 
   spark:
-    image: song-recommender-spark:3.5.7
+    image: hcmc-traffic-spark:3.5.7
     build:
       context: .
       dockerfile: Dockerfile.spark35
     working_dir: /workspace
     command: ["python3", "-c", "import time; time.sleep(10**8)"]
     environment:
-      PYTHONPATH: /opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip
       SPARK_DRIVER_MEMORY: 4g
       MONGO_URI: mongodb://mongo:27017
     volumes:
@@ -85,11 +86,13 @@ services:
       - "127.0.0.1:8501:8501"
     volumes:
       - ./app.py:/app/app.py
+      - ./baseline.py:/app/baseline.py
       - ./pipeline.py:/app/pipeline.py
       - ./producer.py:/app/producer.py
       - ./starter_stream.py:/app/starter_stream.py
       - ./live_kafka_stream.py:/app/live_kafka_stream.py
-      - ./raw_data:/app/raw_data
+      - ./toc_backend:/app/toc_backend
+      - ./raw_data:/app/raw_data:ro
       - ./product:/app/product
       - ./data:/app/data
       - ./outputs:/app/outputs
@@ -98,6 +101,11 @@ services:
         limits:
           memory: 1024M
           cpus: "1.0"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')\""]
       interval: 15s
@@ -106,43 +114,48 @@ services:
     networks:
       - bda501-net
 
-  pipeline:
+  toc-web:
     image: groupexe-knowledgetest-app
     build: .
-    profiles: ["batch"]
-    environment:
-      MONGO_URI: mongodb://mongo:27017
-    command: ["python", "pipeline.py"]
-    volumes:
-      - ./pipeline.py:/app/pipeline.py
-      - ./raw_data:/app/raw_data
-      - ./product:/app/product
-      - ./data:/app/data
-      - ./outputs:/app/outputs
-    networks:
-      - bda501-net
-
-  stream:
-    image: groupexe-knowledgetest-app
-    build: .
-    profiles: ["stream"]
     environment:
       MONGO_URI: mongodb://mongo:27017
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-    command: ["python", "starter_stream.py", "--kill-after-batch", "1"]
+    command: ["uvicorn", "toc_backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "127.0.0.1:8000:8000"
     volumes:
-      - ./starter_stream.py:/app/starter_stream.py
+      - ./toc_backend:/app/toc_backend
+      - ./toc_frontend/dist:/app/toc_frontend/dist
+      - ./baseline.py:/app/baseline.py
       - ./producer.py:/app/producer.py
-      - ./raw_data:/app/raw_data
+      - ./starter_stream.py:/app/starter_stream.py
+      - ./live_kafka_stream.py:/app/live_kafka_stream.py
+      - ./pipeline.py:/app/pipeline.py
+      - ./raw_data:/app/raw_data:ro
+      - ./evidence:/app/evidence
       - ./data:/app/data
       - ./outputs:/app/outputs
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: "1.0"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      kafka:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
     networks:
       - bda501-net
 
   live-consumer:
     image: groupexe-knowledgetest-app
     build: .
-    profiles: ["live"]
     environment:
       MONGO_URI: mongodb://mongo:27017
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
@@ -162,9 +175,80 @@ services:
       - ./live_kafka_stream.py:/app/live_kafka_stream.py
       - ./producer.py:/app/producer.py
       - ./pipeline.py:/app/pipeline.py
-      - ./raw_data:/app/raw_data
+      - ./baseline.py:/app/baseline.py
+      - ./raw_data:/app/raw_data:ro
       - ./data:/app/data
       - ./outputs:/app/outputs
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    networks:
+      - bda501-net
+
+  pipeline:
+    image: groupexe-knowledgetest-app
+    build: .
+    profiles: ["batch"]
+    environment:
+      MONGO_URI: mongodb://mongo:27017
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    command: ["python", "pipeline.py"]
+    volumes:
+      - ./pipeline.py:/app/pipeline.py
+      - ./baseline.py:/app/baseline.py
+      - ./producer.py:/app/producer.py
+      - ./starter_stream.py:/app/starter_stream.py
+      - ./live_kafka_stream.py:/app/live_kafka_stream.py
+      - ./spark_engine.py:/app/spark_engine.py
+      - ./spark_batch.py:/app/spark_batch.py
+      - ./scripts:/app/scripts
+      - ./raw_data:/app/raw_data:ro
+      - ./evidence:/app/evidence
+      - ./product:/app/product
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+          cpus: "2.0"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    networks:
+      - bda501-net
+
+  stream:
+    image: groupexe-knowledgetest-app
+    build: .
+    profiles: ["stream"]
+    environment:
+      MONGO_URI: mongodb://mongo:27017
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    command: ["python", "starter_stream.py", "--kill-after-batch", "1"]
+    volumes:
+      - ./starter_stream.py:/app/starter_stream.py
+      - ./live_kafka_stream.py:/app/live_kafka_stream.py
+      - ./producer.py:/app/producer.py
+      - ./pipeline.py:/app/pipeline.py
+      - ./baseline.py:/app/baseline.py
+      - ./raw_data:/app/raw_data:ro
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: "1.0"
     depends_on:
       kafka:
         condition: service_healthy
@@ -180,3 +264,4 @@ networks:
 
 volumes:
   mongo_data:
+  kafka_data:

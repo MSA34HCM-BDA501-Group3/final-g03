@@ -2,18 +2,20 @@
   "component": "[C13a] & [C13b] Zero-Conflict Frozen Artifact Registry",
   "model_version": "rf_full_23d_v3",
   "artifact_path": "model.joblib",
-  "sha256_digest": "86195ec9e1a882f10946b35d0ea9eb74c06f6856fba8740e19d3f601c0c2410d",
-  "model_sha256": "86195ec9e1a882f10946b35d0ea9eb74c06f6856fba8740e19d3f601c0c2410d",
+  "sha256_digest": "a2e12b7c032acff65b2285d50499cc8a142cbfa1d4549c4f888ce473aac264de",
+  "model_sha256": "a2e12b7c032acff65b2285d50499cc8a142cbfa1d4549c4f888ce473aac264de",
   "static_feature_store_path": "segment_static_features.parquet",
-  "static_feature_store_sha256": "2877a4dd11022e353c6d7277e6e7e87a049e6e585c33a0ece7d2d430308b0251",
+  "static_feature_store_sha256": "71a5565e272f0b5cd71440f752ab7a80d1240c43838c315a95d3cb6535de3ac2",
   "vmax_lookup_path": "vmax_lookup.json",
-  "vmax_lookup_sha256": "d00c68e39a3cbe78d2cba8d2c26fcf1de5523f5d396c8298a7bced97501ab94e",
+  "vmax_lookup_sha256": "41577e2ecb960133c1836da323e3e1a7c8e8e3939bf06315e4f388e90404257f",
   "phase_a_fit_only": true,
   "read_only_in_phase_b_and_c": true,
   "phase_b_c_read_only_verified": true,
   "all_three_artifacts_immutable_verified": true,
   "selected_model": "Random Forest (+Graph PageRank, Causal Priors & K-Means)",
   "selected_val_threshold": 0.25,
+  "val_selected_change_threshold": 0.4,
+  "val_selected_onset_threshold": 0.2,
   "train_cutoff_utc": "2020-12-12T08:00:00+00:00",
   "val_cutoff_utc": "2020-12-25T03:30:00+00:00",
   "feature_count": 23,
@@ -41,5 +43,7 @@
     "segment_train_severe_prior",
     "street_causal_prior_los",
     "street_causal_prior_sev"
-  ]
+  ],
+  "sample_static_feature_store_path": "sample_static_features.parquet",
+  "sample_static_feature_store_sha256": "e7f5f6de936ce9b44b1fe38a7bb95e295683ee488f7fe251a2557d8bca4f9249"
 }

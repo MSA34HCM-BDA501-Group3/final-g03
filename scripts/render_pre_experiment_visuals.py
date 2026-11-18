@@ -271,7 +271,7 @@ def _draw_pre_pagerank_col(ax: plt.Axes) -> None:
     ax.text(
         0.50,
         4.28,
-        "Bước A — Cắt tỉa 90.93% điểm uốn cong bản đồ OSM:",
+        "Bước A — Cắt tỉa 90.97% điểm uốn cong bản đồ OSM:",
         fontsize=8.3,
         fontweight="bold",
         color="#0F172A",
@@ -345,14 +345,14 @@ def _draw_pre_coldstart_col(ax: plt.Axes) -> None:
         5.82,
         5.10,
         "4. Phân Cụm 7D K-Means Cho Vùng Mù",
-        "88.15% Cold-Start",
+        "88.13% Cold-Start",
         "#2563EB",
     )
     _rbox(ax, 6.32, 3.38, 5.46, 1.12, "white", "#CBD5E1", lw=1.2, radius=0.10, zorder=2)
     ax.text(
         6.48,
         4.28,
-        "Thách thức EDA: 74,606 / 84,633 đoạn đường có 0 bản tin GPS",
+        "Thách thức EDA: 74,211 / 84,206 đoạn cơ giới có 0 bản tin GPS",
         fontsize=8.2,
         fontweight="bold",
         color="#0F172A",
@@ -387,7 +387,7 @@ def _draw_pre_coldstart_col(ax: plt.Axes) -> None:
     ax.text(
         6.48,
         3.00,
-        "Gom 84,633 đoạn thành k nhóm hành vi đường phố tương đồng:",
+        "Gom 84,206 đoạn cơ giới thành k nhóm hành vi đường phố:",
         fontsize=8.2,
         fontweight="bold",
         color="#0F172A",
@@ -420,7 +420,7 @@ def _draw_pre_coldstart_col(ax: plt.Axes) -> None:
         9.05,
         0.61,
         "Ý NGHĨA: Đường thiếu GPS mượn đặc trưng nhóm đường tương đồng\n"
-        "→ Thiết kế phủ kín dự báo cho 100% mạng lưới (84,633 đoạn)!",
+        "→ Thiết kế phủ kín dự báo cho 100% mạng lưới (84,206 đoạn)!",
         fontsize=7.8,
         fontweight="bold",
         color="#93C5FD",
@@ -585,7 +585,7 @@ def render_pre_exp_pipeline_walkthrough(out_path: Path) -> Path:
             [
                 "• Lúc 07:08 sáng, xe qua đoạn\n  Lý Thường Kiệt #47407 gửi:\n  velocity = 4 km/h.",
                 "• Edge Case EC-1: Cột max_velocity\n  bị khuyết 85.21% trên bảng gốc.",
-                "• Edge Case EC-6: 88.15% đoạn\n  lân cận bị Cold-Start (0 GPS).",
+                "• Edge Case EC-6: 88.13% đoạn\n  cơ giới bị Cold-Start (0 GPS).",
             ],
         ),
         (
@@ -595,7 +595,7 @@ def render_pre_exp_pipeline_walkthrough(out_path: Path) -> Path:
             "#0284C7",
             "#F0F9FF",
             [
-                "• ANSI try_cast + NFC + UTC+7;\n  3-Tier Imputation tra cứu Vmax\n  khóa trên tập TRAIN.",
+                "• ANSI try_cast + NFC + UTC+7;\n  loại 427 POI; 3-Tier Vmax\n  khóa trên tập TRAIN.",
                 "• 5-Tuple Monoid Combiner gộp\n  khung 30 phút (07:00–07:30).",
                 "• Chuẩn hóa tỷ lệ r = v / Vmax\n  sang 6 mức trạng thái LOS A–F.",
             ],
@@ -607,9 +607,9 @@ def render_pre_exp_pipeline_walkthrough(out_path: Path) -> Path:
             "#0D9488",
             "#F0FDFA",
             [
-                "• Cắt tỉa 90.93% điểm uốn cong;\n  tính Line-Graph PageRank trên\n  84,633 đoạn đường.",
-                "• SON / FPGrowth tìm luật đồng kẹt;\n  7D K-Means gom nhóm hành vi.",
-                "• Khóa Static Feature Store cấp\n  cho 74,606 đoạn Cold-Start.",
+                "• Cắt tỉa 90.97% điểm uốn cong;\n  tính Line-Graph PageRank trên\n  84,206 đoạn (loại U-turn).",
+                "• SON / FPGrowth tìm luật đồng kẹt;\n  7D K-Means trên Organic TRAIN.",
+                "• Khóa Static Feature Store cấp\n  cho 74,211 đoạn Cold-Start.",
             ],
         ),
         (
@@ -620,8 +620,8 @@ def render_pre_exp_pipeline_walkthrough(out_path: Path) -> Path:
             "#ECFDF5",
             [
                 "• Ghép 14 biến cục bộ + 9 biến\n  PageRank, K-Means & Priors\n  thành vector 23D Features.",
-                "• Mô hình Random Forest đóng băng\n  dự báo xác suất LOS kế tiếp\n  ở khung t + 30 phút.",
-                "• Chấm điểm phủ 100% 84,633 đoạn.",
+                "• Mô hình Random Forest (tách\n  synthetic burst khỏi TRAIN)\n  dự báo LOS ở khung t + 30 phút.",
+                "• Chấm điểm phủ 100% 84,206 đoạn.",
             ],
         ),
         (
@@ -632,8 +632,8 @@ def render_pre_exp_pipeline_walkthrough(out_path: Path) -> Path:
             "#FAF5FF",
             [
                 "• 32 KiB Bloom + 1 KiB HLL++\n  + EWMA Hotspot bắt điểm kẹt lì.",
-                "• Idempotent Upsert vào MongoDB\n  kèm khóa version_ts & chỉ mục\n  Compound Index IXSCAN.",
-                "• Two-Tier Reconciliation tự động\n  đối soát & bù tin trễ > 30m.",
+                "• Idempotent Upsert vào MongoDB\n  kèm guard $status_version &\n  Compound Index IXSCAN.",
+                "• Two-Tier Recon & Dual UI\n  (:8000 TOC Web & :8501 Streamlit).",
             ],
         ),
     ]
@@ -791,8 +791,8 @@ def _draw_pre_batch_boxes(ax: plt.Axes) -> None:
         "",
         "Shape-Point Pruner & Line-Graph",
         [
-            "• Cắt tỉa 90.93% điểm uốn cong trên bản đồ",
-            "• Đảo mỗi đoạn đường một chiều thành 1 đỉnh",
+            "• Cắt tỉa 90.97% điểm uốn cong trên bản đồ",
+            "• Đảo mỗi đoạn thành 1 đỉnh (loại U-turn)",
             "• Tính PageRank có hướng & bù nút đường cụt",
         ],
         ZONE_D_COLOR,
@@ -809,7 +809,7 @@ def _draw_pre_batch_boxes(ax: plt.Axes) -> None:
         "SON / FPGrowth & 7D K-Means",
         [
             "• Khai phá tập phổ biến & luật đường đồng kẹt",
-            "• Phân cụm 7D K-Means học trên tập TRAIN",
+            "• Phân cụm 7D K-Means học trên Organic TRAIN",
             "• Suy diễn nhóm hành vi cho vùng mù Cold-Start",
         ],
         ZONE_D_COLOR,
@@ -842,7 +842,7 @@ def _draw_pre_batch_boxes(ax: plt.Axes) -> None:
         "Static Feature Store",
         [
             "• Lưu PageRank, bậc nút, cụm K-Means",
-            "• Phủ kín 100% mạng lưới (84,633 đoạn)",
+            "• Phủ kín 100% mạng lưới (84,206 đoạn)",
             "• Cấp biến tĩnh cho Modeling & Luồng",
         ],
         ZONE_E_COLOR,
@@ -1002,7 +1002,7 @@ def _draw_pre_stream_boxes(ax: plt.Axes) -> None:
         "ML Model & Static Store",
         [
             "• Mô hình Random Forest đóng băng",
-            "• Kho biến tĩnh 84,633 đoạn (chỉ đọc)",
+            "• Kho biến tĩnh 84,206 đoạn (chỉ đọc)",
         ],
         ZONE_E_COLOR,
         "#F0FDFA",
@@ -1036,7 +1036,7 @@ def _draw_pre_stream_boxes(ax: plt.Axes) -> None:
         "MongoDB Serving Store",
         [
             "• Nhận cả cảnh báo v1 & bản chuẩn v2",
-            "• Bulk Upsert kèm khóa version_ts",
+            "• Bulk Upsert + guard $status_version",
             "  (chặn tin cũ v1 ghi đè bản chuẩn v2)",
             "• Compound Index IXSCAN (SLA < 10 ms)",
         ],
@@ -1050,11 +1050,11 @@ def _draw_pre_stream_boxes(ax: plt.Axes) -> None:
         0.38,
         3.76,
         1.52,
-        "ZONE F · LIVE OPERATIONS UI",
-        "Streamlit Dashboard",
+        "ZONE F · DUAL LIVE UI",
+        "TOC Web & Streamlit",
         [
-            "• Cổng điều hành 5 Tab làm mới mỗi 5s",
-            "• Bản đồ điểm nóng, dự báo & kiểm toán",
+            "• FastAPI :8000 + ReactJS + Leaflet TOC",
+            "• Streamlit :8501 (5-Tab kiểm toán)",
         ],
         ZONE_F_COLOR,
         "#F0FDF4",

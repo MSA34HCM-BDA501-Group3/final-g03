@@ -14,7 +14,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from build_slides import _add_dual_rect, render_eda_chart  # noqa: E402
+from build_slides import _add_dual_rect, _render_pdf_to_pngs, render_eda_chart  # noqa: E402
 from render_pre_experiment_visuals import (  # noqa: E402
     render_pre_exp_batch_flow,
     render_pre_exp_graph_sketches,
@@ -40,10 +40,10 @@ from slide_renderer import (  # noqa: E402
 )
 
 REPO_DIR = SCRIPT_DIR.parent
-WORKSPACE_DIR = REPO_DIR.parent
-ARTIFACT_DIR = Path(r"C:\Users\PC\.gemini\antigravity\brain\f813022d-2858-4604-88b6-b1934862999e")
-CHART_DIR = REPO_DIR / "outputs" / "slide_charts"
-PRE_EXP_SLIDE_DIR = REPO_DIR / "outputs" / "slides_pre_experiment"
+OUTPUTS_DIR = REPO_DIR / "outputs"
+CHART_DIR = OUTPUTS_DIR / "slide_charts"
+PRE_EXP_SLIDE_DIR = OUTPUTS_DIR / "slides_pre_experiment"
+SLIDE_RENDER_DIR = OUTPUTS_DIR / "slide_renders"
 TOTAL_PRE_SLIDES = 13
 
 MILESTONE_NAV_TABS = [
@@ -337,7 +337,7 @@ def _add_ms_slide_04_system_architecture(prs: Presentation, arch_img: Path) -> D
             "Phase B (Online Speed Layer): Luồng trực tuyến chỉ đọc (.predict_proba) phát cảnh báo tạm thời (v1), "
             "tuyệt đối không xung đột ghi.",
             "Phase C (Late Recon): Cuối ngày gom tin trễ > 30m cập nhật bản chuẩn (v2) "
-            "trong ngân sách 10.5 / 16 GB RAM.",
+            "trong ngân sách 12.0 / 16.0 GB RAM.",
         ],
         badge="0 Write Conflict",
         theme="sky",
@@ -350,8 +350,8 @@ def _add_ms_slide_04_system_architecture(prs: Presentation, arch_img: Path) -> D
         3.12,
         "Limitations & Risks (Arch)",
         [
-            "Single-Host Contention: Thiết kế 4 dịch vụ Kafka (1.5G), Spark (6G), Mongo (2G), UI (1G) trên 1 máy tiềm "
-            "ẩn tranh chấp I/O đĩa khi Shuffle lớn.",
+            "Single-Host Contention: Thiết kế 6 dịch vụ Kafka (1.5G), Spark (6G), Mongo (2G), TOC Web (:8000) & "
+            "Streamlit (:8501) trên 1 máy tiềm ẩn tranh chấp I/O đĩa khi Shuffle lớn.",
             "Eventual Consistency Gap: Cảnh báo luồng (v1) ưu tiên độ trễ thấp, nên việc cập nhật biến trễ từ các gói "
             "tin muộn > 30m có độ trễ đến chu kỳ Phase C cuối ngày.",
         ],
@@ -382,39 +382,43 @@ def _add_ms_slide_05_data_eda_and_problems(prs: Presentation, eda_chart: Path) -
         2.10,
         "Hồ Sơ 5 Bảng Gốc & Mục Tiêu Quy Mô",
         [
-            "5 bảng gốc Kaggle (38.50 MB): nodes (577,967 điểm), streets (5,553 đường), segments (84,633 đoạn), "
-            "segment_status (90,938 pings; vd: 07:08 Lý Thường Kiệt 4 km/h) & train (33,441 cửa sổ đối chứng).",
-            "Đóng vai trò mẫu đối chứng thiết kế (Proof-of-Scale) cho bài toán toàn TP.HCM (ước tính 8–17 tỷ "
-            "tin/ngày, 1.5–3.0 TB/ngày); dữ liệu thô chỉ phủ GPS trên 11.85% đoạn đường.",
+            "5 bảng gốc Kaggle (38.50 MB): nodes (577,967 điểm), streets (5,553 đường), segments (84,633 thô → "
+            "84,206 cơ giới), segment_status (90,938 pings) & train (33,441 → 33,394 cửa sổ cơ giới).",
+            "Đóng vai trò mẫu đối chứng thiết kế (Proof-of-Scale) cho toàn TP.HCM (ước tính 8–17 tỷ tin/ngày, "
+            "1.5–3.0 TB/ngày); dữ liệu thô chỉ phủ GPS trên 11.87% đoạn cơ giới.",
         ],
         badge="Proof-of-Scale",
         theme="sky",
-        body_size=8.0,
+        body_size=7.9,
     )
 
     ec_headers = ["Data Problem (EC)", "Hiện tượng từ EDA & Phân tán", "Thiết kế Kỹ thuật Đề xuất"]
     ec_rows = [
         ["EC-1 · Missing Vmax", "85.21% cửa sổ (28,495) thiếu Vmax", "Train-Only 3-Tier Imputation (P85/Median/Prior)"],
-        ["EC-2 · Bad Geometry", "154 đoạn ≤ 0m & 427 lối đi bộ", "ANSI try_cast Quarantine + trung vị độ dài"],
-        ["EC-3 · Unicode Drift", "631 dòng Quận & 2,071 dòng lệch dấu", "Chuẩn hóa Unicode NFC đồng nhất tên đường"],
-        ["EC-4 · UTC Rollover", "4,320 cửa sổ (12.92%) lệch ngày UTC+7", "Quy đổi vn_hour (+7h), ict_date & sin/cos"],
+        ["EC-2 · Bad Geometry", "154 đoạn ≤ 0m, 427 POIs & 151 ping lỗi", "ANSI try_cast Quarantine + trung vị 27.0m"],
+        ["EC-3 · Unicode Drift", "631 dòng Quận & 2,247 dòng lệch dấu", "Chuẩn hóa Unicode NFC đồng nhất tên đường"],
+        ["EC-4 · UTC Rollover", "4,305 cửa sổ (12.89%) lệch ngày UTC+7", "Quy đổi vn_hour (+7h), ict_date & sin/cos"],
         [
-            "EC-5 · GPS Gaps >30m",
-            "66.27% (15,516 cặp) ngắt quãng ≥ 60m",
-            "Ghép cặp nghiêm ngặt (segment_id, slot_ts + 30m)",
+            "EC-5 · Gaps & Burst",
+            "66.30% (15,514) đứt ≥ 60m & 7,192 burst",
+            "Exact +30m (7,885 cặp) & sạch burst TRAIN",
         ],
         [
             "EC-6 · Cold-Start",
-            "88.15% (74,606 đoạn) có 0 bản tin GPS",
+            "88.13% (74,211 đoạn) có 0 bản tin GPS",
             "Static Feature Store (PageRank + 7D K-Means)",
         ],
-        ["EC-7 · Shape Points", "90.93% (525,542 nodes) vẽ cong & 48 cụt", "Cắt tỉa shape points + bù Dangling Sinks"],
+        [
+            "EC-7 · Shape Points",
+            "90.97% (525,786 nodes) vẽ cong & 314 cụt",
+            "Cắt tỉa shape points, loại U-turn & bù cụt",
+        ],
         ["EC-8 · Data Skew", "Tập trung tin giờ cao điểm & lệch avg()", "5-Tuple Monoid + 2-Stage Salting (8 giỏ)"],
         ["EC-9 · Late & Dupes", "Nguy cơ gửi lặp gói tin & trễ mạng > 30m", "32.0 KiB Bloom Filter + Tier-2 Backfill"],
         [
             "EC-10 · Crash & Stale",
             "Rủi ro sập luồng & tin cũ v1 đến muộn",
-            "WAL Checkpoint + khóa chống ghi đè version_ts",
+            "WAL Checkpoint + khóa chống ghi đè $status_version",
         ],
     ]
     s5.add_table(6.96, 2.00, 8.49, 6.38, ec_headers, ec_rows, [0.22, 0.38, 0.40], font_size=7.9)
@@ -475,7 +479,7 @@ def _add_ms_slide_07_method_explainer_2(prs: Presentation, method_img2: Path) ->
         2,
         "METHODOLOGY VISUALIZER (2/2) — TRỰC QUAN HÓA LINE-GRAPH PAGERANK, 7D K-MEANS & O(1) SKETCHES",
         "Giải Thích Phương Pháp (2/2): Line-Graph PageRank, K-Means & Bộ Đếm O(1)",
-        "Cơ chế phát hiện nút cổ chai bản đồ, suy diễn cho 88.15% đường thiếu GPS và lọc trùng trong 33.0 KiB RAM",
+        "Cơ chế phát hiện nút cổ chai bản đồ, suy diễn cho 88.13% đường thiếu GPS và lọc trùng trong 33.0 KiB RAM",
     )
     sm2.add_image(0.55, 2.00, 14.90, 4.50, method_img2)
 
@@ -580,15 +584,15 @@ def _add_ms_slide_09_modeling(prs: Presentation) -> DualSlide:
         "Thiết Kế Nhãn Exact t+30m & Chống Rò Rỉ",
         [
             "Exact (segment_id, slot_ts + 30m) Join: Chỉ ghép nhãn khi cùng đoạn đường có quan sát "
-            "ở đúng khung kế tiếp t + 30 phút (7,898 cặp hợp lệ từ EDA; loại bỏ 15,516 cặp đứt quãng ≥ 60m).",
-            "Chronological Split 70/15/15 + Boundary Purge: Chia tập TRAIN / VAL / TEST nghiêm ngặt "
-            "theo trục thời gian và cắt bỏ các mẫu sát biên để ngăn rò rỉ chuỗi trễ.",
+            "ở đúng khung kế tiếp t + 30 phút (7,885 cặp hợp lệ từ EDA; loại bỏ 15,514 cặp đứt quãng ≥ 60m).",
+            "Chronological Split 70/15/15 + Burst Separation & Purge: Chia tập TRAIN / VAL / TEST theo trục thời "
+            "gian, tách 7,192 burst windows tổng hợp khỏi TRAIN và cắt mẫu sát biên.",
             "Future-Shuffle Falsification Protocol: Kiểm chứng tự động bằng phép xáo trộn tương lai τ > t để đảm bảo "
             "ma trận đầu vào X_t hoàn toàn bất biến.",
         ],
         badge="Zero Leakage",
         theme="white",
-        body_size=8.3,
+        body_size=8.1,
     )
     s9.add_card(
         0.55,
@@ -615,10 +619,10 @@ def _add_ms_slide_09_modeling(prs: Presentation) -> DualSlide:
         3.08,
         "Mô Hình Nghiên Cứu & Cơ Chế Cold-Start",
         [
-            "Mô hình Đề xuất — Random Forest (23D): Thiết kế 250 cây, max_depth=14, class_weight='balanced_subsample' "
-            "nhằm học tương tác phi tuyến trên dữ liệu thưa và mất cân bằng lớp mà không cần chuỗi liên tục như GNN.",
+            "Mô hình Đề xuất — Random Forest (23D): Thiết kế 250 cây, max_depth=14, clean sqrt cls_w (0.65) và tuyển "
+            "chọn bằng Live VAL Composite Gate (0.5·Acc + 0.5·PR-AUC) trên dữ liệu organic thưa.",
             "Hệ đối chứng Ablation dự kiến: Đặt cạnh Persistence Baseline, Decision Tree & Binary GBT (14D vs. 23D); "
-            "kết hợp Static Feature Store để chấm điểm cho cả 74,606 đoạn vùng mù Cold-Start.",
+            "kết hợp Static Feature Store phủ 74,211 đoạn Cold-Start (84,206 đoạn cơ giới).",
         ],
         badge="Model Design",
         theme="sky_strong",
@@ -666,9 +670,9 @@ def _add_ms_slide_10_batch_processing(prs: Presentation, batch_flow_img: Path) -
             "Distributed Spark ETL: Thiết kế BroadcastHashJoin ghim danh mục đường vào RAM; 2-Stage Key Salting (8 giỏ "
             "0..7) đi kèm bộ gộp giao hoán 5-Tuple Monoid (cnt, sum, min, max, sev) chống nghẽn giờ cao điểm và bảo "
             "toàn kết quả chính xác; lưu kho Gold Parquet phân vùng theo year_month.",
-            "Graph & Cold-Start Mining: Cắt tỉa 90.93% điểm uốn cong để dựng Directed Line-Graph PageRank (β=0.85, bù "
-            "nút cụt); thiết kế 2-Pass SON / FPGrowth tìm tập đường đồng kẹt "
-            "& 7D K-Means phủ kín 74,606 đoạn Cold-Start.",
+            "Graph & Cold-Start Mining: Cắt tỉa 90.97% điểm uốn cong để dựng Directed Line-Graph PageRank (β=0.85, "
+            "loại U-turn, bù nút cụt); thiết kế 2-Pass SON / FPGrowth tìm tập đường đồng kẹt "
+            "& 7D K-Means phủ kín 74,211 đoạn Cold-Start.",
         ],
         badge="Batch Design",
         theme="sky",
@@ -681,10 +685,10 @@ def _add_ms_slide_10_batch_processing(prs: Presentation, batch_flow_img: Path) -
         2.10,
         "Limitations & Risks (Batch Processing)",
         [
-            "Nguy cơ cỡ mẫu thưa ở luật lan truyền đồng kẹt: Do tín hiệu GPS gốc chỉ phủ 11.85% đoạn đường "
+            "Nguy cơ cỡ mẫu thưa ở luật lan truyền đồng kẹt: Do tín hiệu GPS gốc chỉ phủ 11.87% đoạn cơ giới "
             "và đứt quãng, các luật lan truyền trễ +30m có thể có Support thấp — "
             "chỉ nên dùng làm giả thuyết thăm dò (Exploratory).",
-            "Giới hạn phân cụm Cold-Start tĩnh: 74,606 đoạn thiếu GPS được gán cụm theo hình thái đồ thị và Vmax cấp "
+            "Giới hạn phân cụm Cold-Start tĩnh: 74,211 đoạn thiếu GPS được gán cụm theo hình thái đồ thị và Vmax cấp "
             "đường, chưa phản ánh được các điểm họp chợ tự phát hay nút cổ chai vi mô trong hẻm.",
         ],
         badge="Batch Risk",
@@ -718,7 +722,8 @@ def _add_ms_slide_11_stream_processing(prs: Presentation, stream_flow_img: Path)
             "BitPackedBloomFilter (32.0 KiB, 262,144 bits) lọc trùng & HyperLogLog++ (1.0 KiB) đếm đường hoạt động; "
             "EWMA Hotspot (α=0.15) bắt điểm ĐANG kẹt lì bổ trợ Random Forest (+30m) kèm nhật ký WAL.",
             "Two-Tier Recon & MongoDB: Thiết kế đối soát Tier 1 (kiểm chuẩn đúng hạn) & Tier 2 (gom bù tin trễ > 30m, "
-            "tính lại lag & re-score v2); Bulk Upsert kèm khóa version_ts & Compound Index IXSCAN (mục tiêu < 10 ms).",
+            "tính lại lag & re-score v2); Bulk Upsert kèm khóa $status_version & IXSCAN (mục tiêu < 10 ms) cho Dual-UI "
+            ":8000/:8501.",
         ],
         badge="33.0 KiB · SLA <10ms",
         theme="sky",
@@ -763,7 +768,7 @@ def _add_ms_slide_12_limitations_and_risks(prs: Presentation) -> DualSlide:
         [
             "3. System Architecture",
             (
-                "4 dịch vụ chia sẻ tài nguyên trên 1 máy Docker (10.5/16 GB);\n"
+                "6 dịch vụ chia sẻ tài nguyên trên 1 máy Docker (12.0/16 GB);\n"
                 "độ trễ đồng bộ biến trễ giữa Phase B và Phase C"
             ),
             "Giới hạn cứng mem_limit từng container;\nphân tách đọc/ghi 3-Phase MLOps",
@@ -779,10 +784,10 @@ def _add_ms_slide_12_limitations_and_risks(prs: Presentation) -> DualSlide:
         [
             "6. Modeling",
             (
-                "Nguy cơ ngưỡng mặc định bảo thủ do quán tính trạng thái cao;\n"
+                "Nguy cơ ngưỡng mặc định bảo thủ & lớp B–E thưa;\n"
                 "thiếu biến ngoại sinh trực tiếp (mưa ngập, tai nạn)"
             ),
-            "Kế hoạch hiệu chỉnh ngưỡng τ trên tập VAL;\ncảnh báo sớm theo xác suất rủi ro liên tục",
+            "Lọc burst TRAIN, VAL Composite Gate & hiệu chỉnh τ;\ncảnh báo sớm theo xác suất rủi ro liên tục",
         ],
         [
             "7. Batch Processing",
@@ -792,7 +797,7 @@ def _add_ms_slide_12_limitations_and_risks(prs: Presentation) -> DualSlide:
         [
             "8. Stream Processing",
             "Bloom Filter 32.0 KiB dễ đầy bit nếu chạy dài ngày;\ntin trễ > 30m phải chờ phiên đối soát cuối ngày",
-            "Thiết kế Two-Tier Reconciliation bù trễ;\nkhóa version_ts chặn tin cũ v1 ghi đè bản chuẩn v2",
+            "Thiết kế Two-Tier Reconciliation bù trễ;\nkhóa $status_version chặn tin cũ v1 ghi đè bản chuẩn v2",
         ],
     ]
     s12.add_table(0.55, 2.00, 8.55, 6.38, comp_headers, comp_rows, [0.22, 0.43, 0.35], font_size=8.0)
@@ -804,12 +809,12 @@ def _add_ms_slide_12_limitations_and_risks(prs: Presentation) -> DualSlide:
         6.38,
         "4 Rủi Ro & Giới Hạn Chung Cấp Hệ Thống",
         [
-            "1. Spatial & Fleet Representation Bias: Nguồn GPS cộng đồng chỉ phủ 11.85% đoạn đường (lệch về ô tô trên "
-            "trục chính), chưa đại diện đầy đủ cho luồng xe máy (> 80% lưu lượng TP.HCM).",
+            "1. Spatial & Fleet Representation Bias: Nguồn GPS cộng đồng chỉ phủ 11.87% đoạn cơ giới (lệch về ô tô "
+            "trên trục chính), chưa đại diện đầy đủ cho luồng xe máy (> 80% lưu lượng TP.HCM).",
             "2. Open-World Concept Drift & Seasonality: Mô hình đóng băng ở Phase A có nguy cơ suy giảm độ chính xác "
             "khi chuyển sang mùa mưa ngập lịch sử hoặc phát sinh rào chắn thi công mới.",
-            "3. Rare Sudden-Onset Imbalance: Các pha chuyển đột ngột từ thông thoáng sang kẹt cứng chiếm tỷ trọng rất "
-            "nhỏ so với trạng thái đứng yên, đòi hỏi đánh giá kỹ bằng PR-AUC và hiệu chỉnh ngưỡng.",
+            "3. Rare Sudden-Onset & Class Imbalance: Các pha đổi trạng thái đột ngột và lớp trung gian B–E chiếm tỷ "
+            "trọng nhỏ, đòi hỏi lọc burst TRAIN, đánh giá PR-AUC và hiệu chỉnh ngưỡng.",
             "4. Proof-of-Scale & Human-in-the-Loop Scope: Thiết kế hiện hướng tới kiểm chứng trên tập mẫu chuẩn 38.50 "
             "MB và cung cấp khuyến nghị điều hành, chưa đóng vòng tự động vào đèn SCATS.",
         ],
@@ -854,18 +859,18 @@ def _add_ms_slide_13_plan_next_actions(prs: Presentation) -> DualSlide:
                 "Literature Review, Line-Graph PageRank,\n"
                 "SON/K-Means, nhãn t+30m & mô hình 23D"
             ),
-            "Huấn luyện & chạy Ablation 7 cấu hình (Persistence, DT, RF, GBT trên 14D vs. 23D); kiểm định chống rò rỉ "
-            "Future-Shuffle; phân tích chuyên sâu chế độ chuyển pha (LOS(t) ≠ LOS(t+30m)) & chọn ngưỡng τ trên VAL.",
+            "Huấn luyện & chạy Ablation 7 cấu hình (14D vs. 23D) trên dữ liệu đã tách burst; tuyển chọn bằng VAL "
+            "Composite Gate; kiểm định Future-Shuffle, McNemar & hiệu chỉnh ngưỡng chuyển pha τ trên VAL.",
         ],
         [
             "3. Phạm Công Minh\n(MSSV: 25MS23310)",
             (
                 "Hoàn tất thiết kế Mục 3, 8, 9 & 10:\n"
-                "Kiến trúc Zones A–F (Docker 10.5G),\n"
-                "luồng Kafka, Sketches 33 KiB & Recon"
+                "Kiến trúc Zones A–F (Docker 12.0G),\n"
+                "luồng Kafka, Sketches 33 KiB & Dual-UI"
             ),
-            "Đo kiểm Runtime luồng Kafka → Speed Layer → MongoDB: đo FPR thực tế của Bloom Filter, sai số HLL++, diễn "
-            "tập sập luồng kiểm tra WAL Recovery, đo tỷ lệ bù trễ Tier-2, độ trễ IXSCAN (p50/p95) & dựng UI 5 Tab.",
+            "Đo kiểm Runtime luồng Kafka → Speed Layer (watermark thật) → MongoDB ($status_version & p50/p95 "
+            "IXSCAN); kiểm thử WAL Recovery, Tier-2 Recon & dựng Dual-UI (FastAPI TOC Web :8000 & Streamlit :8501).",
         ],
     ]
     s13.add_table(0.55, 2.00, 14.90, 3.82, t_headers, t_rows, [0.19, 0.30, 0.51], font_size=8.1)
@@ -877,10 +882,10 @@ def _add_ms_slide_13_plan_next_actions(prs: Presentation) -> DualSlide:
         2.40,
         "Lộ Trình Thực Thi Kế Tiếp (Sprint 1 & Sprint 2)",
         [
-            "Sprint 1 — Thực nghiệm Đồ thị & Học máy Dự báo +30m: Sinh kho Static Feature Store (84,633 đoạn), khóa "
-            "Frozen Registry trên tập TRAIN, xuất bảng kết quả Ablation 7 mô hình và đánh giá độ phủ Cold-Start.",
-            "Sprint 2 — Benchmark Runtime Hạ tầng & Tích hợp Live Demo: Khởi chạy cụm Docker (Kafka, Spark, MongoDB), "
-            "đo thời gian thực thi, bộ nhớ tiêu thụ, độ trễ truy vấn explain('executionStats') và kết nối UI :8501.",
+            "Sprint 1 — Thực nghiệm Đồ thị & Học máy Dự báo +30m: Sinh kho Static Feature Store (84,206 đoạn cơ "
+            "giới), tách burst khỏi TRAIN, khóa Frozen Registry, chạy Ablation 7 mô hình & đo phủ Cold-Start.",
+            "Sprint 2 — Benchmark Runtime Hạ tầng & Tích hợp Dual-UI: Khởi chạy cụm 6 container Docker (Kafka, "
+            "Spark, MongoDB, TOC Web :8000 & Streamlit :8501), đo độ trễ IXSCAN explain('executionStats') & WAL.",
         ],
         badge="Immediate Next Actions",
         theme="sky_strong",
@@ -907,11 +912,12 @@ def _add_ms_slide_13_plan_next_actions(prs: Presentation) -> DualSlide:
 
 
 def _safe_copy(src: Path, dst: Path) -> None:
-    if dst.parent.exists():
-        try:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if src.resolve() != dst.resolve():
             shutil.copy2(src, dst)
-        except OSError:
-            pass
+    except OSError:
+        pass
 
 
 def _save_pre_experiment_outputs(prs: Presentation, all_slides: list[DualSlide]) -> tuple[Path, Path]:
@@ -922,25 +928,17 @@ def _save_pre_experiment_outputs(prs: Presentation, all_slides: list[DualSlide])
         png_path = PRE_EXP_SLIDE_DIR / f"slide_{idx:02d}.png"
         dual.save_png(png_path, close_fig=False)
         slide_pngs.append(png_path)
-        _safe_copy(png_path, ARTIFACT_DIR / f"pre_exp_slide_{idx:02d}.png")
 
     pptx_name = "HCMC_Smart_Traffic_PreExperiment_Presentation.pptx"
     pdf_name = "HCMC_Smart_Traffic_PreExperiment_Slides.pdf"
 
     primary_pptx = REPO_DIR / pptx_name
     prs.save(str(primary_pptx))
-    _safe_copy(primary_pptx, WORKSPACE_DIR / pptx_name)
-
-    script_md = REPO_DIR / "PRESENTATION_SCRIPT_PRE_EXPERIMENT.md"
-    if script_md.is_file():
-        _safe_copy(script_md, WORKSPACE_DIR / script_md.name)
+    _safe_copy(primary_pptx, OUTPUTS_DIR / pptx_name)
 
     primary_pdf = REPO_DIR / pdf_name
-    pdf_targets = [primary_pdf, WORKSPACE_DIR / pdf_name]
-    grid_targets = [
-        REPO_DIR / "outputs" / "pre_exp_slides_overview_grid.png",
-        ARTIFACT_DIR / "pre_exp_slides_overview_grid.png",
-    ]
+    pdf_targets = [primary_pdf, OUTPUTS_DIR / pdf_name]
+    grid_targets = [OUTPUTS_DIR / "pre_exp_slides_overview_grid.png"]
     export_overview_grid_and_pdf(
         slide_pngs,
         grid_targets,
@@ -948,11 +946,12 @@ def _save_pre_experiment_outputs(prs: Presentation, all_slides: list[DualSlide])
         slide_figs=slide_figs,
         pdf_title="HCMC Smart Traffic Big Data Platform — Design & Methodology Presentation (Pre-Experiment · BDA501)",
     )
+    _render_pdf_to_pngs(primary_pdf, [SLIDE_RENDER_DIR / "pre_experiment"])
     return primary_pptx, primary_pdf
 
 
 def main() -> None:
-    arch_img = REPO_DIR / "outputs" / "system_architecture.png"
+    arch_img = OUTPUTS_DIR / "system_architecture.png"
     eda_chart = CHART_DIR / "chart_eda_anomalies.png"
     if not eda_chart.is_file():
         render_eda_chart(eda_chart)

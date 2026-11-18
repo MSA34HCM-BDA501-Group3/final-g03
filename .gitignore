@@ -2,12 +2,14 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.crc
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
 .venv/
 venv/
 env/
+toc_frontend/node_modules/
 .DS_Store
 Thumbs.db
 
@@ -26,6 +28,9 @@ Thumbs.db
 raw_data/
 /data/*
 !/data/demo_sample/
-outputs/spark_pipeline_model/**/data/
 outputs/live_reset_signal.json
-evidence/session9/_template_*.docx
+outputs/checkpoints/
+outputs/stream_sink1_bronze/
+outputs/live_bronze_wal.jsonl
+outputs/spark_bronze_stream_sink/
+outputs/stream_landing_json/

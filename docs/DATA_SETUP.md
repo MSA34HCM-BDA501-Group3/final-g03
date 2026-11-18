@@ -35,19 +35,18 @@ Các con số kiểm kê trong `outputs/file_inventory.csv` là kết quả đã
 
 ```powershell
 python -m pip install -r requirements.txt
-docker compose up --build -d kafka mongo spark
+docker compose up -d --build
 python pipeline.py
 python baseline.py
-pytest -v
-ruff check . --select E,F,W,C901 --config "lint.mccabe.max-complexity=14" --config "line-length=120"
+python starter_stream.py --kill-after-batch 1
+python -m ruff check . --select E,F,W,C901 --config "lint.mccabe.max-complexity=14" --config "line-length=120"
 ```
 
-Sau khi chạy thành công, cần có `data/dataset.csv`, `data/lakehouse/segment_static_features.parquet` và các báo cáo trong `outputs/`, bao gồm `outputs/transition_evaluation.csv`. Dashboard `app.py` đọc dữ liệu đã sinh nên chỉ khởi chạy sau pipeline:
+Sau khi chạy thành công, cần có `data/dataset.csv` (`33,394` dòng × `60` cột), `data/lakehouse/segment_static_features.parquet` (`84,206` đoạn đường cơ giới), `data/lakehouse/bronze_raw_events/events.parquet` (`90,787` bản tin GPS sạch), `data/lakehouse/stream_replay_windows/replay.parquet`, `data/lakehouse/curated_gold/year_month=*` (`10` phân vùng tháng đọc sạch bởi cả PyArrow/Pandas và Spark 3.5.7), và các báo cáo trong `outputs/`, bao gồm `outputs/metrics.json`, `outputs/ablation_results.csv`, `outputs/transition_evaluation.csv`, `outputs/mongo_verify.json`, `outputs/spark_runtime_evidence.json`.
 
-```powershell
-docker compose up -d app
-```
+Hai giao diện Web đọc dữ liệu đã sinh sau khi chạy pipeline:
+- **Web TOC (`ReactJS + FastAPI`) tại <http://localhost:8000>:** dịch vụ `toc-web` trong `docker-compose.yml`.
+- **Dashboard `Streamlit 5-Tab` tại <http://localhost:8501>:** dịch vụ `app` trong `docker-compose.yml` hoặc chạy `streamlit run app.py` trên host.
 
-Hoặc dùng `streamlit run app.py` trong môi trường Python đã cài dependencies. `ui-demo.html` là bản tĩnh độc lập, không cần raw data.
-
-`raw_data/` và `data/` nằm trong `.gitignore` có chủ ý. Bản dựng Spark 3.5.7 dùng `Dockerfile.spark35`; `Dockerfile.spark`/`requirements-spark.txt` là môi trường riêng PySpark 4.2.0 cho `compose.quyen.yml`.
+`raw_data/` và `data/` nằm trong `.gitignore` có chủ ý. Bản dựng Spark 3.5.7 dùng `Dockerfile.spark35` (`hcmc-traffic-spark:3.5.7`); `Dockerfile.spark`/`requirements-spark.txt` là môi trường riêng cho `compose.quyen.yml`.
+*(Bộ kiểm thử `tests/test_platform_v3.py` và `tests/test_quyen_spark.py` đã đồng bộ Wave 2: `python -m pytest -v` đạt `40 passed` trên full data và `29 passed, 6 skipped` trên checkout mới dùng `data/demo_sample/`.)*

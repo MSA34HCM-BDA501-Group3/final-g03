@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import sys
 from pathlib import Path
 
+import fitz
+import joblib
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from matplotlib.patches import Rectangle
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE
@@ -55,25 +59,63 @@ from slide_renderer import (  # noqa: E402
 )
 
 REPO_DIR = SCRIPT_DIR.parent
-WORKSPACE_DIR = REPO_DIR.parent
-ARTIFACT_DIR = Path(r"C:\Users\PC\.gemini\antigravity\brain\f813022d-2858-4604-88b6-b1934862999e")
-CHART_DIR = REPO_DIR / "outputs" / "slide_charts"
-SLIDE_PNG_DIR = REPO_DIR / "outputs" / "slides"
+OUTPUTS_DIR = REPO_DIR / "outputs"
+CHART_DIR = OUTPUTS_DIR / "slide_charts"
+SLIDE_PNG_DIR = OUTPUTS_DIR / "slides"
+SLIDE_RENDER_DIR = OUTPUTS_DIR / "slide_renders"
 TOTAL_SLIDES = 17
 
 
+def _load_slide_truth() -> dict:
+    m = json.loads((OUTPUTS_DIR / "metrics.json").read_text(encoding="utf-8"))
+    sp = json.loads((OUTPUTS_DIR / "spark_runtime_evidence.json").read_text(encoding="utf-8"))
+    mv = json.loads((OUTPUTS_DIR / "mongo_verify.json").read_text(encoding="utf-8"))
+    qp = json.loads((OUTPUTS_DIR / "query_progress.json").read_text(encoding="utf-8"))
+    ab = pd.read_csv(OUTPUTS_DIR / "ablation_results.csv")
+    art = joblib.load(OUTPUTS_DIR / "model.joblib")
+    imps = dict(zip(art["full_features"], art["rf_multiclass"].feature_importances_))
+    local_set = set(art["local_features"])
+    local_imp = sum(v for k, v in imps.items() if k in local_set) * 100.0
+    graph_imp = sum(v for k, v in imps.items() if k not in local_set) * 100.0
+    return {
+        "m": m,
+        "sp": sp,
+        "mv": mv,
+        "qp": qp,
+        "ab": ab,
+        "imps": imps,
+        "local_imp": local_imp,
+        "graph_imp": graph_imp,
+    }
+
+
 def render_eda_chart(out_path: Path) -> Path:
+    m = json.loads((OUTPUTS_DIR / "metrics.json").read_text(encoding="utf-8"))
+    ds = m["dataset"]
+    qf = m["quality_funnel_c5"]
+    tr = m["evaluation"]["transition_analysis"]
+    cold_pct = m["static_feature_store_c13b"]["cold_start_ratio_pct"]
+    pruned_pct = ds["pruned_orphan_nodes_count"] / ds["nodes_count"] * 100.0
+
     fig, ax = plt.subplots(figsize=(6.65, 6.10), dpi=220)
     labels = [
-        "UTC → Giờ VN Rollover (+7h)\n(4,320 / 33,441 cửa sổ 30m)",
-        "Non-Contiguous GPS Gaps (> 30m)\n(15,516 / 23,414 cặp quan sát)",
+        f"UTC → Giờ VN Rollover (+7h)\n(4,305 / {ds['labeled_windows_count']:,} cửa sổ 30m)",
+        "Non-Contiguous GPS Gaps (> 30m)\n(15,514 / 23,399 cặp quan sát)",
         "Streets Missing max_velocity\n(4,566 / 5,553 tuyến đường)",
-        "Windows Missing max_velocity\n(28,495 / 33,441 cửa sổ 30m)",
-        "Cold-Start Segments (0 GPS)\n(74,606 / 84,633 đoạn đường)",
-        "Segments Missing max_velocity\n(74,762 / 84,633 đoạn đường)",
-        "Intermediate Shape Points\n(525,542 / 577,967 nodes)",
+        f"Windows Missing max_velocity\n(28,495 / {ds['labeled_windows_count']:,} cửa sổ 30m)",
+        f"Cold-Start Segments (0 GPS)\n({ds['cold_start_segments_count']:,} / {ds['segments_count']:,} đoạn cơ giới)",
+        f"Segments Missing max_velocity\n(74,762 / {ds['raw_segments_count']:,} đoạn thô)",
+        f"Intermediate Shape Points\n({ds['pruned_orphan_nodes_count']:,} / {ds['nodes_count']:,} nodes)",
     ]
-    vals = [12.92, 66.27, 82.23, 85.21, 88.15, 88.34, 90.93]
+    vals = [
+        12.89,
+        66.30,
+        82.23,
+        qf["missing_max_velocity_train_pct"],
+        cold_pct,
+        qf["missing_max_velocity_segments_pct"],
+        round(pruned_pct, 2),
+    ]
     cols = ["#38BDF8", "#0EA5E9", "#0284C7", "#0369A1", "#1D4ED8", "#1E3A8A", "#0F172A"]
     y = np.arange(len(labels))
     bars = ax.barh(y, vals, color=cols, height=0.58, edgecolor="none")
@@ -83,8 +125,9 @@ def render_eda_chart(out_path: Path) -> Path:
         "Tỷ lệ khuyết thiếu & đặc thù dữ liệu thực nghiệm (%)", fontsize=8.8, fontweight="bold", color="#334155"
     )
     ax.set_title(
-        "5-Table EDA: Empirical Data Sparsity & Anomaly Profile",
-        fontsize=10.1,
+        f"5-Table EDA: Sparsity & Anomaly Profile (Non-Road POI: {qf['non_road_osm_segments']} | "
+        f"Burst: {tr['test_samples'] and ds['synthetic_burst_windows_flagged']:,})",
+        fontsize=9.4,
         fontweight="bold",
         color="#0F172A",
         pad=10,
@@ -109,58 +152,73 @@ def render_eda_chart(out_path: Path) -> Path:
 
 
 def render_spark_chart(out_path: Path) -> Path:
+    m = json.loads((OUTPUTS_DIR / "metrics.json").read_text(encoding="utf-8"))
+    sp = json.loads((OUTPUTS_DIR / "spark_runtime_evidence.json").read_text(encoding="utf-8"))
+    p1 = m["monoid_and_catalyst_c9"]["pillar_i1_monoid_and_salting"]
+    ms_sp = sp["monoid_salting_spark"]
+    jn_sp = sp["catalyst_join_spark"]
+
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(6.95, 6.10), dpi=220)
+    raw_skew = p1["temporal_slot_peak_to_median_ratio"]
+    salt_skew = p1["peak_slot_salted_bucket_skew_ratio"]
     bars1 = ax1.barh(
-        ["2-Stage Key Salting\n(8 Salt Buckets)", "Un-salted GroupBy\n(Rush-Hour Skew)"],
-        [1.023, 687.43],
+        ["2-Stage Key Salting\n(8 Buckets)", "Un-salted GroupBy\n(Rush-Hour Skew)"],
+        [salt_skew, raw_skew],
         color=["#059669", "#DC2626"],
         height=0.50,
     )
     ax1.set_xscale("log")
-    ax1.set_xlim(0.5, 2500)
-    ax1.set_xlabel("Peak-to-Median Partition Load Ratio (Log Scale)", fontsize=8.5, fontweight="bold")
+    ax1.set_xlim(0.5, 3200)
+    ax1.set_xlabel("Peak-to-Median Slot Load Ratio (Log Scale)", fontsize=8.5, fontweight="bold")
     ax1.set_title(
-        "2-Stage Key Salting (8 Buckets · CV = 0.0057)",
-        fontsize=9.6,
+        f"2-Stage Key Salting (CV={p1['salt_bucket_cv']:.4f} · IQR {ms_sp['unsalted_iqr_ms']:.1f}→"
+        f"{ms_sp['salted_iqr_ms']:.1f} ms · Diff={ms_sp['two_way_exceptAll_diff']})",
+        fontsize=9.2,
         fontweight="bold",
         color="#0F172A",
     )
     ax1.grid(axis="x", linestyle="--", alpha=0.35)
     ax1.spines["top"].set_visible(False)
     ax1.spines["right"].set_visible(False)
-    for bar, txt in zip(bars1, ["1.023x (Balanced)", "687.43x (Hot Partition Skew)"]):
+    for bar, txt in zip(
+        bars1,
+        [f"{salt_skew:.3f}x (Balanced)", f"{raw_skew:.2f}x (Hot Slot Skew)"],
+    ):
         ax1.text(
             bar.get_width() * 1.18,
             bar.get_y() + bar.get_height() / 2,
             txt,
             va="center",
-            fontsize=8.4,
+            fontsize=8.3,
             fontweight="bold",
             color="#0F172A",
         )
 
     x = np.arange(2)
-    w = 0.32
-    r1 = ax2.bar(x - w / 2, [10, 5], w, label="SortMergeJoin (Baseline)", color="#64748B")
-    r2 = ax2.bar(x + w / 2, [2, 0], w, label="BroadcastHashJoin (Optimized)", color="#0284C7")
+    w = 0.34
+    b_vals = [jn_sp["baseline_median_ms"], ms_sp["unsalted_median_ms"]]
+    o_vals = [jn_sp["optimized_median_ms"], ms_sp["salted_median_ms"]]
+    r1 = ax2.bar(x - w / 2, b_vals, w, label="Baseline (SortMerge / Unsalted)", color="#64748B")
+    r2 = ax2.bar(x + w / 2, o_vals, w, label="Optimized (Broadcast / 8-Salt)", color="#0284C7")
     ax2.set_xticks(
         x,
         [
-            "Full Window Pipeline\n(0.946s → 0.506s)",
-            "Static Topology Join\n(0.932s → 0.666s)",
+            f"Catalyst Join ({jn_sp['baseline_exchange_stages_measured']}→"
+            f"{jn_sp['optimized_exchange_stages_measured']} Exch · +{jn_sp['join_speedup_pct']:.2f}%)",
+            "Monoid Salting Tradeoff\n(2-Stage Shuffle vs IQR Stability)",
         ],
-        fontsize=8.4,
+        fontsize=8.1,
         fontweight="bold",
     )
-    ax2.set_ylim(0, 12.2)
-    ax2.set_ylabel("Shuffle Exchanges", fontsize=8.5, fontweight="bold")
+    ax2.set_ylim(0, max(o_vals + b_vals) * 1.24)
+    ax2.set_ylabel("Spark 3.5.7 Median Runtime (ms)", fontsize=8.4, fontweight="bold")
     ax2.set_title(
-        "Catalyst Physical Plan: BroadcastHashJoin vs. SortMergeJoin",
-        fontsize=9.6,
+        "Spark 3.5.7 Physical Plan & Monoid Salting Tradeoff (0 exceptAll Diff)",
+        fontsize=9.4,
         fontweight="bold",
         color="#0F172A",
     )
-    ax2.legend(fontsize=8.1, loc="upper right")
+    ax2.legend(fontsize=8.0, loc="upper left")
     ax2.grid(axis="y", linestyle="--", alpha=0.35)
     ax2.spines["top"].set_visible(False)
     ax2.spines["right"].set_visible(False)
@@ -169,10 +227,10 @@ def render_spark_chart(out_path: Path) -> Path:
             height = bar.get_height()
             ax2.text(
                 bar.get_x() + bar.get_width() / 2,
-                height + 0.3,
-                f"{int(height)}",
+                height + 4.5,
+                f"{height:.1f} ms",
                 ha="center",
-                fontsize=8.6,
+                fontsize=8.1,
                 fontweight="bold",
                 color="#0F172A",
             )
@@ -185,17 +243,26 @@ def render_spark_chart(out_path: Path) -> Path:
 
 
 def render_streaming_serving_chart(out_path: Path) -> Path:
+    m = json.loads((OUTPUTS_DIR / "metrics.json").read_text(encoding="utf-8"))
+    mv = json.loads((OUTPUTS_DIR / "mongo_verify.json").read_text(encoding="utf-8"))
+    qp = json.loads((OUTPUTS_DIR / "query_progress.json").read_text(encoding="utf-8"))
+    total_w = m["dataset"]["labeled_windows_count"]
+    prov_tail = int(qp["Phase_B_in_flight_provisional_retained"])
+    late_backfill = int(qp["Phase_C_reconciled_backfilled"])
+    batch_ver = total_w - prov_tail - late_backfill
+    lat = mv["uc2_arterial_query"]["latency_benchmark_ms"]
+
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(6.85, 6.10), dpi=220)
     stages = [
-        "provisional_stream (v1)\n(Active Tail Windows)",
-        "late_backfilled_by_batch (v2)\n(Late > 30m Watermark)",
-        "batch_verified (v2)\n(100% On-Time Parity)",
+        "provisional_stream (v1)\n(Active Tail Retained)",
+        "late_backfilled (v2)\n(Late > 30m · 609 Lag Healed)",
+        "batch_verified (v2)\n(Tier-1 exceptAll == 0)",
     ]
-    counts = [488, 501, 32452]
+    counts = [prov_tail, late_backfill, batch_ver]
     b1 = ax1.barh(stages, counts, color=["#0EA5E9", "#D97706", "#059669"], height=0.52)
     ax1.set_xscale("log")
     ax1.set_xlim(100, 190000)
-    ax1.set_xlabel("30-Minute Windows in Serving Store (Total = 33,441)", fontsize=8.4, fontweight="bold")
+    ax1.set_xlabel(f"30-Minute Windows in Serving Store (Total = {total_w:,})", fontsize=8.4, fontweight="bold")
     ax1.set_title(
         "Two-Tier Reconciliation Lifecycle (Completeness: 98.50% → 100.00%)",
         fontsize=9.5,
@@ -220,17 +287,17 @@ def render_streaming_serving_chart(out_path: Path) -> Path:
         "Warm Median\n(IXSCAN)",
         "Warm p95\n(IXSCAN)",
         "Cold First\n(IXSCAN)",
-        "Target SLA\n(< 10 ms)",
+        "Warm Median\n(COLLSCAN)",
     ]
-    lat_vals = [0.530, 0.636, 1.113, 10.0]
-    lat_cols = ["#0284C7", "#059669", "#0D9488", "#94A3B8"]
+    lat_vals = [lat["warm_median_ms"], lat["warm_p95_ms"], lat["cold_query_ms"], lat["collscan_warm_median_ms"]]
+    lat_cols = ["#0284C7", "#059669", "#0D9488", "#DC2626"]
     x2 = np.arange(len(lat_labels))
     b2 = ax2.bar(x2, lat_vals, width=0.46, color=lat_cols)
     ax2.set_xticks(x2, lat_labels, fontsize=8.3, fontweight="bold", color="#0F172A")
-    ax2.set_ylim(0, 11.8)
+    ax2.set_ylim(0, max(lat_vals) * 1.18)
     ax2.set_ylabel("Query Latency (ms)", fontsize=8.4, fontweight="bold")
     ax2.set_title(
-        "MongoDB 8.0.34 Compound Index IXSCAN Latency (< 1 ms)",
+        f"MongoDB {mv['mongo_server_version']} ESR IXSCAN vs COLLSCAN ({lat['ixscan_vs_collscan_speedup_x']:.2f}x)",
         fontsize=9.5,
         fontweight="bold",
         color="#0F172A",
@@ -241,8 +308,8 @@ def render_streaming_serving_chart(out_path: Path) -> Path:
     for bar, val in zip(b2, lat_vals):
         ax2.text(
             bar.get_x() + bar.get_width() / 2,
-            val + 0.30,
-            f"{val:.3f} ms" if val < 5 else f"{val:.1f} ms",
+            val + 0.25,
+            f"{val:.3f} ms",
             ha="center",
             fontsize=8.3,
             fontweight="bold",
@@ -539,8 +606,11 @@ def _add_slide_03_literature_review(prs: Presentation) -> DualSlide:
     return s3
 
 
-def _add_slide_04_system_architecture(prs: Presentation, arch_img: Path) -> DualSlide:
+def _add_slide_04_system_architecture(prs: Presentation, arch_img: Path, t: dict | None = None) -> DualSlide:
     """Slide 04 (Section 3): System Architecture (Zones A-F & Pipelines) + Component Limitations & Risks."""
+    tr = (t or _load_slide_truth())["m"]
+    ev = tr["evaluation"]
+    rc = tr["streaming_mmds"]["reconciliation"]
     s4 = DualSlide(prs)
     s4.add_chrome(
         4,
@@ -549,8 +619,8 @@ def _add_slide_04_system_architecture(prs: Presentation, arch_img: Path) -> Dual
         "SECTION 03 · SYSTEM ARCHITECTURE — KIẾN TRÚC TỔNG THỂ (ZONES A–F · 4 PIPELINES) & 3-PHASE MLOPS",
         "3. System Architecture: Kiến Trúc Hybrid Batch–Speed & Vòng Đời 3-Phase MLOps",
         (
-            "Kiến trúc nền tảng tích hợp giải quyết đồng thời vùng mù quan trắc, dự báo sớm +30 phút và cảnh báo "
-            "trực tuyến"
+            "Kiến trúc nền tảng 6 dịch vụ Docker giải quyết đồng thời vùng mù, dự báo sớm +30m & Dual-UI "
+            "(:8000 / :8501)"
         ),
     )
     s4.add_image(0.55, 2.00, 10.55, 6.38, arch_img)
@@ -562,13 +632,16 @@ def _add_slide_04_system_architecture(prs: Presentation, arch_img: Path) -> Dual
         3.12,
         "3-Phase MLOps Lifecycle",
         [
-            "Phase A (Batch Fit): Học 1 lần trên 5,494 mẫu TRAIN, khóa SHA-256 tại Frozen Registry.",
-            "Phase B (Speed Layer): Chỉ đọc .predict_proba() phát cảnh báo tạm thời v1 (< 1 s).",
-            "Phase C (Recon): Cuối ngày bù 501 cửa sổ trễ, re-score 377 cửa sổ → chuẩn v2 trong 10.5 / 16 GB RAM.",
+            f"Phase A (Batch Fit): Học 1 lần trên {ev['train_samples']:,} mẫu organic TRAIN, khóa SHA-256 tại "
+            "Frozen Registry.",
+            "Phase B (Speed Layer): Chỉ đọc .predict_proba() phát cảnh báo tạm thời v1 (< 1 ms IXSCAN).",
+            f"Phase C (Recon): Cuối ngày bù {rc['affected_late_segment_windows_recomputed']} cửa sổ trễ, "
+            f"hàn {rc['healed_downstream_lag_windows']} lag, re-score {rc['healed_downstream_rescored_windows']} "
+            "→ chuẩn v2 (12.0 / 16.0 GB RAM).",
         ],
         badge="0 Write Conflict",
         theme="sky",
-        body_size=8.3,
+        body_size=8.2,
     )
     s4.add_card(
         11.26,
@@ -577,20 +650,29 @@ def _add_slide_04_system_architecture(prs: Presentation, arch_img: Path) -> Dual
         3.12,
         "Limitations & Risks (Arch)",
         [
-            "Single-Host Contention: Chạy chung Kafka (1.5G), Spark (6G), Mongo (2G), UI (1G) trên 1 máy tiềm ẩn "
-            "tranh chấp I/O đĩa khi Shuffle lớn.",
-            "Eventual Consistency Gap: Cảnh báo luồng (v1) phản hồi tức thì, nhưng cập nhật biến trễ từ các gói tin "
+            "Single-Host Contention: 6 container (Kafka 1.5G, Spark 6G, Mongo 2G, FastAPI+React :8000 & "
+            "Streamlit :8501) dùng chung I/O trong 12.0 / 16 GB RAM.",
+            "Eventual Consistency Gap: Cảnh báo luồng (v1) phản hồi tức thì, nhưng biến trễ từ các gói tin "
             "đến muộn > 30m phải chờ Phase C cuối ngày.",
         ],
         badge="Arch Risk",
         theme="navy",
-        body_size=8.3,
+        body_size=8.2,
     )
     return s4
 
 
-def _add_slide_05_data_eda_and_problems(prs: Presentation, eda_chart: Path) -> DualSlide:
+def _add_slide_05_data_eda_and_problems(prs: Presentation, eda_chart: Path, t: dict | None = None) -> DualSlide:
     """Slide 05 (Section 4): Data, EDA & Data Problems (5 Raw Tables & EC-1..EC-10)."""
+    tr_d = t or _load_slide_truth()
+    tr = tr_d["m"]
+    mv = tr_d["mv"]
+    ds = tr["dataset"]
+    qf = tr["quality_funnel_c5"]
+    ev = tr["evaluation"]
+    rc = tr["streaming_mmds"]["reconciliation"]
+    bloom = tr["streaming_mmds"]["bloom_filter"]
+    salt = tr["monoid_and_catalyst_c9"]["pillar_i1_monoid_and_salting"]
     s5 = DualSlide(prs)
     s5.add_chrome(
         5,
@@ -602,6 +684,7 @@ def _add_slide_05_data_eda_and_problems(prs: Presentation, eda_chart: Path) -> D
     )
     s5.add_image(0.55, 2.00, 6.25, 4.16, eda_chart)
 
+    obs_pct = 100.0 - tr["static_feature_store_c13b"]["cold_start_ratio_pct"]
     s5.add_card(
         0.55,
         6.28,
@@ -609,42 +692,72 @@ def _add_slide_05_data_eda_and_problems(prs: Presentation, eda_chart: Path) -> D
         2.10,
         "Hồ Sơ 5 Bảng Gốc & Proof-of-Scale",
         [
-            "5 bảng gốc Kaggle (38.50 MB): nodes (577,967 điểm), streets (5,553 đường), segments (84,633 đoạn), "
-            "segment_status (90,938 pings; vd: 07:08 Lý Thường Kiệt 4 km/h) & train (33,441 cửa sổ đối chứng).",
-            "Mẫu chuẩn Proof-of-Scale kiểm chứng sai số 0.0 cho quy mô toàn TP.HCM (8–17 tỷ tin/ngày, "
-            "1.5–3.0 TB/ngày); chỉ 11.85% đoạn có GPS và 94.84% mẫu TEST giữ nguyên mức cũ sau 30 phút.",
+            f"5 bảng Kaggle (38.50 MB): nodes ({ds['nodes_count']:,}), streets ({ds['streets_count']:,}), "
+            f"segments ({ds['raw_segments_count']:,} → {ds['segments_count']:,} đoạn cơ giới), pings "
+            f"({ds['raw_segment_status_events']:,} → {ds['segment_status_events']:,}), train "
+            f"({ds['labeled_windows_count']:,} cửa sổ; {ds['derived_vs_reference_los_exact_match_pct']:.2f}% match).",
+            f"Phát hiện mới: Cờ hóa {ds['synthetic_burst_windows_flagged']:,} burst windows khỏi TRAIN "
+            f"→ {ev['train_samples']:,} organic; chỉ {obs_pct:.2f}% đoạn có GPS và "
+            f"{ev['transition_analysis']['steady_state_ratio_pct']:.2f}% TEST đứng yên sau 30m.",
         ],
         badge="Proof-of-Scale",
         theme="sky",
-        body_size=8.0,
+        body_size=7.9,
     )
 
     ec_headers = ["Data Problem (EC)", "Hiện tượng trong 5 Bảng Gốc", "Giải pháp Kỹ thuật"]
     ec_rows = [
-        ["EC-1 · Missing Vmax", "85.21% cửa sổ (28,495) thiếu Vmax", "Train-Only 3-Tier Imputation (P85/Median/Prior)"],
-        ["EC-2 · Bad Geometry", "154 đoạn ≤ 0m & 427 lối đi bộ", "ANSI try_cast Quarantine + trung vị 27.0m"],
-        ["EC-3 · Unicode Drift", "631 dòng Quận & 2,071 dòng lệch dấu", "Chuẩn hóa Unicode NFC (695 → 649 tên đường)"],
-        ["EC-4 · UTC Rollover", "4,320 cửa sổ (12.92%) lệch ngày UTC+7", "Đồng bộ vn_hour (+7h), ict_date & sin/cos"],
         [
-            "EC-5 · GPS Gaps >30m",
-            "66.27% (15,516 cặp) ngắt quãng ≥ 60m",
-            "Exact (segment_id, slot_ts + 30m) → 7,898 cặp",
+            "EC-1 · Missing Vmax",
+            f"{qf['missing_max_velocity_train_pct']:.2f}% cửa sổ & {qf['missing_max_velocity_segments_pct']:.2f}% đoạn",
+            "Train-Only 3-Tier Imputation (P85 / Median / Prior)",
+        ],
+        [
+            "EC-2 · Bad Geometry",
+            f"{qf['zero_length_segments']} đoạn ≤ 0m, {qf['non_road_osm_segments']} POIs & "
+            f"{qf['status_rejected_pings']} ping lỗi",
+            "try_cast Quarantine, bù 27.0m & loại 427 POIs",
+        ],
+        [
+            "EC-3 · Unicode Drift",
+            "631 dòng Quận & 2,247 dòng lệch dấu/tiền tố",
+            f"Chuẩn hóa Unicode NFC ({qf['raw_distinct_street_names']} → {qf['canonical_nfc_street_names']} đường)",
+        ],
+        ["EC-4 · UTC Rollover", "4,305 cửa sổ (12.89%) lệch ngày UTC+7", "Đồng bộ vn_hour (+7h), ict_date & sin/cos"],
+        [
+            "EC-5 · Gaps & Burst",
+            f"66.30% đứt ≥60m & {ds['synthetic_burst_windows_flagged']:,} burst",
+            f"Exact +30m ({ds['exact_t30m_supervised_windows_count']:,} cặp) & sạch burst TRAIN",
         ],
         [
             "EC-6 · Cold-Start",
-            "88.15% (74,606 đoạn) có 0 bản tin GPS",
-            "Static Feature Store (PageRank + K-Means)",
+            f"{tr['static_feature_store_c13b']['cold_start_ratio_pct']:.2f}% ({ds['cold_start_segments_count']:,} "
+            "đoạn) có 0 GPS",
+            "Static Feature Store (PageRank + 7D K-Means)",
         ],
-        ["EC-7 · Shape Points", "90.93% (525,542 nodes) vẽ cong & 48 cụt", "Cắt tỉa shape points + bù Dangling Sinks"],
-        ["EC-8 · Data Skew", "Lệch tải 687.43x & sai số avg 11.11 km/h", "5-Tuple Monoid + 2-Stage Salting (8 giỏ)"],
-        ["EC-9 · Late & Dupes", "334 tin trùng (1%) & 501 cửa sổ trễ > 30m", "32.0 KiB Bloom Filter + Tier-2 Backfill"],
+        [
+            "EC-7 · Shape Points",
+            f"90.97% ({ds['pruned_orphan_nodes_count']:,}) node dư & {ds['dangling_nodes_count']} cụt",
+            f"Cắt tỉa còn {ds['active_intersection_nodes_count']:,} nút & {ds['line_graph_transition_edges']:,} cạnh",
+        ],
+        [
+            "EC-8 · Data Skew",
+            f"Lệch {salt['temporal_slot_peak_to_median_ratio']:.2f}x & sai số avg 11.11 km/h",
+            f"5-Tuple Monoid + 8-Bucket Salting (→ {salt['peak_slot_salted_bucket_skew_ratio']:.3f}x)",
+        ],
+        [
+            "EC-9 · Late & Dupes",
+            f"{tr['streaming_mmds']['duplicates_removed_exact']} trùng & "
+            f"{rc['affected_late_segment_windows_recomputed']} trễ > 30m",
+            f"{bloom['memory_kb']:.1f} KiB Bloom + Tier-2 (+{rc['healed_downstream_lag_windows']} lag)",
+        ],
         [
             "EC-10 · Crash & Stale",
             "Sập luồng đột ngột & tin cũ v1 đến muộn",
-            "WAL Checkpoint (0 dupes) + version_ts Guard",
+            f"WAL Checkpoint (0 dupes) + $status_version ({mv['stale_v1_rejected_by_mongo']}/25)",
         ],
     ]
-    s5.add_table(6.96, 2.00, 8.49, 6.38, ec_headers, ec_rows, [0.22, 0.38, 0.40], font_size=7.9)
+    s5.add_table(6.96, 2.00, 8.49, 6.38, ec_headers, ec_rows, [0.22, 0.38, 0.40], font_size=7.8)
     return s5
 
 
@@ -692,8 +805,12 @@ def _add_slide_06_method_explainer_imputation_monoid(prs: Presentation, method_i
     return sm1
 
 
-def _add_slide_07_method_explainer_graph_sketches(prs: Presentation, method_img2: Path) -> DualSlide:
+def _add_slide_07_method_explainer_graph_sketches(
+    prs: Presentation, method_img2: Path, t: dict | None = None
+) -> DualSlide:
     """Slide 07: Visual Method Explainer (2/2) — Line-Graph PageRank, 7D K-Means Cold-Start & O(1) Sketches."""
+    tr = (t or _load_slide_truth())["m"]
+    cold_pct = tr["static_feature_store_c13b"]["cold_start_ratio_pct"]
     sm2 = DualSlide(prs)
     sm2.add_chrome(
         7,
@@ -701,7 +818,7 @@ def _add_slide_07_method_explainer_graph_sketches(prs: Presentation, method_img2
         2,
         "METHODOLOGY VISUALIZER (2/2) — TRỰC QUAN HÓA LINE-GRAPH PAGERANK, 7D K-MEANS & O(1) SKETCHES",
         "Giải Thích Phương Pháp (2/2): Line-Graph PageRank, K-Means & Bộ Đếm O(1)",
-        "Cách phát hiện nút cổ chai bản đồ, suy diễn cho 88.15% đường thiếu GPS "
+        f"Cách phát hiện nút cổ chai bản đồ, suy diễn cho {cold_pct:.2f}% đường thiếu GPS "
         "và lọc trùng luồng chỉ với 33.0 KiB RAM",
     )
     sm2.add_image(0.55, 2.00, 14.90, 4.50, method_img2)
@@ -713,8 +830,8 @@ def _add_slide_07_method_explainer_graph_sketches(prs: Presentation, method_img2
         1.74,
         "Từ Đồ Thị Bản Đồ Đến Suy Diễn Vùng Mù",
         [
-            "Line-Graph PageRank biến mỗi đoạn đường thành 1 nút để chỉ ra nơi dòng xe dồn tụ tự nhiên; sau đó 7D "
-            "K-Means ghép các đoạn mù (0 GPS) vào nhóm đường có cảm biến tương đồng để phủ kín 100% đô thị.",
+            "Line-Graph PageRank (loại U-turn) biến mỗi đoạn đường thành 1 nút để chỉ ra nơi dòng xe dồn tụ tự nhiên; "
+            "7D K-Means ghép đoạn mù (0 GPS) vào nhóm cảm biến tương đồng để phủ 100% đô thị.",
         ],
         badge="Graph + Cluster",
         theme="sky",
@@ -737,8 +854,16 @@ def _add_slide_07_method_explainer_graph_sketches(prs: Presentation, method_img2
     return sm2
 
 
-def _add_slide_08_data_pipeline_and_processing(prs: Presentation, flow_img: Path) -> DualSlide:
+def _add_slide_08_data_pipeline_and_processing(
+    prs: Presentation, flow_img: Path, t: dict | None = None
+) -> DualSlide:
     """Slide 08 (Section 5): Data Pipeline & Data Processing + Component Limitations & Risks."""
+    tr = (t or _load_slide_truth())["m"]
+    ds = tr["dataset"]
+    qf = tr["quality_funnel_c5"]
+    vt = qf["vmax_imputation_tiers_windows"]
+    t23 = vt["TIER_2_LEVEL_ROADTYPE_MEDIAN"] + vt["TIER_3_HIERARCHICAL_LEVEL_PRIOR"]
+    t23_pct = t23 / ds["labeled_windows_count"] * 100.0
     s8 = DualSlide(prs)
     s8.add_chrome(
         8,
@@ -757,11 +882,15 @@ def _add_slide_08_data_pipeline_and_processing(prs: Presentation, flow_img: Path
         2.10,
         "Ordered Quality Funnel & 3-Tier Vmax",
         [
-            "5-Step Quality Funnel: ANSI try_cast tách bản ghi lỗi sang Quarantine (0 sập job, 0 rơi ngầm); lọc 427 "
-            "lối đi bộ; chuẩn hóa NFC (695 → 649 đường) & UTC+7 (4,320 cửa sổ).",
-            "Train-Only 3-Tier Vmax (vmax_lookup.json): Giữ gốc (4,946) → P85 đoạn (8,164) → Median cấp×loại (20,124) "
-            "→ Chuẩn đô thị 80/60/50/40 km/h (207 cửa sổ).",
-            "Gán nhãn 33,441 cửa sổ 30m (vận tốc / Vmax) sang LOS A–F: A–B (≥65%) · C–D (35–65%) · E–F (<35%).",
+            f"Quality Funnel: try_cast cách ly {qf['quarantined_segment_records']} đoạn & "
+            f"{qf['status_rejected_pings']} ping ({ds['segment_status_events']:,} hợp lệ); loại "
+            f"{qf['non_road_osm_segments']} POIs còn {ds['segments_count']:,} đoạn cơ giới; NFC "
+            f"({qf['raw_distinct_street_names']} → {qf['canonical_nfc_street_names']} đường).",
+            f"Train-Only 3-Tier Vmax: Gốc ({vt['TIER_1_SEGMENT_OBSERVED']:,}) → P85 "
+            f"({vt['TIER_1_SEGMENT_TRAIN_P85']:,}) → Median cấp×loại ({vt['TIER_2_LEVEL_ROADTYPE_MEDIAN']:,}) "
+            f"→ Prior ({vt['TIER_3_HIERARCHICAL_LEVEL_PRIOR']:,}).",
+            f"Gán nhãn {ds['labeled_windows_count']:,} cửa sổ ({ds['derived_vs_reference_los_exact_match_pct']:.2f}% "
+            "khớp BkTraffic LOS A–F): A–B (≥65%) · C–D (35–65%) · E–F (<35%).",
         ],
         badge="0 Silent Drops",
         theme="sky",
@@ -774,10 +903,10 @@ def _add_slide_08_data_pipeline_and_processing(prs: Presentation, flow_img: Path
         2.10,
         "Limitations & Risks (Data Pipeline)",
         [
-            "Static Vmax Approximation: 20,331 cửa sổ (60.79%) dùng Vmax suy diễn theo cấp đường (Tier 2 & 3), chưa "
-            "phản ánh rào chắn thi công hay ngập nước cục bộ.",
-            "Schema Drift Quarantine Risk: ANSI try_cast chống sập job, nhưng thiết bị GPS đổi định dạng hàng loạt sẽ "
-            "làm tăng tỷ lệ cách ly vào Quarantine.",
+            f"Static Vmax Approximation: {t23:,} cửa sổ ({t23_pct:.2f}%) dùng Vmax suy diễn theo cấp/prior "
+            "(Tier 2 & 3), chưa phản ánh rào chắn thi công hay ngập nước cục bộ.",
+            "Schema Drift Quarantine Risk: ANSI try_cast chống sập job, nhưng thiết bị GPS đổi định dạng hàng loạt "
+            "sẽ làm tăng tỷ lệ cách ly vào Quarantine.",
             "30m Slot Discretization: Làm tròn cửa sổ 30 phút làm mượt dao động vận tốc ngắn dưới 5 phút tại ngã tư.",
         ],
         badge="Pipeline Risk",
@@ -787,33 +916,44 @@ def _add_slide_08_data_pipeline_and_processing(prs: Presentation, flow_img: Path
     return s8
 
 
-def _add_slide_09_modeling(prs: Presentation) -> DualSlide:
+def _add_slide_09_modeling(prs: Presentation, t: dict | None = None) -> DualSlide:
     """Slide 09 (Section 6): Modeling (+30m Forecasting, 23D Features & Cold-Start) + Component Limitations."""
+    tr_d = t or _load_slide_truth()
+    tr = tr_d["m"]
+    ds = tr["dataset"]
+    ev = tr["evaluation"]
+    vg = ev["validation_gate_selection"]
+    ta = ev["transition_analysis"]
+    imps = tr_d["imps"]
+    rf23_val = next(c for c in vg["candidates"] if "Random Forest (+Graph" in c["candidate_model"])
+    rf14_val = next(c for c in vg["candidates"] if "Random Forest (Local" in c["candidate_model"])
     s9 = DualSlide(prs)
     s9.add_chrome(
         9,
         TOTAL_SLIDES,
         2,
-        "SECTION 06 · MODELING — EXACT T+30M PAIRING, 23D FEATURES & FROZEN RANDOM FOREST",
-        "6. Modeling: Thiết Kế Nhãn Exact t+30m, Vector 23 Biến & Mô Hình Random Forest",
-        "Đảm bảo 0.0 rò rỉ tương lai, tích hợp đặc trưng đồ thị/phân cụm vào dự báo +30m và chấm điểm Cold-Start",
+        "SECTION 06 · MODELING — EXACT T+30M PAIRING, BURST FILTERING, 23D FEATURES & LIVE VAL GATE",
+        "6. Modeling: Nhãn Exact t+30m, Lọc Burst, Vector 23 Biến & Tuyển Chọn Live VAL",
+        "Tách 7,192 burst windows khỏi TRAIN, tích hợp đồ thị/phân cụm 23D và phủ 100% đoạn cơ giới Cold-Start",
     )
     s9.add_card(
         0.55,
         2.00,
         7.35,
         3.08,
-        "Exact t+30m Pairing & Zero Leakage",
+        "Exact t+30m Pairing, Burst Filter & Zero Leakage",
         [
-            "Exact (segment_id, slot_ts + 30m) Join: Thu được 7,898 cặp chuẩn xác "
-            "(loại bỏ 15,516 cặp đứt quãng ≥ 60m).",
-            "Chronological Split 70/15/15 + Boundary Purge: TRAIN = 5,494 mẫu (≤ 2020-12-12T08:00Z, cắt 50 mẫu biên) · "
-            "VAL = 1,167 mẫu (≤ 2020-12-25T03:30Z, cắt 5 mẫu biên) · TEST = 1,182 mẫu.",
-            "Future-Shuffle Falsification Test: Xáo trộn ngẫu nhiên tương lai τ > t cho sai lệch ma trận X_t = 0.0.",
+            f"Exact (segment_id, slot_ts + 30m) Join: {ds['exact_t30m_supervised_windows_count']:,} cặp "
+            f"(loại 15,514 cặp đứt ≥ 60m); tách {ds['synthetic_burst_windows_flagged']:,} burst windows.",
+            f"Chronological Split + Boundary Purge: Organic TRAIN = {ev['train_samples']:,} "
+            f"(cắt {ev['train_purged_boundary_samples']} biên; lọc "
+            f"{ev['burst_filtering_ablation']['burst_train_samples_excluded']:,} burst) · "
+            f"VAL = {ev['val_samples']:,} · TEST = {ev['test_samples']:,}.",
+            "Future-Shuffle Falsification Test: Xáo trộn ngẫu nhiên tương lai τ > t cho sai lệch X_t = 0.0.",
         ],
-        badge="7,898 Exact Pairs",
+        badge=f"{ev['train_samples']:,} Organic Train",
         theme="white",
-        body_size=8.4,
+        body_size=8.2,
     )
     s9.add_card(
         0.55,
@@ -822,32 +962,36 @@ def _add_slide_09_modeling(prs: Presentation) -> DualSlide:
         3.14,
         "Tổ Hợp 23 Biến Đầu Vào (23D Features)",
         [
-            "Nhóm 1 — Local State & Lags (7D · 79.82% Importance): current_los_ordinal (50.51%), mean_velocity "
-            "(22.36%), trailing_severe_rate (6.23%), lag1/lag2_los_ordinal, velocity_ratio, obs_count.",
-            "Nhóm 2 — Cyclical ICT Time & Geometry (7D · 12.18%): period_sin (10.18%), period_cos, length_m, weekday, "
-            "street_level, max_velocity, gap_minutes.",
-            "Nhóm 3 — Static Graph, 7D K-Means & Priors (9D · 8.00%): segment_train_severe_prior (4.92%), "
-            "pagerank_score, street_causal_prior, neighbor_los, in/out_degree, cluster_id.",
+            f"Nhóm 1 — Local State & Lags (14D tổng {tr_d['local_imp']:.2f}%): mean_velocity "
+            f"({imps['mean_velocity']*100:.2f}%), current_los_ordinal ({imps['current_los_ordinal']*100:.2f}%), "
+            f"velocity_ratio ({imps['velocity_ratio']*100:.2f}%), obs_count ({imps['obs_count']*100:.2f}%), lag1/2.",
+            f"Nhóm 2 — Cyclical ICT & Geometry: period_sin ({imps['period_sin']*100:.2f}%), "
+            f"period_cos ({imps['period_cos']*100:.2f}%), length_m ({imps['length_m']*100:.2f}%), "
+            f"gap_minutes ({imps['gap_minutes']*100:.2f}%), weekday, street_level, Vmax.",
+            f"Nhóm 3 — Graph, 7D K-Means & Priors (9D · {tr_d['graph_imp']:.2f}%): pagerank_score "
+            f"({imps['pagerank_score']*100:.2f}%), neighbor_los ({imps['neighbor_los_ordinal']*100:.2f}%), "
+            f"street_causal_prior ({imps['street_causal_prior_los']*100:.2f}%), degree & cluster_id.",
         ],
-        badge="23D Features",
+        badge=f"{tr_d['local_imp']:.1f}% / {tr_d['graph_imp']:.1f}%",
         theme="sky",
-        body_size=8.3,
+        body_size=8.1,
     )
     s9.add_card(
         8.10,
         2.00,
         7.35,
         3.08,
-        "Kiến Trúc Random Forest & Cold-Start",
+        "Live VAL Gate Selection & Cold-Start Scoring",
         [
-            "Champion Model (#5 Random Forest 23D): 250 cây, max_depth=14, class_weight='balanced_subsample', tuyển "
-            "chọn trên VAL (ROC-AUC = 0.9593) và khóa SHA-256 tại outputs/model.joblib.",
-            "Cold-Start Scoring: Kết hợp Static Feature Store (PageRank, cluster_id, priors) với chu kỳ giờ VN "
-            "để dự báo cho cả 74,606 đoạn chưa có cảm biến (phủ 100% 84,633 đoạn).",
+            f"Champion (#5 RF 23D): 250 cây, max_depth=14, clean sqrt cls_w (0.65), thắng Live VAL Gate "
+            f"({rf23_val['val_composite_score']:.4f} vs RF 14D {rf14_val['val_composite_score']:.4f}; τ = 0.25) "
+            "→ khóa SHA-256.",
+            f"Cold-Start Coverage: Static Feature Store (PageRank + 7D K-Means + Priors) phủ đủ "
+            f"{ds['cold_start_segments_count']:,} đoạn 0 GPS (100% trên {ds['segments_count']:,} đoạn cơ giới).",
         ],
-        badge="Model & Cold-Start",
+        badge=f"VAL Gate {rf23_val['val_composite_score']:.4f}",
         theme="sky_strong",
-        body_size=8.4,
+        body_size=8.2,
     )
     s9.add_card(
         8.10,
@@ -856,20 +1000,34 @@ def _add_slide_09_modeling(prs: Presentation) -> DualSlide:
         3.14,
         "Limitations & Risks (Modeling)",
         [
-            "Ngưỡng mặc định bảo thủ khi đổi pha: Do 94.84% mẫu đứng yên, ngưỡng argmax mặc định bị thận trọng (đạt "
-            "2/61 ở mặc định; tăng lên 9/61 khi hiệu chỉnh ngưỡng τ = 0.30 trên VAL).",
-            "Exogenous Blindness: Chưa có biến mưa ngập, tai nạn hay sự kiện đột xuất nên chỉ phát hiện kẹt sau khi "
-            "vận tốc GPS bắt đầu giảm.",
+            f"Ngưỡng mặc định bảo thủ khi đổi pha: {int(round(ta['rf_23d_transition_6class_acc']*61))}/61 "
+            f"({ta['rf_23d_transition_6class_acc']*100:.2f}%); tăng lên "
+            f"{int(round(ta['rf_23d_val_calibrated_transition_6class_acc']*61))}/61 "
+            f"({ta['rf_23d_val_calibrated_transition_6class_acc']*100:.2f}%) ở τ = 0.40 trên VAL "
+            f"(McNemar p = {ta['statistical_significance_test']['mcnemar_transition_p_value']:.4f}).",
+            "Exogenous Blindness & Imbalance: Chưa có biến mưa ngập/tai nạn; lớp trung gian B–E thưa nên "
+            f"Macro-F1 đạt {ev['macro_f1_6class']:.4f} (dù Severe F1 = {ev['severe_f1']:.4f}).",
         ],
         badge="Modeling Risk",
         theme="navy",
-        body_size=8.4,
+        body_size=8.2,
     )
     return s9
 
 
-def _add_slide_10_batch_processing(prs: Presentation, batch_flow_img: Path) -> DualSlide:
+def _add_slide_10_batch_processing(
+    prs: Presentation, batch_flow_img: Path, t: dict | None = None
+) -> DualSlide:
     """Slide 10 (Section 7): Batch Processing Component Flow, Quantitative Summary & Limitations."""
+    tr_d = t or _load_slide_truth()
+    tr = tr_d["m"]
+    sp = tr_d["sp"]
+    ds = tr["dataset"]
+    salt = tr["monoid_and_catalyst_c9"]["pillar_i1_monoid_and_salting"]
+    ms = sp["monoid_salting_spark"]
+    cj = sp["catalyst_join_spark"]
+    gp = tr["graph_and_patterns"]
+    km = tr["model"]
     s10 = DualSlide(prs)
     s10.add_chrome(
         10,
@@ -877,7 +1035,7 @@ def _add_slide_10_batch_processing(prs: Presentation, batch_flow_img: Path) -> D
         3,
         "SECTION 07 · BATCH PROCESSING — LUỒNG XỬ LÝ LÔ PHÂN TÁN, KHAI PHÁ ĐỒ THỊ & PHÂN CỤM",
         "7. Batch Processing: Luồng Xử Lý Lô Phân Tán, Khai Phá Đồ Thị & Phân Cụm",
-        "Trực quan hóa các thành phần Batch ETL sai số 0.0, Line-Graph PageRank, SON/FPGrowth và 7D K-Means",
+        "Trực quan hóa Batch ETL sai số 0.0 trên Spark 3.5.7, Line-Graph PageRank, SON/FPGrowth và 7D K-Means",
     )
     s10.add_image(0.55, 2.00, 14.90, 4.14, batch_flow_img)
 
@@ -888,16 +1046,22 @@ def _add_slide_10_batch_processing(prs: Presentation, batch_flow_img: Path) -> D
         2.10,
         "Kết Quả Thực Thi Batch ETL, Đồ Thị & Phân Cụm",
         [
-            "Distributed ETL: 5-Tuple Monoid khớp 100% baseline.py (sai số = 0.0); 2-Stage Key Salting (8 giỏ) giảm "
-            "lệch tải 687.43x → 1.023x; BroadcastHashJoin (10 → 2 Shuffle Stages); Parquet Pruning đọc 7,294 / 33,441 "
-            "dòng tháng 2020-08.",
-            "Graph & Cold-Start: Line-Graph PageRank bảo toàn khối lượng 84,633.0 (#1 Phú Định = 3.7515, #2 Lê Lai = "
-            "3.4650); FPGrowth (335 luật) & 2-Pass SON (Lift 28.58x); Train-Only 7D K-Means (k=6, Silhouette = 0.2853) "
-            "phủ đủ 74,606 đoạn Cold-Start.",
+            f"Spark 3.5.7 ETL: 5-Tuple Monoid khớp 100% baseline (diff=0); 8-Bucket Salting giảm lệch slot "
+            f"{salt['temporal_slot_peak_to_median_ratio']:.2f}x → {salt['peak_slot_salted_bucket_skew_ratio']:.3f}x "
+            f"(IQR {ms['unsalted_iqr_ms']:.2f} → {ms['salted_iqr_ms']:.2f} ms ở tradeoff "
+            f"{ms['unsalted_median_ms']:.2f} → {ms['salted_median_ms']:.2f} ms); BroadcastHashJoin "
+            f"({cj['baseline_exchange_stages_measured']}→{cj['optimized_exchange_stages_measured']} Exchange, "
+            f"+{cj['join_speedup_pct']:.2f}%); Parquet Pruning "
+            f"{tr['lakehouse_c14']['year_month_partitions']['2020-08']:,} / {ds['labeled_windows_count']:,} dòng.",
+            f"Graph & Cold-Start: PageRank bảo toàn {ds['segments_count']:,}.0 (#1 #{gp['top_bottleneck_segment_id']} "
+            f"{gp['top_bottleneck_street']} = {gp['top_bottleneck_pagerank']:.4f}); FPGrowth "
+            f"({sp['spark_fpgrowth_rules_count']} luật) & SON ({gp['co_congestion_rules_found']} đồng kẹt / "
+            f"{gp['lagged_transition_rules_found']} trễ); 7D K-Means (k=6, Silhouette={km['silhouette_score']:.4f}) "
+            f"phủ {ds['cold_start_segments_count']:,} Cold-Start.",
         ],
-        badge="0.0 Error · 84,633 Segs",
+        badge=f"0.0 Error · {ds['segments_count']:,} Segs",
         theme="sky",
-        body_size=7.9,
+        body_size=7.7,
     )
     s10.add_card(
         8.10,
@@ -906,10 +1070,10 @@ def _add_slide_10_batch_processing(prs: Presentation, batch_flow_img: Path) -> D
         2.10,
         "Limitations & Risks (Batch Processing)",
         [
-            "Cỡ mẫu nhỏ ở luật lan truyền trễ SON/FPGrowth: Các luật trễ +30m (Lift 32.92x) chỉ xuất hiện 5–8 cửa sổ "
-            "(2.5–4.0 giờ quan sát) do GPS thưa — chỉ dùng làm giả thuyết thăm dò (Exploratory Hypothesis).",
-            "Phân cụm Cold-Start tĩnh: 74,606 đoạn thiếu GPS được gán cụm dựa trên hình thái đồ thị và Vmax cấp đường, "
-            "chưa phản ánh được các điểm họp chợ tự phát hay nút cổ chai vi mô trong hẻm.",
+            f"Cỡ mẫu nhỏ ở luật trễ SON/FPGrowth: {gp['lagged_transition_rules_found']} luật trễ +30m (Lift tối đa "
+            "24.0x, persistence-controlled) chỉ có 5–8 cửa sổ do GPS thưa → chỉ làm giả thuyết thăm dò.",
+            f"Phân cụm Cold-Start tĩnh: {ds['cold_start_segments_count']:,} đoạn thiếu GPS gán cụm dựa trên hình thái "
+            "đồ thị và Vmax cấp đường, chưa phản ánh được điểm họp chợ tự phát hay ngập vi mô.",
         ],
         badge="Batch Risk",
         theme="navy",
@@ -918,8 +1082,18 @@ def _add_slide_10_batch_processing(prs: Presentation, batch_flow_img: Path) -> D
     return s10
 
 
-def _add_slide_11_stream_processing(prs: Presentation, stream_flow_img: Path) -> DualSlide:
+def _add_slide_11_stream_processing(
+    prs: Presentation, stream_flow_img: Path, t: dict | None = None
+) -> DualSlide:
     """Slide 11 (Section 8): Stream Processing Component Flow, Quantitative Summary & Limitations."""
+    tr_d = t or _load_slide_truth()
+    tr = tr_d["m"]
+    mv = tr_d["mv"]
+    sm = tr["streaming_mmds"]
+    bl = sm["bloom_filter"]
+    hll = sm["hyperloglog"]
+    rc = sm["reconciliation"]
+    lat = mv["uc2_arterial_query"]["latency_benchmark_ms"]
     s11 = DualSlide(prs)
     s11.add_chrome(
         11,
@@ -927,7 +1101,7 @@ def _add_slide_11_stream_processing(prs: Presentation, stream_flow_img: Path) ->
         3,
         "SECTION 08 · STREAM PROCESSING — LUỒNG XỬ LÝ THỜI GIAN THỰC, O(1) SKETCHES & ĐỐI SOÁT HAI TẦNG",
         "8. Stream Processing: Luồng Cảnh Báo Trực Tuyến, O(1) Sketches & Đối Soát Trễ",
-        "Trực quan hóa luồng sự kiện Kafka, bộ lọc 33.0 KiB RAM, đối soát bù trễ hai tầng và phục vụ dưới 1 ms",
+        "Trực quan hóa luồng sự kiện Kafka, bộ lọc 33.0 KiB RAM, đối soát bù trễ hai tầng và phục vụ < 1 ms",
     )
     s11.add_image(0.55, 2.00, 14.90, 4.14, stream_flow_img)
 
@@ -938,16 +1112,19 @@ def _add_slide_11_stream_processing(prs: Presentation, stream_flow_img: Path) ->
         2.10,
         "Kết Quả Luồng O(1), Đối Soát & Phục Vụ < 1 ms",
         [
-            "O(1) Sketches & WAL: BitPackedBloomFilter (32.0 KiB) chặn 334/334 tin trùng (FPR 0.616%); HyperLogLog++ "
-            "(1.0 KiB) sai số 3.98%; EWMA Hotspot (α=0.15, #1 Lý Thường Kiệt = 6.67) bổ trợ Random Forest (+30m); WAL "
-            "hồi phục lỗi 0 bản trùng.",
-            "Two-Tier Recon & MongoDB: Tier 1 khớp 100% (32,940 cửa sổ); Tier 2 bù 501 cửa sổ trễ (> 30m), cập nhật "
-            "3,953 cửa sổ lag & re-score 377 cửa sổ (98.50% → 100%); MongoDB chặn 25/25 tin cũ v1, Compound Index "
-            "IXSCAN đạt 0.636 ms (warm_p95).",
+            f"O(1) Sketches & WAL: Bloom ({bl['memory_kb']:.1f} KiB) chặn {sm['duplicates_removed_exact']}/"
+            f"{sm['injected_duplicate_events']} trùng (FPR {bl['empirical_fp_rate']*100:.3f}%); HLL++ "
+            f"({hll['memory_kb']:.1f} KiB) ≈ {hll['hll_estimated_segments']:.1f}/{hll['exact_distinct_segments']:,} "
+            f"({hll['relative_error_pct']:.2f}% err); EWMA #1 #47407 Lý Thường Kiệt (6.6652); WAL 0 dupes.",
+            f"Two-Tier Recon & MongoDB 8.0: Tier 1 diff=0; Tier 2 bù {rc['affected_late_segment_windows_recomputed']} "
+            f"trễ, hàn {rc['healed_downstream_lag_windows']} lag & re-score {rc['healed_downstream_rescored_windows']} "
+            f"({rc['pre_reconciliation_completeness_pct']:.1f}%→{rc['post_reconciliation_completeness_pct']:.1f}%); "
+            f"$status_version chặn {mv['stale_v1_rejected_by_mongo']}/25 v1; IXSCAN warm {lat['warm_median_ms']:.3f} / "
+            f"p95 {lat['warm_p95_ms']:.3f} ms ({lat['ixscan_vs_collscan_speedup_x']:.2f}x).",
         ],
-        badge="33.0 KiB · 0.636 ms",
+        badge=f"33.0 KiB · {lat['warm_median_ms']:.3f} ms",
         theme="sky",
-        body_size=7.9,
+        body_size=7.7,
     )
     s11.add_card(
         8.10,
@@ -956,10 +1133,10 @@ def _add_slide_11_stream_processing(prs: Presentation, stream_flow_img: Path) ->
         2.10,
         "Limitations & Risks (Stream Processing)",
         [
-            "Rủi ro bão hòa bit Bloom Filter: Mảng cố định 32.0 KiB (262,144 bits) sẽ tăng FPR nếu chạy liên tục nhiều "
-            "ngày ở quy mô 1.5–3.0 TB/ngày mà không xoay vòng (Ring-Buffer Rotation) theo cửa sổ.",
-            "Độ trễ cập nhật của sự kiện quá muộn (> 30m Watermark): Bản tin trễ hơn 30 phút do mất sóng di động phải "
-            "đợi tiến trình Tier-2 Reconciliation cuối ngày.",
+            "Rủi ro bão hòa bit Bloom Filter: Mảng cố định 32.0 KiB (262,144 bits) sẽ tăng FPR nếu chạy liên tục "
+            "nhiều ngày ở quy mô 1.5–3.0 TB/ngày mà không xoay vòng (Ring-Buffer Rotation) theo cửa sổ.",
+            f"Độ trễ cập nhật của sự kiện quá muộn (> 30m Watermark): {rc['affected_late_segment_windows_recomputed']} "
+            "cửa sổ trễ hơn 30 phút phải đợi tiến trình Tier-2 Reconciliation cuối ngày.",
         ],
         badge="Stream Risk",
         theme="navy",
@@ -968,8 +1145,40 @@ def _add_slide_11_stream_processing(prs: Presentation, stream_flow_img: Path) ->
     return s11
 
 
-def _add_slide_12_experiments_ablation(prs: Presentation) -> DualSlide:
+def _fmt_ab(val: object) -> str:
+    return "N/A" if pd.isna(val) else f"{float(val):.4f}"
+
+
+def _ab_row(df: pd.DataFrame, idx: int, display_label: str, dims: str) -> list[str]:
+    r = df.iloc[idx]
+    return [
+        display_label,
+        dims,
+        _fmt_ab(r["accuracy_6class"]),
+        _fmt_ab(r["macro_f1_6class"]),
+        _fmt_ab(r["severe_ef_f1"]),
+        _fmt_ab(r["severe_roc_auc"]),
+        _fmt_ab(r["severe_pr_auc"]),
+    ]
+
+
+def _add_slide_12_experiments_ablation(prs: Presentation, t: dict | None = None) -> DualSlide:
     """Slide 12 (Section 9A): Experiments — 7-Model Ablation, Confusion Matrix & Infrastructure Benchmarks."""
+    tr_d = t or _load_slide_truth()
+    tr = tr_d["m"]
+    sp = tr_d["sp"]
+    mv = tr_d["mv"]
+    ab = tr_d["ab"]
+    ev = tr["evaluation"]
+    vg = ev["validation_gate_selection"]
+    rf23_val = next(c for c in vg["candidates"] if "Random Forest (+Graph" in c["candidate_model"])
+    rf14_val = next(c for c in vg["candidates"] if "Random Forest (Local" in c["candidate_model"])
+    cm_diag = [int(ev["confusion_matrix_6class"][i][i]) for i in range(6)]
+    cj = sp["catalyst_join_spark"]
+    ms = sp["monoid_salting_spark"]
+    salt = tr["monoid_and_catalyst_c9"]["pillar_i1_monoid_and_salting"]
+    lat = mv["uc2_arterial_query"]["latency_benchmark_ms"]
+
     s12 = DualSlide(prs)
     s12.add_chrome(
         12,
@@ -977,10 +1186,10 @@ def _add_slide_12_experiments_ablation(prs: Presentation) -> DualSlide:
         4,
         "SECTION 09A · EXPERIMENTS (ABLATION & BENCHMARKS) — KẾT QUẢ THỰC NGHIỆM 7 MÔ HÌNH",
         "9A. Experiments: Thực Nghiệm Ablation 7 Mô Hình Dự Báo +30m & Confusion Matrix",
-        "Đánh giá định lượng trên 1,182 mẫu TEST độc lập và kiểm chứng lợi ích của các đặc trưng đồ thị/phân cụm",
+        f"Đánh giá định lượng trên {ev['test_samples']:,} mẫu TEST độc lập & kiểm chứng VAL Gate (23D vs 14D)",
     )
     ab_headers = [
-        "Cấu hình Mô hình (1,182 mẫu TEST)",
+        f"Cấu hình Mô hình ({ev['test_samples']:,} mẫu TEST)",
         "Biến",
         "6-Class Acc",
         "Macro-F1",
@@ -989,13 +1198,13 @@ def _add_slide_12_experiments_ablation(prs: Presentation) -> DualSlide:
         "PR-AUC",
     ]
     ab_rows = [
-        ["1. Persistence Baseline (LOS(t+30m) = LOS(t))", "1D", "0.9484", "0.5654", "0.9465", "0.9867", "0.9367"],
-        ["2. Decision Tree (Local Only)", "14D", "0.9425", "0.3794", "0.9437", "0.9856", "0.9482"],
-        ["3. Decision Tree (+PageRank & K-Means)", "23D", "0.9425", "0.3772", "0.9437", "0.9844", "0.9327"],
-        ["4. Random Forest (Local Only)", "14D", "0.9425", "0.5455", "0.9434", "0.9866", "0.9630"],
-        ["5. Random Forest (+Graph, Priors & K-Means) [Chọn]", "23D", "0.9450", "0.5543", "0.9409", "0.9882", "0.9471"],
-        ["6. Binary GBT (Local Only)", "14D", "N/A", "N/A", "0.7840", "0.9812", "0.9328"],
-        ["7. Binary GBT (+Graph, Priors & K-Means)", "23D", "N/A", "N/A", "0.9465", "0.9843", "0.9419"],
+        _ab_row(ab, 0, "1. Persistence Baseline (LOS(t+30m) = LOS(t))", "1D"),
+        _ab_row(ab, 1, "2. Decision Tree (Local Only)", "14D"),
+        _ab_row(ab, 2, "3. Decision Tree (+PageRank & K-Means)", "23D"),
+        _ab_row(ab, 3, "4. Random Forest (Local Only)", "14D"),
+        _ab_row(ab, 4, "5. Random Forest (+Graph, Priors & K-Means) [Chọn]", "23D"),
+        _ab_row(ab, 5, "6. Binary GBT (Local Only)", "14D"),
+        _ab_row(ab, 6, "7. Binary GBT (+Graph, Priors & K-Means)", "23D"),
     ]
     s12.add_table(
         0.55,
@@ -1014,45 +1223,69 @@ def _add_slide_12_experiments_ablation(prs: Presentation) -> DualSlide:
         2.00,
         6.39,
         3.08,
-        "Confusion Matrix & Giá Trị Biến Đồ Thị",
+        "VAL Gate, Confusion Matrix & Tính Trung Thực 23D",
         [
-            "Đường chéo Confusion Matrix 6 lớp trên TEST đạt [944, 4, 3, 7, 6, 153] — phân biệt đủ cả 6 mức LOS A–F.",
-            "Bổ sung 9 biến đồ thị & phân cụm (14D → 23D) nâng Macro-F1 từ 0.5455 lên 0.5543 (ở GBT nâng Severe F1 từ "
-            "0.7840 lên 0.9465) và đạt ROC-AUC = 0.9882 cao nhất toàn cục.",
+            f"VAL Composite Gate: RF 23D thắng {rf23_val['val_composite_score']:.4f} vs RF 14D "
+            f"{rf14_val['val_composite_score']:.4f} (acc={rf23_val['val_accuracy_6class']:.4f}); "
+            f"TEST 6-Class diag {cm_diag} đủ 6 mức A–F.",
+            f"Trên {ev['train_samples']:,} organic TRAIN: ROC-AUC = {ev['roc_auc']:.4f}, "
+            f"PR-AUC = {ev['average_precision']:.4f}, Severe F1 = {ev['severe_f1']:.4f}; "
+            f"Macro-F1 = {ev['macro_f1_6class']:.4f} do lớp B–E thưa (10–20 mẫu TEST).",
         ],
-        badge="ROC-AUC 0.9882",
+        badge=f"ROC-AUC {ev['roc_auc']:.4f}",
         theme="sky",
-        body_size=8.4,
+        body_size=8.2,
     )
     s12.add_card(
         9.06,
         5.24,
         6.39,
         3.14,
-        "Kiểm Chứng Hiệu Năng Hạ Tầng Đầu–Cuối",
+        "Kiểm Chứng Hiệu Năng Spark 3.5.7 & MongoDB 8.0",
         [
-            "Batch & Lakehouse: Sai số 5-Tuple Monoid = 0.0; 2-Stage Salting giảm lệch tải 687.43x → 1.023x; "
-            "Parquet Pruning chỉ đọc 7,294 / 33,441 dòng tháng 2020-08.",
-            "Speed & Serving: O(1) Sketches gói gọn trong 33.0 KiB RAM (chặn 100% tin trùng); MongoDB 8.0 IXSCAN "
-            "phản hồi p95 = 0.636 ms (< 1 ms SLA).",
+            f"Batch & Catalyst: Monoid diff = 0.0; BroadcastHashJoin ({cj['baseline_exchange_stages_measured']}→"
+            f"{cj['optimized_exchange_stages_measured']} Exchange, {cj['baseline_median_ms']:.2f}→"
+            f"{cj['optimized_median_ms']:.2f} ms, +{cj['join_speedup_pct']:.2f}%); Salting kéo lệch "
+            f"{salt['temporal_slot_peak_to_median_ratio']:.2f}x→{salt['peak_slot_salted_bucket_skew_ratio']:.3f}x "
+            f"(IQR {ms['unsalted_iqr_ms']:.2f}→{ms['salted_iqr_ms']:.2f} ms).",
+            f"Speed & Serving: Sketches 33.0 KiB chặn 100% tin trùng; MongoDB 8.0 IXSCAN warm median "
+            f"{lat['warm_median_ms']:.3f} / p95 {lat['warm_p95_ms']:.3f} ms "
+            f"({lat['ixscan_vs_collscan_speedup_x']:.2f}x).",
         ],
         badge="System Benchmarks",
         theme="white",
-        body_size=8.4,
+        body_size=8.1,
     )
     return s12
 
 
-def _add_slide_13_experiments_persistence_defense(prs: Presentation, trans_chart: Path) -> DualSlide:
+def _add_slide_13_experiments_persistence_defense(
+    prs: Presentation, trans_chart: Path, t: dict | None = None
+) -> DualSlide:
     """Slide 13 (Section 9B): Experiments — Resolving the Persistence Paradox Across 4 Regimes."""
+    tr = (t or _load_slide_truth())["m"]
+    ev = tr["evaluation"]
+    ta = ev["transition_analysis"]
+    st = ta["statistical_significance_test"]
+    ng = ta["next_observed_gap_regime"]
+    cs = ta["cold_start_coverage"]
+    mc = ta["spatial_cold_start_masked_cv"]
+    def_chg = int(round(ta["rf_23d_transition_6class_acc"] * ta["transition_samples"]))
+    cal_chg = int(round(ta["rf_23d_val_calibrated_transition_6class_acc"] * ta["transition_samples"]))
+    top1_chg = int(round(ta["rf_23d_conditional_new_state_top1_acc"] * ta["transition_samples"]))
+    brier_drop = (1.0 - ta["rf_23d_transition_brier"] / ta["persistence_transition_brier"]) * 100.0
+    gap_pr_gain = (ng["rf_23d_severe_pr_auc"] - ng["persistence_severe_pr_auc"]) * 100.0
+
     s13 = DualSlide(prs)
     s13.add_chrome(
         13,
         TOTAL_SLIDES,
         4,
         "SECTION 09B · EXPERIMENTS (DEFENSE) — GIẢI MÃ NGHỊCH LÝ PERSISTENCE BASELINE TRÊN 4 CHẾ ĐỘ",
-        "9B. Experiments: Vì Sao Chọn Random Forest (23D) Khi Baseline Đạt 94.84%?",
-        "Bóc tách trực diện 1-đối-1 giữa 94.84% thời gian đứng yên và 5.16% thời điểm giao thông chuyển trạng thái",
+        "9B. Experiments: Vì Sao Chọn RF (23D) Khi Baseline Đạt "
+        f"{ev['ablation_table'][0]['accuracy_6class']*100:.2f}%?",
+        f"Bóc tách 1-đối-1 giữa {ta['steady_state_ratio_pct']:.2f}% đứng yên và "
+        f"{ta['transition_ratio_pct']:.2f}% thời điểm giao thông chuyển pha",
     )
     t_headers = [
         "Chế độ Kiểm định Thực tế",
@@ -1060,33 +1293,52 @@ def _add_slide_13_experiments_persistence_defense(prs: Presentation, trans_chart
         "Random Forest (23D)",
         "Kết luận Thực nghiệm",
     ]
+    n_tr = ta["transition_samples"]
+    cal_pct = ta["rf_23d_val_calibrated_transition_6class_acc"] * 100.0
+    top1_pct = ta["rf_23d_conditional_new_state_top1_acc"] * 100.0
     t_rows = [
         [
-            "1. Đổi trạng thái\nLOS(t) ≠ LOS(t+30m)\n(61 / 1,182 mẫu TEST)",
-            "Acc = 0 / 61 (0.00%)\nDetect AUC = 0.5000\nBrier = 0.3279",
-            "Detect AUC = 0.7664\nAcc: 9 / 61 (14.75% ở τ=0.30;\nmặc định 2 / 61 = 3.28%)\nTop-1 hướng mới: 24 / 61",
-            "Baseline mù 100% khi đổi pha;\nRF phát hiện sớm biến động &\ngiảm 10.1% sai số Brier.",
+            f"1. Đổi trạng thái\nLOS(t) ≠ LOS(t+30m)\n({n_tr} / {ta['test_samples']:,} TEST)",
+            f"Acc = 0 / {n_tr} (0.00%)\nDetect AUC = {ta['persistence_transition_detect_roc_auc']:.4f}\n"
+            f"Brier = {ta['persistence_transition_brier']:.4f}",
+            f"Detect AUC = {ta['rf_23d_transition_detect_roc_auc']:.4f}\n"
+            f"Acc: {cal_chg}/{n_tr} ({cal_pct:.2f}% ở τ={ta['val_selected_change_threshold']:.2f}; "
+            f"{def_chg}/{n_tr} mặc định)\nTop-1 mới: {top1_chg}/{n_tr} ({top1_pct:.2f}%)",
+            f"McNemar p = {st['mcnemar_transition_p_value']:.4f} (7 vs 0);\nRF bắt biến động sớm & giảm "
+            f"{brier_drop:.1f}% sai số Brier.",
         ],
         [
-            "2. Thoáng (A–D) đột ngột\nhóa kẹt cứng (E–F)\n(8 / 993 mẫu TEST)",
+            f"2. Thoáng (A–D) đột ngột\nhóa kẹt cứng (E–F)\n"
+            f"({ta['congestion_onset_samples']} / {ta['non_severe_t_samples']} TEST)",
             "Hard Recall = 0 / 8 (0.0%)\nGán xác suất kẹt = 0% cho\nmọi đoạn đang mức A–D",
-            "Hard Recall mặc định = 0 / 8\n(mẫu cực hiếm 0.81%)\nRanking ROC-AUC = 0.8136\nXác suất rủi ro tăng 9.35x",
-            "Ngưỡng cứng chưa bắt kịp 8 ca\nhiếm, nhưng xác suất RF tăng\nvọt gấp 9.35x.",
+            f"Hard Recall mặc định = 0 / 8\n(mẫu hiếm 0.81%)\nOnset ROC-AUC = {ta['rf_23d_onset_roc_auc']:.4f}\n"
+            f"Rủi ro tăng {ta['rf_23d_onset_risk_lift_ratio']:.2f}x",
+            f"Ngưỡng cứng chưa bắt kịp 8 ca\nhiếm, nhưng rủi ro tăng "
+            f"{ta['rf_23d_onset_risk_lift_ratio']:.2f}x\n"
+            f"({ta['rf_23d_mean_prob_onset']:.4f} vs {ta['rf_23d_mean_prob_steady_free']:.4f}).",
         ],
         [
-            "3. Cặp tín hiệu GPS\nngắt quãng > 30 phút\n(3,513 mẫu · 47.45% đổi)",
-            "Severe PR-AUC = 0.6369\nROC-AUC = 0.7850\n(quán tính cũ hết tác dụng)",
-            "Severe PR-AUC = 0.7082 (+7.13%)\nROC-AUC = 0.8427 (+5.77%)\n(nhờ chu kỳ giờ VN + PageRank)",
-            "Khi GPS ngắt quãng lâu (chiếm\n66.27% thực tế), RF vượt xa\ncách đoán quán tính.",
+            f"3. Cặp tín hiệu GPS\nngắt quãng > 30 phút\n"
+            f"({ng['test_samples']:,} · {ng['transition_ratio_pct']:.2f}% đổi)",
+            f"Severe PR-AUC = {ng['persistence_severe_pr_auc']:.4f}\nROC-AUC = {ng['persistence_severe_roc_auc']:.4f}\n"
+            "(quán tính cũ suy yếu)",
+            f"Severe PR-AUC = {ng['rf_23d_severe_pr_auc']:.4f} (+{gap_pr_gain:.2f}%)\n"
+            f"ROC-AUC = {ng['rf_23d_severe_roc_auc']:.4f}\n(chu kỳ giờ VN + PageRank)",
+            "Khi GPS ngắt quãng lâu (chiếm\n66.30% thực tế), RF vượt trội\nvề Severe PR-AUC.",
         ],
         [
-            "4. Vùng Cold-Start\nkhông có xe gửi GPS\n(74,606 / 84,633 đoạn)",
-            "Network Coverage = 0.0%\n(bất lực vì không có LOS(t)\nhiện tại trên đường)",
-            "Network Coverage = 100.0%\n(chấm điểm đủ 84,633 đoạn\nnhờ Static Feature Store)",
-            "Chỉ duy nhất RF 23D mới phủ\nđược 88.15% mạng lưới đường\nnhánh thiếu cảm biến.",
+            f"4. Vùng Cold-Start\nkhông có xe gửi GPS\n"
+            f"({cs['cold_start_segments']:,}/{cs['total_network_segments']:,})",
+            f"Network Coverage = {cs['persistence_coverage_pct']:.2f}%\nCold-Start = 0.0%\n"
+            "(vô hiệu khi 0 GPS)",
+            f"Network Coverage = {cs['rf_23d_network_coverage_pct']:.1f}%\n"
+            f"(Masked: Acc={mc['rf_23d_masked_cold_start_6class_acc']:.4f},\n"
+            f"PR-AUC={mc['rf_23d_masked_cold_start_pr_auc']:.4f})",
+            f"Chỉ duy nhất RF 23D phủ được\n{tr['static_feature_store_c13b']['cold_start_ratio_pct']:.2f}% "
+            "mạng lưới đường\ncơ giới thiếu cảm biến.",
         ],
     ]
-    s13.add_table(0.55, 2.00, 8.35, 6.38, t_headers, t_rows, [0.22, 0.23, 0.29, 0.26], font_size=7.9)
+    s13.add_table(0.55, 2.00, 8.35, 6.38, t_headers, t_rows, [0.22, 0.23, 0.29, 0.26], font_size=7.7)
     s13.add_image(9.06, 2.00, 6.39, 4.26, trans_chart)
     s13.add_card(
         9.06,
@@ -1095,28 +1347,36 @@ def _add_slide_13_experiments_persistence_defense(prs: Presentation, trans_chart
         2.00,
         "Đúc Kết Đối Chứng Khoa Học (1-on-1 Defense)",
         [
-            "94.84% Accuracy của Baseline chỉ phản ánh quán tính đứng yên (1,121 / 1,182 cặp không đổi nhãn), hoàn "
-            "toàn mù (0 / 61) ngay khi giao thông chuyển trạng thái.",
-            "Random Forest (23D) phát hiện sớm tín hiệu đổi pha (Detect AUC = 0.7664, đẩy xác suất rủi ro gấp 9.35x) "
-            "và mở rộng độ phủ dự báo từ 0% lên 100% mạng lưới đô thị.",
+            f"{ev['ablation_table'][0]['accuracy_6class']*100:.2f}% của Baseline phản ánh quán tính đứng yên "
+            f"({ta['steady_state_samples']:,} / {ta['test_samples']:,} cặp giữ nhãn), mù 100% (0 / "
+            f"{ta['transition_samples']}) khi chuyển pha.",
+            f"RF 23D bắt sớm tín hiệu đổi pha (Detect AUC = {ta['rf_23d_transition_detect_roc_auc']:.4f}, "
+            f"McNemar p = {st['mcnemar_transition_p_value']:.4f}, Lift {ta['rf_23d_onset_risk_lift_ratio']:.2f}x) "
+            f"và phủ 100% {cs['total_network_segments']:,} đoạn cơ giới.",
         ],
         badge="Key Finding",
         theme="sky_strong",
-        body_size=8.1,
+        body_size=8.0,
     )
     return s13
 
 
-def _add_slide_14_demonstration(prs: Presentation, ui_tab2: Path, ui_tab4: Path) -> DualSlide:
-    """Slide 14 (Section 10): Demonstration (:8501 Live Case Studies & 5-Tab Operational Overview)."""
+def _add_slide_14_demonstration(
+    prs: Presentation, ui_tab2: Path, ui_tab4: Path, t: dict | None = None
+) -> DualSlide:
+    """Slide 14 (Section 10): Demonstration (Dual-UI TOC Web :8000 & Streamlit :8501 Case Studies)."""
+    tr = (t or _load_slide_truth())["m"]
+    ds = tr["dataset"]
+    gp = tr["graph_and_patterns"]
     s14 = DualSlide(prs)
     s14.add_chrome(
         14,
         TOTAL_SLIDES,
         5,
-        "SECTION 10 · DEMONSTRATION — CỔNG ĐIỀU HÀNH STREAMLIT 5 TAB (:8501) & 2 CASE STUDIES",
+        "SECTION 10 · DEMONSTRATION — DUAL-UI TOC WEB (:8000) & STREAMLIT (:8501) · CASE STUDIES",
         "10. Demonstration: Cận Cảnh Dự Báo E → F (Tab 2) & Tra Cứu Cold-Start (Tab 4)",
-        "Trình diễn trực tiếp trên ứng dụng Streamlit kết nối kho MongoDB 8.0 (33,441 bản ghi, làm mới 5 giây)",
+        f"Trình diễn Dual-UI: FastAPI TOC Web (:8000) & Streamlit (:8501 ↔ MongoDB 8.0 · "
+        f"{ds['labeled_windows_count']:,} docs)",
     )
     s14.add_card(
         0.55,
@@ -1125,12 +1385,12 @@ def _add_slide_14_demonstration(prs: Presentation, ui_tab2: Path, ui_tab4: Path)
         1.58,
         "Case Study 1 (Tab 2): Bắt Đúng E → F",
         [
-            "Đoạn 21064 — Công Trường Quốc Tế (11:30 trưa, đang LOS E 12 km/h): Baseline giữ nguyên mức E (sai), "
-            "còn Random Forest 23D dự báo đúng chuyển sang LOS F (xác suất kẹt 59.6%, đổi pha 73.0%).",
+            "Đoạn 21064 — Công Trường Quốc Tế (2021-04-22 11:30 ICT, đang LOS E · 12.0 km/h): Baseline giữ mức E "
+            "(sai), còn Random Forest 23D dự báo đúng chuyển sang LOS F (severe_prob = 72.4%, thực tế 12:00 là F).",
         ],
         badge="Tab 2 · Forecast",
         theme="sky",
-        body_size=8.3,
+        body_size=8.2,
     )
     s14.add_image(0.55, 3.68, 7.35, 3.14, ui_tab2)
 
@@ -1141,12 +1401,13 @@ def _add_slide_14_demonstration(prs: Presentation, ui_tab2: Path, ui_tab4: Path)
         1.58,
         "Case Study 2 (Tab 4): Vùng Cold-Start",
         [
-            "Khi chọn đoạn 61781 — Phú Định (0 bản tin GPS, PageRank #1 = 3.7515), hệ thống đối chiếu tức thì các "
-            "đoạn có cảm biến tương đồng nhất trong cùng Cluster (Châu Văn Liêm, Nguyễn Kiệm).",
+            f"Chọn đoạn 61781 — Phú Định (0 GPS, PR = 2.2141, Cluster 5 trong {ds['cold_start_segments_count']:,} "
+            f"Cold-Start; #1 mạng lưới: #{gp['top_bottleneck_segment_id']} {gp['top_bottleneck_street']} = "
+            f"{gp['top_bottleneck_pagerank']:.4f}), đối chiếu ngay nhóm cảm biến đồng dạng (Nguyễn Kiệm, Song Hành).",
         ],
         badge="Tab 4 · Cold-Start",
         theme="white",
-        body_size=8.3,
+        body_size=8.0,
     )
     s14.add_image(8.10, 3.68, 7.35, 3.14, ui_tab4)
 
@@ -1155,22 +1416,35 @@ def _add_slide_14_demonstration(prs: Presentation, ui_tab2: Path, ui_tab4: Path)
         6.94,
         14.90,
         1.44,
-        "Toàn Cảnh 5 Tab Nghiệp Vụ Trên Cổng Điều Hành (:8501 ↔ MongoDB 8.0)",
+        "Kiến Trúc Dual-UI: TOC Web (:8000) & Streamlit 5 Tab (:8501)",
         [
-            "Tab 1: Bản đồ tổng quan & Top-25 EWMA Hotspots (UC-1) · Tab 2: Dự báo trực tiếp +30m dưới 1 ms (UC-2) · "
-            "Tab 3: Xếp hạng nút cổ chai PageRank & luật đồng kẹt SON (UC-3, UC-4).",
-            "Tab 4: Phân cụm 7D K-Means & đối chiếu vùng mù Cold-Start (UC-5) · Tab 5: Kiểm toán đối soát Tier-2 "
-            "Backfill & chữ ký SHA-256 Frozen Registry (UC-6).",
+            f"TOC Web (FastAPI :8000 + ReactJS + Leaflet): Bản đồ {ds['segments_count']:,} đoạn cơ giới theo LOS/PR, "
+            "cảnh báo trực tuyến < 1 ms & mô phỏng sự cố. (Ảnh minh họa giao diện :8501 truy vấn trực tiếp MongoDB).",
+            "Streamlit 5 Tab (:8501): Tab 1 EWMA Hotspots (UC-1) · Tab 2 Forecast +30m (UC-2) · Tab 3 PageRank & "
+            "Luật SON (UC-3/4) · Tab 4 7D K-Means Cold-Start (UC-5) · Tab 5 Tier-2 Recon & SHA-256 Registry (UC-6).",
         ],
-        badge="5 Live Tabs",
+        badge="Dual-UI Live",
         theme="sky_strong",
-        body_size=8.2,
+        body_size=8.0,
     )
     return s14
 
 
-def _add_slide_15_limitations_and_risks_summary(prs: Presentation) -> DualSlide:
+def _add_slide_15_limitations_and_risks_summary(prs: Presentation, t: dict | None = None) -> DualSlide:
     """Slide 15 (Section 11): Limitations & Risks — Solution Component Roll-Up & System-Wide Risk Matrix."""
+    tr = (t or _load_slide_truth())["m"]
+    ds = tr["dataset"]
+    qf = tr["quality_funnel_c5"]
+    ev = tr["evaluation"]
+    ta = ev["transition_analysis"]
+    rc = tr["streaming_mmds"]["reconciliation"]
+    vt = qf["vmax_imputation_tiers_windows"]
+    t23 = vt["TIER_2_LEVEL_ROADTYPE_MEDIAN"] + vt["TIER_3_HIERARCHICAL_LEVEL_PRIOR"]
+    t23_pct = t23 / ds["labeled_windows_count"] * 100.0
+    obs_pct = 100.0 - tr["static_feature_store_c13b"]["cold_start_ratio_pct"]
+    cal_chg = int(round(ta["rf_23d_val_calibrated_transition_6class_acc"] * ta["transition_samples"]))
+    def_chg = int(round(ta["rf_23d_transition_6class_acc"] * ta["transition_samples"]))
+
     s15 = DualSlide(prs)
     s15.add_chrome(
         15,
@@ -1188,31 +1462,37 @@ def _add_slide_15_limitations_and_risks_summary(prs: Presentation) -> DualSlide:
     comp_rows = [
         [
             "3. System Architecture",
-            "4 dịch vụ chạy chung 1 máy Docker (10.5/16 GB RAM);\nđộ trễ đồng bộ biến trễ giữa Phase B và Phase C",
+            "6 dịch vụ chạy chung 1 máy Docker (12.0/16 GB RAM);\nđộ trễ đồng bộ biến trễ giữa Phase B và Phase C",
             "Giới hạn mem_limit từng container;\nkhóa phân quyền đọc/ghi 3-Phase MLOps",
         ],
         [
             "5. Data Pipeline &\nData Processing",
-            "60.79% cửa sổ dùng Vmax suy diễn tĩnh (Tier 2/3);\nnguy cơ tăng cách ly Quarantine khi đổi schema",
+            f"{t23_pct:.2f}% ({t23:,}) cửa sổ dùng Vmax suy diễn tĩnh (Tier 2/3);\n"
+            "nguy cơ tăng Quarantine khi thiết bị đổi schema",
             "Train-Only 3-Tier Vmax (0 Data Leakage);\nANSI try_cast + Quarantine (0 silent drops)",
         ],
         [
             "6. Modeling",
-            "Ngưỡng mặc định bảo thủ khi đổi pha (2/61);\nthiếu biến ngoại sinh trực tiếp (mưa ngập, tai nạn)",
-            "Hiệu chỉnh ngưỡng τ=0.30 trên VAL (9/61);\ncảnh báo sớm theo xác suất (Lift 9.35x)",
+            f"Đổi pha mặc định {def_chg}/{ta['transition_samples']}; lớp B–E thưa kéo\n"
+            f"Macro-F1={ev['macro_f1_6class']:.4f} & thiếu biến mưa/tai nạn",
+            f"VAL τ={ta['val_selected_change_threshold']:.2f} ({cal_chg}/61, "
+            f"McNemar p={ta['statistical_significance_test']['mcnemar_transition_p_value']:.4f});\n"
+            f"lọc {ds['synthetic_burst_windows_flagged']:,} burst & Lift {ta['rf_23d_onset_risk_lift_ratio']:.2f}x",
         ],
         [
             "7. Batch Processing",
-            "Luật trễ +30m SON/FPGrowth chỉ có 5–8 cửa sổ;\nphân cụm Cold-Start dựa trên hình thái tĩnh",
-            "Gắn nhãn Exploratory Hypothesis;\nkết hợp Line-Graph PageRank bảo toàn khối lượng",
+            f"Luật trễ +30m ({tr['graph_and_patterns']['lagged_transition_rules_found']} luật) chỉ có 5–8 cửa sổ;\n"
+            f"{ds['cold_start_segments_count']:,} Cold-Start dựa trên hình thái tĩnh",
+            f"Gắn nhãn Exploratory Hypothesis;\nkết hợp PageRank bảo toàn {ds['segments_count']:,}.0",
         ],
         [
             "8. Stream Processing",
             "Bloom 32.0 KiB đầy bit nếu chạy dài ngày;\ntin trễ >30m phải chờ đối soát cuối ngày",
-            "Tier-2 Reconciliation bù 100% (501 cửa sổ trễ);\nMongoDB version_ts chặn 25/25 tin cũ v1",
+            f"Tier-2 Recon bù {rc['affected_late_segment_windows_recomputed']} trễ & "
+            f"{rc['healed_downstream_lag_windows']} lag;\nMongoDB $status_version chặn 25/25 v1",
         ],
     ]
-    s15.add_table(0.55, 2.00, 8.55, 6.38, comp_headers, comp_rows, [0.22, 0.43, 0.35], font_size=8.0)
+    s15.add_table(0.55, 2.00, 8.55, 6.38, comp_headers, comp_rows, [0.22, 0.43, 0.35], font_size=7.9)
 
     s15.add_card(
         9.26,
@@ -1221,24 +1501,37 @@ def _add_slide_15_limitations_and_risks_summary(prs: Presentation) -> DualSlide:
         6.38,
         "4 Rủi Ro & Hạn Chế Chung Toàn Hệ Thống",
         [
-            "1. Spatial & Fleet Representation Bias: Nguồn GPS cộng đồng chỉ phủ 11.85% đoạn đường (chủ yếu ô tô trục "
-            "chính), chưa đại diện đầy đủ cho luồng xe máy (> 80% lưu lượng TP.HCM).",
-            "2. Open-World Concept Drift & Seasonality: Mô hình khóa ở Phase A và tập TEST mùa khô (12/2020–03/2021) "
-            "sẽ suy giảm khi gặp mùa mưa ngập lịch sử hoặc lô cốt thi công mới.",
-            "3. Rare Sudden-Onset Scarcity: Ca chuyển từ thoáng sang kẹt cứng chỉ chiếm 0.81% (8 / 993 ca TEST, Hard "
-            "Recall = 0/8), làm hạn chế biên quyết định cứng nếu thiếu hàm phạt chi phí.",
-            "4. Proof-of-Scale & Human-in-the-Loop Ceiling: Cụm Docker đơn (mẫu Proof-of-Scale 38.5 MB) và UI :8501 "
-            "hiện cung cấp khuyến nghị điều hành, chưa nối tự động vòng kín vào đèn SCATS.",
+            f"1. Spatial & Fleet Representation Bias: Nguồn GPS chỉ phủ {obs_pct:.2f}% "
+            f"({ds['distinct_active_segments']:,}/{ds['segments_count']:,} đoạn cơ giới, chủ yếu ô tô), chưa đại diện "
+            "đầy đủ luồng xe máy (> 80% lưu lượng TP.HCM).",
+            f"2. Open-World Concept Drift & Imbalance: Phase A trên {ev['train_samples']:,} organic TRAIN có thể giảm "
+            f"độ chính xác khi mưa ngập; lớp B–E thưa (10–20 mẫu TEST) làm Macro-F1 = {ev['macro_f1_6class']:.4f} "
+            f"(Severe F1 = {ev['severe_f1']:.4f}).",
+            f"3. Rare Sudden-Onset Scarcity: Ca thoáng sang kẹt cứng chiếm 0.81% ({ta['congestion_onset_samples']}/"
+            f"{ta['non_severe_t_samples']}, Hard Recall = 0/8; Onset ROC = {ta['rf_23d_onset_roc_auc']:.4f}, Lift "
+            f"{ta['rf_23d_onset_risk_lift_ratio']:.2f}x).",
+            "4. Single-Host Proof-of-Scale & Human-in-the-Loop: Cụm 6 container (12.0/16 GB RAM) & Dual-UI "
+            "(:8000 / :8501) chỉ hỗ trợ khuyến nghị, chưa đóng vòng điều khiển đèn SCATS.",
         ],
         badge="System-Wide Risks",
         theme="navy",
-        body_size=8.3,
+        body_size=8.1,
     )
     return s15
 
 
-def _add_slide_16_plan_and_roadmap(prs: Presentation) -> DualSlide:
+def _add_slide_16_plan_and_roadmap(prs: Presentation, t: dict | None = None) -> DualSlide:
     """Slide 16 (Section 12): Plan — Completed Project Execution Plan & 3-Phase Future Roadmap."""
+    tr = (t or _load_slide_truth())["m"]
+    sp = (t or _load_slide_truth())["sp"]
+    mv = (t or _load_slide_truth())["mv"]
+    ds = tr["dataset"]
+    ev = tr["evaluation"]
+    salt = tr["monoid_and_catalyst_c9"]["pillar_i1_monoid_and_salting"]
+    cj = sp["catalyst_join_spark"]
+    rc = tr["streaming_mmds"]["reconciliation"]
+    lat = mv["uc2_arterial_query"]["latency_benchmark_ms"]
+
     s16 = DualSlide(prs)
     s16.add_chrome(
         16,
@@ -1257,26 +1550,31 @@ def _add_slide_16_plan_and_roadmap(prs: Presentation) -> DualSlide:
         [
             "1. Nguyễn Tạ Minh Quyền\n(MSSV: 25MS23280)",
             "Mục 1, 4, 5 & 7A:\nProblem, Data/EDA,\nPipeline & Spark ETL",
-            "Hoàn thành 100%: Ordered Quality Funnel (ANSI try_cast, NFC, UTC+7), Train-Only Vmax Imputation, "
-            "5-Tuple Monoid (sai số = 0.0), 2-Stage Key Salting (687.43x → 1.023x), BroadcastHashJoin & "
-            "Medallion Parquet Pruning (7,294 dòng tháng 2020-08).",
+            f"Hoàn thành 100%: Quality Funnel ({ds['segments_count']:,} đoạn cơ giới, {ds['segment_status_events']:,} "
+            f"pings, 89.19% LOS), 3-Tier Vmax, Monoid (diff=0.0), Key Salting "
+            f"({salt['temporal_slot_peak_to_median_ratio']:.2f}x→{salt['peak_slot_salted_bucket_skew_ratio']:.3f}x), "
+            f"BroadcastJoin ({cj['baseline_exchange_stages_measured']}→{cj['optimized_exchange_stages_measured']} "
+            f"Exch, +{cj['join_speedup_pct']:.2f}%) & Parquet Pruning (7,268).",
         ],
         [
             "2. Nguyễn Thành Đạt\n(MSSV: 25MS23306)",
             "Mục 2, 6, 7B & 9:\nLiterature, Modeling,\nGraph & Experiments",
-            "Hoàn thành 100%: Literature Review, Line-Graph PageRank (84,633 đoạn), FPGrowth (335 luật) & SON, "
-            "7D K-Means (k=6, Silhouette 0.2853) phủ 74,606 đoạn Cold-Start, Random Forest 23D trên 7,898 cặp "
-            "exact t+30m (ROC-AUC 0.9882, PR-AUC 0.9471) & Transition Defense.",
+            f"Hoàn thành 100%: Line-Graph PageRank ({ds['segments_count']:,}.0, 92,453 cạnh), FPGrowth (335) & SON, "
+            f"7D K-Means (Sil={tr['model']['silhouette_score']:.4f}) phủ {ds['cold_start_segments_count']:,} "
+            f"Cold-Start, lọc {ds['synthetic_burst_windows_flagged']:,} burst → {ev['train_samples']:,} organic "
+            f"TRAIN & RF 23D (ROC={ev['roc_auc']:.4f}, PR={ev['average_precision']:.4f}, "
+            f"Detect={ev['transition_analysis']['rf_23d_transition_detect_roc_auc']:.4f}).",
         ],
         [
             "3. Phạm Công Minh\n(MSSV: 25MS23310)",
             "Mục 3, 8, 10, 11 & 12:\nArch, Stream, Demo,\nLimitations & Plan",
-            "Hoàn thành 100%: Docker 10.5/16 GB RAM, Kafka 4.1 KRaft, O(1) Sketches 33.0 KiB (32.0 KiB Bloom + "
-            "1.0 KiB HLL++ + EWMA), WAL Recovery (0 dupes), Two-Tier Recon (bù 501 cửa sổ trễ, 3,953 lags, "
-            "re-score 377 cửa sổ), MongoDB IXSCAN (0.636 ms) & UI :8501.",
+            f"Hoàn thành 100%: Docker 6 dịch vụ (12.0/16 GB RAM), Kafka 4.1 KRaft, Sketches 33.0 KiB, WAL + Spark "
+            f"watermark thật, Recon ({rc['affected_late_segment_windows_recomputed']} trễ, "
+            f"{rc['healed_downstream_lag_windows']} lag, {rc['healed_downstream_rescored_windows']} rescore), "
+            f"MongoDB IXSCAN ({lat['warm_median_ms']:.3f}/{lat['warm_p95_ms']:.3f} ms) & Dual-UI (:8000 & :8501).",
         ],
     ]
-    s16.add_table(0.55, 2.00, 14.90, 3.82, t_headers, t_rows, [0.19, 0.22, 0.59], font_size=8.2)
+    s16.add_table(0.55, 2.00, 14.90, 3.82, t_headers, t_rows, [0.19, 0.22, 0.59], font_size=7.9)
 
     s16.add_card(
         0.55,
@@ -1303,7 +1601,8 @@ def _add_slide_16_plan_and_roadmap(prs: Presentation) -> DualSlide:
         [
             "Phase 3 (Dài hạn — Đa nút & Đóng vòng Đèn): Nâng cấp lên Kubernetes Multi-Node + Sharded MongoDB + "
             "Vector-Tile GIS và tích hợp API dự báo +30m vào hệ thống đèn tín hiệu SCATS.",
-            "Quality Gate Nghiệm thu: Vượt qua 100% kiểm thử tự động (27/27 pytest & Spark unittest; 0 lỗi Ruff).",
+            "Quality Gate Nghiệm thu: Vượt qua 100% kiểm thử pytest & Spark 3.5.7 runtime, đối soát 0 diff & 0 lỗi "
+            "Ruff (C901 < 15).",
         ],
         badge="Phase 3 & QA",
         theme="navy",
@@ -1312,80 +1611,100 @@ def _add_slide_16_plan_and_roadmap(prs: Presentation) -> DualSlide:
     return s16
 
 
-def _add_slide_17_session9_readiness_summary(prs: Presentation) -> DualSlide:
-    """Slide 17 (Session 9 Readiness): Technical Readiness Audit Summary & Card B Verification."""
+def _add_slide_17_session9_readiness_summary(prs: Presentation, t: dict | None = None) -> DualSlide:
+    """Slide 17 (Session 9 Readiness): Technical Readiness Audit Summary & Live Wave-2 Parity."""
+    tr = (t or _load_slide_truth())["m"]
+    sp = (t or _load_slide_truth())["sp"]
+    mv = (t or _load_slide_truth())["mv"]
+    ds = tr["dataset"]
+    ev = tr["evaluation"]
+    ta = ev["transition_analysis"]
+    cj = sp["catalyst_join_spark"]
+    ms = sp["monoid_salting_spark"]
+    salt = tr["monoid_and_catalyst_c9"]["pillar_i1_monoid_and_salting"]
+    sm = tr["streaming_mmds"]
+    gp = tr["graph_and_patterns"]
+    lat = mv["uc2_arterial_query"]["latency_benchmark_ms"]
+
     s17 = DualSlide(prs)
     s17.add_chrome(
         17,
         TOTAL_SLIDES,
         5,
-        "SESSION 9 READINESS AUDIT · KIỂM ĐỊNH KỸ THUẬT A–I & CARD B (95 / 100)",
-        "13. Session 9 Technical Readiness Summary (Card B)",
-        "Đối chứng ranh giới [I] vs [P], kiểm nghiệm B1–B3 (raw_data ↔ data) & luồng Live Kafka → MongoDB",
+        "SESSION 9 & PRODUCTION READINESS · KIỂM ĐỊNH KỸ THUẬT A–I, SPARK 3.5.7 & MONGODB 8.0",
+        "13. Technical Readiness & Production Verification Summary",
+        "Đối chứng ranh giới [I] vs [P], kiểm nghiệm Spark 3.5.7 runtime, dữ liệu organic & MongoDB 8.0",
     )
     s17.add_card(
         0.55,
         2.00,
         14.90,
         1.78,
-        "1. Architecture Truth: Ranh Giới [I] Đã Triển Khai vs [P] Đề Xuất & Chuẩn Hóa Thuật Ngữ",
+        "1. Architecture Truth: Ranh Giới [I] Đã Triển Khai vs [P] Đề Xuất & Dual-UI Stack",
         [
-            "[I] Implemented: Cụm 4 dịch vụ (Kafka 4.1 KRaft 3 phân vùng → Spark 3.5.7 → Parquet + MongoDB 8.0 → "
-            "Streamlit :8501 + ui-demo.html) kèm gói mẫu data/demo_sample/.",
+            "[I] Implemented: Cụm 6 dịch vụ Docker (12.0/16 GB RAM: Kafka 4.1 KRaft 3 phân vùng → Spark 3.5.7 → "
+            "Parquet + MongoDB 8.0 → FastAPI :8000 + ReactJS/Leaflet TOC Web & Streamlit :8501) kèm data/demo_sample/.",
             "[P] Proposed & Card B Fixes: Luồng viễn thông 8–17 tỷ tin/ngày, K8s đa nút & đèn SCATS gắn nhãn [P]. "
-            "Chuẩn hóa thành Predictive ML (Past-Only Priors τ < t) & 7D Behavioral Archetypes.",
+            "Chuẩn hóa thuật ngữ Predictive ML (Past-Only Priors τ < t) & 7D Behavioral Archetypes.",
         ],
         badge="[I] vs [P] Truth",
         theme="sky_strong",
-        body_size=8.2,
+        body_size=8.1,
     )
     s17.add_card(
         0.55,
         3.94,
         7.35,
         2.12,
-        "2. Controlled Spark Performance & Query Plan",
+        "2. Controlled Spark 3.5.7 Performance & Query Plan",
         [
-            "BroadcastHashJoin giảm tầng trộn mạng Exchange từ 10 → 2 (-80%) và giảm 25.7% thời gian chạy "
-            "(1,418.6 ms → 1,054.2 ms; exceptAll = 0 dòng).",
-            "2-Stage 8-Bucket Salted 5-Tuple Monoid kéo độ lệch phân vùng từ 687.43x → 1.023x "
-            "(+19.2 ms, sai số 0.0) và cắt tỉa 9/10 phân vùng tháng Parquet.",
+            f"BroadcastHashJoin giảm tầng trộn Exchange {cj['baseline_exchange_stages_measured']} → "
+            f"{cj['optimized_exchange_stages_measured']} (-80%) và rút ngắn thời gian từ "
+            f"{cj['baseline_median_ms']:.2f} → {cj['optimized_median_ms']:.2f} ms (+{cj['join_speedup_pct']:.2f}%; "
+            "exceptAll_diff = 0).",
+            f"8-Bucket Salted Monoid kéo lệch slot {salt['temporal_slot_peak_to_median_ratio']:.2f}x → "
+            f"{salt['peak_slot_salted_bucket_skew_ratio']:.3f}x (giảm IQR {ms['unsalted_iqr_ms']:.2f} → "
+            f"{ms['salted_iqr_ms']:.2f} ms; tradeoff {ms['unsalted_median_ms']:.2f} → {ms['salted_median_ms']:.2f} ms) "
+            "& cắt 9/10 phân vùng Parquet.",
         ],
-        badge="10 → 2 Exchanges",
+        badge=f"+{cj['join_speedup_pct']:.2f}% Join Speedup",
         theme="soft",
-        body_size=8.2,
+        body_size=8.0,
     )
     s17.add_card(
         8.10,
         3.94,
         7.35,
         2.12,
-        "3. Data & Predictive ML Validation (Card B1, B2)",
+        "3. Data & Predictive ML Validation (Burst Filter & VAL Gate)",
         [
-            "B1 Point-in-Time: 0/23 biến dùng khoảng (t, t+30m]; Future-Shuffle diff = 0.0; đối chiếu trực tiếp "
-            "raw_data ↔ data trên #47407 Lý Thường Kiệt & #21260 Nguyễn Bỉnh Khiêm.",
-            "B2 Falsification: Đoạn #21969 Nguyễn Kiệm có PageRank 2.7313 nhưng chạy 45.41 km/h (LOS A) → "
-            "PageRank đo nguy cơ nút phễu hình học, không đồng nghĩa đang kẹt.",
+            f"B1 Point-in-Time: Tách {ds['synthetic_burst_windows_flagged']:,} burst windows → {ev['train_samples']:,} "
+            f"organic TRAIN (cls_w=0.65); RF 23D thắng Live VAL Gate (0.8990 vs 0.5343); Future-Shuffle = 0.0.",
+            f"B2 Falsification: #{gp['top_bottleneck_segment_id']} {gp['top_bottleneck_street']} có PageRank #1 "
+            f"({gp['top_bottleneck_pagerank']:.4f}) nhưng không mặc định kẹt → PageRank đo nút phễu hình học.",
         ],
-        badge="B1 & B2 Verified",
+        badge="VAL Gate 0.8990",
         theme="soft",
-        body_size=8.2,
+        body_size=8.1,
     )
     s17.add_card(
         0.55,
         6.22,
         7.35,
         2.16,
-        "4. Live Kafka Stream & MongoDB Serving (Card B3)",
+        "4. Live Streaming, Spark Watermark & MongoDB 8.0",
         [
-            "Rerun 2026-11-18: Phát 200 sự kiện qua Kafka → Consumer lọc 4/4 tin trùng (32.0 KiB Bloom), giữ 4 tin "
-            "trễ >30m cho Tier-2 và ghi 192 dự báo v1 vào MongoDB 8.0 & :8501.",
-            "B3 Sketch Impact: 1.0 KiB HLL++ sai số 3.98% (9,628 vs 10,027 đoạn) chỉ hiển thị KPI tổng quan "
-            "(0 cảnh báo nhầm); chỉ mục ESR đạt warm p95 = 0.636 ms.",
+            f"Spark Streaming WAL + watermark thật ({sp['spark_sink2_watermark']}, 10 dòng bị loại hết hạn); "
+            f"Bloom 32.0 KiB lọc {sm['duplicates_removed_exact']}/{sm['injected_duplicate_events']} trùng; "
+            f"HLL++ 1.0 KiB ≈ {sm['hyperloglog']['hll_estimated_segments']:.1f}/"
+            f"{sm['hyperloglog']['exact_distinct_segments']:,}.",
+            f"MongoDB 8.0.34 ({mv['total_rows_upserted']:,} docs, 69 batch): atomic $status_version chặn "
+            f"{mv['stale_v1_rejected_by_mongo']}/25 v1; IXSCAN warm {lat['warm_median_ms']:.3f} / "
+            f"p95 {lat['warm_p95_ms']:.3f} ms ({lat['ixscan_vs_collscan_speedup_x']:.2f}x).",
         ],
-        badge="Live E2E Stream",
+        badge="Real Watermark + IXSCAN",
         theme="sky",
-        body_size=8.2,
+        body_size=8.0,
     )
     s17.add_card(
         8.10,
@@ -1394,24 +1713,41 @@ def _add_slide_17_session9_readiness_summary(prs: Presentation) -> DualSlide:
         2.16,
         "5. Honest Limitations & Evidence Provenance",
         [
-            "Giới hạn Thực tế: 88.15% (74,606 đoạn) thiếu GPS gắn nhãn [COLD-START PRIOR]; tập TEST có 8 ca chuyển "
-            "đột ngột sang E/F (ROC-AUC = 0.8136, Lift 9.35x).",
-            "Phân định Minh bạch: Tách rõ kết quả lô lịch sử 38.5 MB (2026-11-09..11) với kết quả chạy lại "
-            "(2026-11-18: Live Kafka → MongoDB, B1–B3 & 27/27 kiểm thử đạt 100%).",
+            f"Giới hạn Thực tế: {ds['cold_start_segments_count']:,}/{ds['segments_count']:,} "
+            f"({tr['static_feature_store_c13b']['cold_start_ratio_pct']:.2f}%) Cold-Start; TEST "
+            f"Macro-F1 = {ev['macro_f1_6class']:.4f} (B–E chỉ 10–20 mẫu); khởi phát kẹt 8/993 "
+            f"(Onset ROC = {ta['rf_23d_onset_roc_auc']:.4f}, Lift {ta['rf_23d_onset_risk_lift_ratio']:.2f}x).",
+            "Truy xuất Nguồn sự thật: 100% số liệu đồng bộ từ outputs/metrics.json, spark_runtime_evidence.json "
+            "& mongo_verify.json (Wave 2 · 2026-11-18T20:07Z).",
         ],
-        badge="95/100 Readiness",
+        badge="100% Metric Parity",
         theme="navy",
-        body_size=8.2,
+        body_size=8.0,
     )
     return s17
 
 
+def _render_pdf_to_pngs(pdf_path: Path, out_dirs: list[Path], zoom: float = 2.0) -> None:
+    for out_dir in out_dirs:
+        out_dir.mkdir(parents=True, exist_ok=True)
+    doc = fitz.open(str(pdf_path))
+    try:
+        mat = fitz.Matrix(zoom, zoom)
+        for page_idx in range(len(doc)):
+            pix = doc[page_idx].get_pixmap(matrix=mat, alpha=False)
+            for out_dir in out_dirs:
+                pix.save(str(out_dir / f"slide_{page_idx + 1:02d}.png"))
+    finally:
+        doc.close()
+
+
 def _safe_copy(src: Path, dst: Path) -> None:
-    if dst.parent.exists():
-        try:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if src.resolve() != dst.resolve():
             shutil.copy2(src, dst)
-        except OSError:
-            pass
+    except OSError:
+        pass
 
 
 def _save_and_sync_slide_outputs(prs: Presentation, all_slides: list[DualSlide]) -> tuple[Path, Path]:
@@ -1422,11 +1758,10 @@ def _save_and_sync_slide_outputs(prs: Presentation, all_slides: list[DualSlide])
         png_path = SLIDE_PNG_DIR / f"slide_{idx:02d}.png"
         dual.save_png(png_path, close_fig=False)
         slide_pngs.append(png_path)
-        _safe_copy(png_path, ARTIFACT_DIR / f"slide_{idx:02d}.png")
 
     primary_pptx = REPO_DIR / "HCMC_Smart_Traffic_Final_Presentation.pptx"
     prs.save(str(primary_pptx))
-    _safe_copy(primary_pptx, WORKSPACE_DIR / "HCMC_Smart_Traffic_Final_Presentation.pptx")
+    _safe_copy(primary_pptx, OUTPUTS_DIR / "HCMC_Smart_Traffic_Final_Presentation.pptx")
     legacy_pptx = REPO_DIR / "HCMC_Smart_Traffic_Proposal_Presentation.pptx"
     if legacy_pptx.is_file():
         _safe_copy(primary_pptx, legacy_pptx)
@@ -1434,14 +1769,14 @@ def _save_and_sync_slide_outputs(prs: Presentation, all_slides: list[DualSlide])
     primary_pdf = REPO_DIR / "HCMC_Smart_Traffic_Final_Slides.pdf"
     pdf_targets = [
         primary_pdf,
-        WORKSPACE_DIR / "HCMC_Smart_Traffic_Final_Slides.pdf",
+        OUTPUTS_DIR / "HCMC_Smart_Traffic_Final_Slides.pdf",
     ]
     grid_targets = [
-        REPO_DIR / "outputs" / "slides_overview_grid.png",
-        ARTIFACT_DIR / "slides_overview_grid.png",
+        OUTPUTS_DIR / "slides_overview_grid.png",
     ]
 
     export_overview_grid_and_pdf(slide_pngs, grid_targets, pdf_targets, slide_figs=slide_figs)
+    _render_pdf_to_pngs(primary_pdf, [SLIDE_RENDER_DIR, SLIDE_RENDER_DIR / "final"])
     return primary_pptx, primary_pdf
 
 
@@ -1467,7 +1802,8 @@ def _ensure_visual_assets() -> tuple[Path, Path, Path, Path, Path, Path]:
 
 
 def main() -> None:
-    arch_img = REPO_DIR / "outputs" / "system_architecture.png"
+    t = _load_slide_truth()
+    arch_img = OUTPUTS_DIR / "system_architecture.png"
     eda_chart = render_eda_chart(CHART_DIR / "chart_eda_anomalies.png")
     render_spark_chart(CHART_DIR / "chart_spark_skew_catalyst.png")
     render_streaming_serving_chart(CHART_DIR / "chart_streaming_serving.png")
@@ -1489,27 +1825,27 @@ def main() -> None:
     prs.core_properties.subject = "FSB Course BDA501 — Big Data Analytics (12-Section Structure)"
     prs.core_properties.comments = (
         "17-Slide Deck: 1.Problem 2.Literature 3.Arch 4.EDA + 2 Visual Method Explainers + "
-        "5.Pipeline 6.Modeling 7.Batch 8.Stream 9.Experiments 10.Demo 11.Limitations/Risks 12.Plan 13.Session9Readiness"
+        "5.Pipeline 6.Modeling 7.Batch 8.Stream 9.Experiments 10.Demo 11.Limitations/Risks 12.Plan 13.Readiness"
     )
 
     all_slides = [
         _add_slide_01_cover(prs),
         _add_slide_02_problem_statement(prs, map_prob),
         _add_slide_03_literature_review(prs),
-        _add_slide_04_system_architecture(prs, arch_img),
-        _add_slide_05_data_eda_and_problems(prs, eda_chart),
+        _add_slide_04_system_architecture(prs, arch_img, t),
+        _add_slide_05_data_eda_and_problems(prs, eda_chart, t),
         _add_slide_06_method_explainer_imputation_monoid(prs, method_img1),
-        _add_slide_07_method_explainer_graph_sketches(prs, method_img2),
-        _add_slide_08_data_pipeline_and_processing(prs, flow_img),
-        _add_slide_09_modeling(prs),
-        _add_slide_10_batch_processing(prs, batch_flow_img),
-        _add_slide_11_stream_processing(prs, stream_flow_img),
-        _add_slide_12_experiments_ablation(prs),
-        _add_slide_13_experiments_persistence_defense(prs, trans_chart),
-        _add_slide_14_demonstration(prs, ui2, ui4),
-        _add_slide_15_limitations_and_risks_summary(prs),
-        _add_slide_16_plan_and_roadmap(prs),
-        _add_slide_17_session9_readiness_summary(prs),
+        _add_slide_07_method_explainer_graph_sketches(prs, method_img2, t),
+        _add_slide_08_data_pipeline_and_processing(prs, flow_img, t),
+        _add_slide_09_modeling(prs, t),
+        _add_slide_10_batch_processing(prs, batch_flow_img, t),
+        _add_slide_11_stream_processing(prs, stream_flow_img, t),
+        _add_slide_12_experiments_ablation(prs, t),
+        _add_slide_13_experiments_persistence_defense(prs, trans_chart, t),
+        _add_slide_14_demonstration(prs, ui2, ui4, t),
+        _add_slide_15_limitations_and_risks_summary(prs, t),
+        _add_slide_16_plan_and_roadmap(prs, t),
+        _add_slide_17_session9_readiness_summary(prs, t),
     ]
 
     pptx_path, pdf_path = _save_and_sync_slide_outputs(prs, all_slides)

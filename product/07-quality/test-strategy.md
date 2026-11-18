@@ -1,19 +1,18 @@
-# Chiến Lược Kiểm Thử & Đảm Bảo Chất Lượng (Test Strategy — Phase 07 QA)
+# Chiến Lược Kiểm Thử (Test Strategy — Wave 2 Verification)
 
-## 1. Bốn Tầng Kiểm Thử Tự Động (`4-Layer Verification Pyramid`)
+## 1. Phân tầng Kiểm thử & Bất biến Dữ liệu (Invariants)
+1. **Unit & Structural Invariants:**
+   - **Topology & Cleaning:** Kiểm tra `84,633 -> 84,206` đoạn đường cơ giới sạch (`427` non-road loại, `580` GIS quarantine: `154 R1 + 426 R2`); đồ thị cắt tỉa từ `577,967` xuống `52,181` nút hoạt động (loại `525,786 = 90.97%`), `92,453` cạnh đồ thị đường (không U-turn), `314` nút cụt.
+   - **Unicode NFC & ICT Timezone:** `2,247` cửa sổ chuẩn hóa NFC (`695 -> 641`, gộp `54` biến thể); `4,305` cửa sổ lật ngày ICT (`12.89%` của `33,394`).
+   - **Pure 5-Tuple Monoid:** Đảm bảo tính kết hợp `(n, s1, s2, min_v, max_v)` trên mảng phân mảnh khớp `100.0%` (`0` sai lệch, `0.0 km/h` diff) và lỗi trung bình của trung bình `11.111111` trên `[1,2,3]` bị triệt tiêu hoàn toàn.
+2. **Data Integrity & Leakage Guards:**
+   - **Burst Audit & Exclusion:** Phát hiện `7,192` cửa sổ synthetic burst (`2020-08-02 23:30` & `2020-08-03 00:00`) và loại `3,596` cặp burst khỏi tập huấn luyện có giám sát, giữ `1,885` cặp `TRAIN` hữu cơ (`50` cặp xuyên biên đã purge), `1,167` `VAL` (`5` purge), `1,182` `TEST` (`7,885` cặp `+30m` chính xác).
+   - **Clean Training Policy:** Kiểm tra không có `sample_weight` nhân tạo hay fallback override; chỉ dùng `class_weight` exponent `0.65` và `RF 23D` thắng `VAL` gate (`0.8990` vs `0.5343`).
+3. **Streaming, Spark & Database Contracts:**
+   - **Bounded Sketches:** `RotatingBloom` `32 KiB` (`2 x 16 KiB`, bắt `333/333` bản ghi trùng với `0.6109%` FPR) + `64-bit HLL` `1 KiB` (`9,620.2 / 9,995`, sai số `3.75%`) + `WAL = 73.7 KB`.
+   - **Two-Tier Reconciliation:** `tier1_exceptAll_diff = 0` (`100.0%`), Tier-2 bù `500` cửa sổ trễ / `226` khung giờ, chữa lành `609` cửa sổ lag, chấm lại `384` (`185` đổi nhãn/xác suất).
+   - **Spark 3.5.7 & MongoDB 8.0:** Catalyst `SortMergeJoin (5 Exchange, 145.24 ms) -> BroadcastHashJoin (1 Exchange, 120.45 ms, 17.07% speedup, 0 exceptAll diff)`; Monoid `147.11 ms` vs salted `222.60 ms`; MongoDB `33,394` docs, atomic `$status_version` guard từ chối `25/25` bản tin `v1` cũ, `IXSCAN 0.389/0.692 ms` (`23.55x` vs `COLLSCAN`).
 
-1. **Unit & Algebraic Property Tests (`Kiểm thử Đại số & Đơn vị`):**
-   - Kiểm chứng tính giao hoán và kết hợp của đại số `5-Tuple Commutative Monoid` $\mathbf{m} = (\text{cnt}, \sum v, \min v, \max v, \text{severe\_cnt})$ trên phân hoạch không đều `[1, 2, 3]` (chứng minh bẫy sai số `Average-of-Averages = 11.11 km/h`) và `2-Stage Key Salting` (`[C9]`) so với `baseline.py` (`0` sai lệch).
-   - Kiểm chứng hàm chuẩn hóa `Unicode NFC` (`_normalize_street_name`) khử sạch `100%` lỗi mã hóa `NFD/NFC`, `Ð/Đ`, tiền tố `Đường ` và tiền tố/hậu tố hành chính `Phường/Quận` trên `2,071` cửa sổ (`EC-3`).
-2. **Data Quality & Anti-Leakage Invariant Tests (`Kiểm thử Bất biến Dữ liệu & Chống Rò rỉ`):**
-   - Kiểm chứng lọc bỏ `525,542` điểm uốn cong trung gian (`shape points`) từ OSM, giữ đúng `52,425` giao lộ hoạt động (`EC-7`).
-   - Kiểm chứng `3-Tier Train-Only Velocity Imputation` (`outputs/vmax_lookup.json`) điền khuyết `100%` `max_velocity` (`0` `NaN` còn sót) và bất biến khi nhiễu tập `VAL/TEST` (`EC-1`, `Q04`).
-   - Kiểm chứng kết nối đúng chân trời `t+30m` (loại bỏ khoảng trống `60m`/`9h`), phân chia theo mốc thời gian `70/15/15` kèm `Target Cutoff Purge` (`max(train.target_ts) <= train_cutoff`), và xác nhận `Causal Expanding Priors` + `7D K-Means` tại thời điểm $t$ không thay đổi khi nhiễu dữ liệu tương lai $t' > t$ (`EC-5`, `D01–D04`).
-   - Kiểm chứng `Validation Gate` tự động chọn `Random Forest (+Graph PageRank, Causal Priors & K-Means, 23D)` và `6x6 Confusion Matrix` có đường chéo `> 0` trên toàn bộ 6 mức `LOS A..F` (`D09`).
-3. **Stream Sketching, WAL Recovery & Reconciliation Tests (`Kiểm thử Tích hợp Luồng, Phục hồi WAL & Đối soát`):**
-   - Kiểm chứng `32.0 KiB Bit-Packed Bloom Filter` (`uint8[32768]`) bắt `100%` (`334 / 334`) bản ghi trùng lặp với `FPR = 0.00616 < 3%` (`EC-8`, `M05`).
-   - Kiểm chứng `1.0 KiB HyperLogLog++` (`uint8[1024]`) ước lượng số đoạn đường hoạt động với sai số tương đối `3.98% < 5%` và cắt tỉa trạng thái suy giảm mũ dưới $\epsilon = 10^{-4}$.
-   - Kiểm chứng `Two-Tier Reconciliation` đạt `100.0%` khớp trong `Watermark` (`Tier 1 exceptAll = 0`, kèm bài kiểm thử tiêm lỗi `Failure Injection` khi đột biến 1 dòng) và nâng độ đầy đủ từ `98.50%` lên `100.0%` sau khi bù `501` sự kiện trễ trên `219` khung giờ và chấm điểm lại `377` cửa sổ hạ lưu (`Tier 2 — EC-9`, `M10`).
-   - Kiểm chứng `WAL Checkpoint Kill/Restart Recovery` (`0` hiệu ứng phụ trùng lặp), `Version Guard` (`status_version`: v2 chặn mọi bản tin v1 đến muộn), và `verify_frozen_registry_integrity()` (`SHA-256` trước và sau khi chấm điểm trực tuyến).
-4. **End-to-End Serving & Database Execution Plan Tests (`Kiểm thử Phục vụ & MongoDB IXSCAN`):**
-   - Kiểm chứng `[C16]` `MongoDB 8.0` thực thi `Idempotent Partitioned Bulk UpdateOne(upsert=True)` (`33,441` bản ghi qua `69` lô) và kế hoạch truy vấn `UC-2` sử dụng `Compound Index IXSCAN` (`level_prob_segment_idx`) với `in_memory_sort == False`, đồng thời trả về trạng thái trung thực `status = "not_verified"` khi container MongoDB bị ngắt (`M07–M09`, `T04`).
+## 2. Hiện trạng Bộ Test Tự động trong `tests/`
+- `tests/test_platform_v3.py` (`23` hàm) và `tests/test_quyen_spark.py` (`5` phương thức) bao phủ các kiểm định tích hợp.
+- **Trạng thái hiện tại:** Bộ assertion trong `tests/test_platform_v3.py` được viết theo các ngưỡng Wave 1 cũ (như `33,441` dòng, `46` NFC entities) nên đang chờ track cập nhật chuyên biệt để khớp với baseline Wave 2 (`33,394`, `84,206`, `92,453`, `609`, v.v.).

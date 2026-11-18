@@ -567,7 +567,36 @@ class DualSlide:
         _pptx_textbox(self.slide, x + 0.14, y_top + 0.56, w - 0.26, 0.28, label, 9.2, lbl_col, bold=True)
         _pptx_textbox(self.slide, x + 0.14, y_top + 0.84, w - 0.26, h - 0.90, sublabel, 7.8, bc, bold=False)
 
-    def add_card(
+    def _draw_card_badge_mpl(self, x: float, w: float, ym: float, h: float, cut: float, badge: str, theme: str) -> None:
+        bw = min(1.85, max(0.95, len(badge) * 0.085 + 0.24))
+        bx = x + w - cut - bw - 0.12
+        by = ym + h - 0.40
+        p_fc = HEX_SKY_MID if theme == "navy" else HEX_NAVY
+        p_tc = HEX_NAVY if theme == "navy" else HEX_WHITE
+        self.ax.add_patch(
+            FancyBboxPatch(
+                (bx, by),
+                bw,
+                0.24,
+                boxstyle="round,pad=0.01,rounding_size=0.12",
+                facecolor=p_fc,
+                edgecolor="none",
+                zorder=4,
+            )
+        )
+        self.ax.text(
+            bx + bw / 2,
+            by + 0.12,
+            badge,
+            fontsize=7.5,
+            fontweight="bold",
+            color=p_tc,
+            ha="center",
+            va="center",
+            zorder=5,
+        )
+
+    def _draw_card_mpl(
         self,
         x: float,
         y_top: float,
@@ -575,9 +604,9 @@ class DualSlide:
         h: float,
         title: str,
         bullets: list[str],
-        badge: str | None = None,
-        theme: str = "white",
-        body_size: float = 8.6,
+        badge: str | None,
+        theme: str,
+        body_size: float,
     ) -> None:
         fc, ec, tc, bc, ac = card_palette(theme)
         ym = self._ym(y_top, h)
@@ -590,8 +619,6 @@ class DualSlide:
             (x + w - cut - 0.05, ym + h - cut - 0.05),
         ]
         self.ax.add_patch(Polygon(tri, closed=True, facecolor=ac, edgecolor="none", zorder=3))
-
-        # Target bullet dot next to card title for signature editorial look
         t_cy = ym + h - 0.28
         self.ax.add_patch(
             Circle(
@@ -613,55 +640,18 @@ class DualSlide:
             )
         )
         self.ax.text(
-            x + 0.42,
-            ym + h - 0.18,
-            title,
-            fontsize=10.3,
-            fontweight="bold",
-            color=tc,
-            ha="left",
-            va="top",
-            zorder=4,
+            x + 0.42, ym + h - 0.18, title, fontsize=10.3, fontweight="bold", color=tc, ha="left", va="top", zorder=4
         )
         div_y = ym + h - 0.48
         self.ax.plot([x + 0.18, x + w - 0.22], [div_y, div_y], color=ec, lw=0.75, alpha=0.55, zorder=3)
-
         if badge:
-            bw = min(1.85, max(0.95, len(badge) * 0.085 + 0.24))
-            bx = x + w - cut - bw - 0.12
-            by = ym + h - 0.40
-            p_fc = HEX_SKY_MID if theme == "navy" else HEX_NAVY
-            p_tc = HEX_NAVY if theme == "navy" else HEX_WHITE
-            self.ax.add_patch(
-                FancyBboxPatch(
-                    (bx, by),
-                    bw,
-                    0.24,
-                    boxstyle="round,pad=0.01,rounding_size=0.12",
-                    facecolor=p_fc,
-                    edgecolor="none",
-                    zorder=4,
-                )
-            )
-            self.ax.text(
-                bx + bw / 2,
-                by + 0.12,
-                badge,
-                fontsize=7.5,
-                fontweight="bold",
-                color=p_tc,
-                ha="center",
-                va="center",
-                zorder=5,
-            )
-
+            self._draw_card_badge_mpl(x, w, ym, h, cut, badge, theme)
         max_chars = max(26, int((w - 0.36) * (108.0 / body_size)))
-        wrapped_lines: list[str] = []
-        for b in bullets:
-            sub = wrap_paragraph(b, max_chars)
-            for idx, line in enumerate(sub):
-                prefix = "• " if idx == 0 else "   "
-                wrapped_lines.append(prefix + line)
+        wrapped_lines = [
+            ("• " if idx == 0 else "   ") + line
+            for b in bullets
+            for idx, line in enumerate(wrap_paragraph(b, max_chars))
+        ]
         self.ax.text(
             x + 0.20,
             ym + h - 0.58,
@@ -674,6 +664,20 @@ class DualSlide:
             zorder=4,
         )
 
+    def _draw_card_pptx(
+        self,
+        x: float,
+        y_top: float,
+        w: float,
+        h: float,
+        title: str,
+        bullets: list[str],
+        badge: str | None,
+        theme: str,
+        body_size: float,
+    ) -> None:
+        fc, ec, tc, bc, _ = card_palette(theme)
+        cut = 0.24
         shp = self.slide.shapes.add_shape(MSO_SHAPE.SNIP_1_RECTANGLE, Inches(x), Inches(y_top), Inches(w), Inches(h))
         if len(shp.adjustments) > 0:
             shp.adjustments[0] = round(min(0.45, cut / max(min(w, h), 1e-3)), 5)
@@ -682,7 +686,6 @@ class DualSlide:
         shp.line.color.rgb = rgb(ec)
         shp.line.width = Pt(1.15)
         _zero_shape_margins(shp)
-
         cdiv = self.slide.shapes.add_shape(
             MSO_SHAPE.RECTANGLE, Inches(x + 0.18), Inches(y_top + 0.45), Inches(w - 0.38), Inches(0.01)
         )
@@ -690,7 +693,6 @@ class DualSlide:
         cdiv.fill.fore_color.rgb = rgb(ec)
         cdiv.line.fill.background()
         _zero_shape_margins(cdiv)
-
         bw = min(1.85, max(0.95, len(badge) * 0.085 + 0.24)) if badge else 0.0
         title_w = w - (bw + cut + 0.28 if badge else 0.35)
         _pptx_textbox(self.slide, x + 0.14, y_top + 0.10, title_w, 0.34, title, 10.2, tc, bold=True)
@@ -698,14 +700,11 @@ class DualSlide:
             p_fc = HEX_SKY_MID if theme == "navy" else HEX_NAVY
             p_tc = HEX_NAVY if theme == "navy" else HEX_WHITE
             _pptx_pill(self.slide, x + w - cut - bw - 0.12, y_top + 0.11, bw, 0.24, badge, p_fc, p_fc, p_tc, 7.4)
-
         tb = self.slide.shapes.add_textbox(Inches(x + 0.14), Inches(y_top + 0.48), Inches(w - 0.28), Inches(h - 0.56))
         tf = tb.text_frame
         tf.word_wrap = True
-        tf.margin_left = Inches(0.03)
-        tf.margin_right = Inches(0.03)
-        tf.margin_top = Inches(0.02)
-        tf.margin_bottom = Inches(0.02)
+        tf.margin_left, tf.margin_right = Inches(0.03), Inches(0.03)
+        tf.margin_top, tf.margin_bottom = Inches(0.02), Inches(0.02)
         for idx, b in enumerate(bullets):
             p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
             p.space_after = Pt(3.0)
@@ -714,6 +713,155 @@ class DualSlide:
             r.font.name = "Segoe UI"
             r.font.size = Pt(body_size)
             r.font.color.rgb = rgb(bc)
+
+    def add_card(
+        self,
+        x: float,
+        y_top: float,
+        w: float,
+        h: float,
+        title: str,
+        bullets: list[str],
+        badge: str | None = None,
+        theme: str = "white",
+        body_size: float = 8.6,
+    ) -> None:
+        self._draw_card_mpl(x, y_top, w, h, title, bullets, badge, theme, body_size)
+        self._draw_card_pptx(x, y_top, w, h, title, bullets, badge, theme, body_size)
+
+    @staticmethod
+    def _table_row_palette(r_idx: int, highlight_row: int | None) -> tuple[str, str, bool]:
+        if r_idx == 0:
+            return HEX_NAVY, HEX_WHITE, True
+        if highlight_row is not None and r_idx == highlight_row:
+            return HEX_OK_BG, HEX_NAVY, True
+        bg_hex = HEX_WHITE if r_idx % 2 == 1 else "#F1F5F9"
+        return bg_hex, HEX_SLATE_DARK, False
+
+    def _draw_table_cell_mpl(
+        self,
+        cx: float,
+        ry: float,
+        cw: float,
+        row_h: float,
+        val: str,
+        r_idx: int,
+        c_idx: int,
+        bg_hex: str,
+        txt_hex: str,
+        is_bold: bool,
+        font_size: float,
+    ) -> None:
+        self.ax.add_patch(
+            Rectangle((cx, ry), cw, row_h, facecolor=bg_hex, edgecolor=HEX_BORDER, lw=0.65, zorder=2)
+        )
+        max_c = max(8, int((cw - 0.12) * (112.0 / font_size)))
+        wrapped = "\n".join(wrap_paragraph(val, max_c))
+        if r_idx == 0:
+            cell_col = HEX_WHITE
+        elif c_idx == 0:
+            cell_col = HEX_NAVY
+        else:
+            cell_col = txt_hex
+        self.ax.text(
+            cx + 0.08,
+            ry + row_h / 2,
+            wrapped,
+            fontsize=font_size,
+            fontweight="bold" if (is_bold or c_idx == 0) else "normal",
+            color=cell_col,
+            ha="left",
+            va="center",
+            linespacing=1.15,
+            zorder=3,
+        )
+
+    def _draw_table_mpl(
+        self,
+        x: float,
+        ym_bottom: float,
+        w: float,
+        h: float,
+        col_ws: list[float],
+        row_h: float,
+        headers: list[str],
+        rows: list[list[str]],
+        highlight_row: int | None,
+        font_size: float,
+    ) -> None:
+        pad_f = 0.05
+        self.ax.add_patch(
+            Rectangle(
+                (x - pad_f, ym_bottom - pad_f),
+                w + 2 * pad_f,
+                h + 2 * pad_f,
+                facecolor=HEX_SKY_PALE,
+                edgecolor=HEX_SKY_DEEP,
+                lw=1.1,
+                zorder=1,
+            )
+        )
+        total_rows = len(rows) + 1
+        for r_idx in range(total_rows):
+            ry = ym_bottom + (total_rows - 1 - r_idx) * row_h
+            bg_hex, txt_hex, is_bold = self._table_row_palette(r_idx, highlight_row)
+            cx = x
+            row_vals = headers if r_idx == 0 else rows[r_idx - 1]
+            for c_idx, (cw, val) in enumerate(zip(col_ws, row_vals)):
+                self._draw_table_cell_mpl(cx, ry, cw, row_h, val, r_idx, c_idx, bg_hex, txt_hex, is_bold, font_size)
+                cx += cw
+
+    def _style_pptx_cell(
+        self,
+        cell: object,
+        val: str,
+        r_idx: int,
+        c_idx: int,
+        highlight_row: int | None,
+        font_size: float,
+    ) -> None:
+        cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+        cell.margin_left, cell.margin_right = Inches(0.05), Inches(0.05)
+        cell.margin_top, cell.margin_bottom = Inches(0.02), Inches(0.02)
+        cell.fill.solid()
+        bg_hex, txt_hex, is_bold = self._table_row_palette(r_idx, highlight_row)
+        fg_hex = HEX_NAVY if (r_idx != 0 and highlight_row != r_idx and c_idx == 0) else txt_hex
+        bld = is_bold or (r_idx != 0 and c_idx == 0)
+        cell.fill.fore_color.rgb = rgb(bg_hex)
+        p = cell.text_frame.paragraphs[0]
+        p.alignment = PP_ALIGN.LEFT
+        run = p.add_run()
+        run.text = val
+        run.font.name = "Segoe UI"
+        run.font.size = Pt(font_size)
+        run.font.bold = bld
+        run.font.color.rgb = rgb(fg_hex)
+
+    def _draw_table_pptx(
+        self,
+        x: float,
+        y_top: float,
+        w: float,
+        h: float,
+        col_ws: list[float],
+        row_h: float,
+        headers: list[str],
+        rows: list[list[str]],
+        highlight_row: int | None,
+        font_size: float,
+    ) -> None:
+        total_rows = len(rows) + 1
+        tbl_shape = self.slide.shapes.add_table(
+            total_rows, len(headers), Inches(x), Inches(y_top), Inches(w), Inches(h)
+        )
+        tbl = tbl_shape.table
+        for c_idx, cw in enumerate(col_ws):
+            tbl.columns[c_idx].width = Inches(cw)
+        for r_idx in range(total_rows):
+            tbl.rows[r_idx].height = Inches(row_h)
+            row_vals = headers if r_idx == 0 else rows[r_idx - 1]
+            for c_idx, val in enumerate(row_vals):
+                self._style_pptx_cell(tbl.cell(r_idx, c_idx), val, r_idx, c_idx, highlight_row, font_size)
 
     def add_table(
         self,
@@ -727,95 +875,11 @@ class DualSlide:
         highlight_row: int | None = None,
         font_size: float = 8.1,
     ) -> None:
-        total_rows = len(rows) + 1
-        row_h = h / total_rows
+        row_h = h / (len(rows) + 1)
         ym_bottom = self._ym(y_top, h)
         col_ws = [w * f for f in col_fracs]
-
-        # Outer chamfered sky frame around table for Behance editorial cohesion
-        pad_f = 0.05
-        self.ax.add_patch(
-            Rectangle(
-                (x - pad_f, ym_bottom - pad_f),
-                w + 2 * pad_f,
-                h + 2 * pad_f,
-                facecolor=HEX_SKY_PALE,
-                edgecolor=HEX_SKY_DEEP,
-                lw=1.1,
-                zorder=1,
-            )
-        )
-
-        # Matplotlib rendering
-        for r_idx in range(total_rows):
-            ry = ym_bottom + (total_rows - 1 - r_idx) * row_h
-            if r_idx == 0:
-                bg_hex, txt_hex, is_bold = HEX_NAVY, HEX_WHITE, True
-            elif highlight_row is not None and r_idx == highlight_row:
-                bg_hex, txt_hex, is_bold = HEX_OK_BG, HEX_NAVY, True
-            else:
-                bg_hex = HEX_WHITE if r_idx % 2 == 1 else "#F1F5F9"
-                txt_hex, is_bold = HEX_SLATE_DARK, False
-
-            cx = x
-            row_vals = headers if r_idx == 0 else rows[r_idx - 1]
-            for c_idx, (cw, val) in enumerate(zip(col_ws, row_vals)):
-                self.ax.add_patch(
-                    Rectangle((cx, ry), cw, row_h, facecolor=bg_hex, edgecolor=HEX_BORDER, lw=0.65, zorder=2)
-                )
-                max_c = max(8, int((cw - 0.12) * (112.0 / font_size)))
-                wrapped = "\n".join(wrap_paragraph(val, max_c))
-                cell_bold = is_bold or (c_idx == 0)
-                cell_col = HEX_WHITE if r_idx == 0 else (HEX_NAVY if c_idx == 0 else txt_hex)
-                self.ax.text(
-                    cx + 0.08,
-                    ry + row_h / 2,
-                    wrapped,
-                    fontsize=font_size,
-                    fontweight="bold" if cell_bold else "normal",
-                    color=cell_col,
-                    ha="left",
-                    va="center",
-                    linespacing=1.15,
-                    zorder=3,
-                )
-                cx += cw
-
-        # Native python-pptx Table rendering
-        tbl_shape = self.slide.shapes.add_table(
-            total_rows, len(headers), Inches(x), Inches(y_top), Inches(w), Inches(h)
-        )
-        tbl = tbl_shape.table
-        for c_idx, cw in enumerate(col_ws):
-            tbl.columns[c_idx].width = Inches(cw)
-        for r_idx in range(total_rows):
-            tbl.rows[r_idx].height = Inches(row_h)
-            row_vals = headers if r_idx == 0 else rows[r_idx - 1]
-            for c_idx, val in enumerate(row_vals):
-                cell = tbl.cell(r_idx, c_idx)
-                cell.vertical_anchor = MSO_ANCHOR.MIDDLE
-                cell.margin_left = Inches(0.05)
-                cell.margin_right = Inches(0.05)
-                cell.margin_top = Inches(0.02)
-                cell.margin_bottom = Inches(0.02)
-                cell.fill.solid()
-                if r_idx == 0:
-                    bg_hex, fg_hex, bld = HEX_NAVY, HEX_WHITE, True
-                elif highlight_row is not None and r_idx == highlight_row:
-                    bg_hex, fg_hex, bld = HEX_OK_BG, HEX_NAVY, True
-                else:
-                    bg_hex = HEX_WHITE if r_idx % 2 == 1 else "#F1F5F9"
-                    fg_hex = HEX_NAVY if c_idx == 0 else HEX_SLATE_DARK
-                    bld = c_idx == 0
-                cell.fill.fore_color.rgb = rgb(bg_hex)
-                p = cell.text_frame.paragraphs[0]
-                p.alignment = PP_ALIGN.LEFT
-                run = p.add_run()
-                run.text = val
-                run.font.name = "Segoe UI"
-                run.font.size = Pt(font_size)
-                run.font.bold = bld
-                run.font.color.rgb = rgb(fg_hex)
+        self._draw_table_mpl(x, ym_bottom, w, h, col_ws, row_h, headers, rows, highlight_row, font_size)
+        self._draw_table_pptx(x, y_top, w, h, col_ws, row_h, headers, rows, highlight_row, font_size)
 
     def add_image(self, x: float, y_top: float, w: float, h: float, img_path: Path) -> None:
         ym = self._ym(y_top, h)
@@ -877,6 +941,17 @@ class DualSlide:
             plt.close(self.fig)
 
 
+def _copy_extra_pdfs(primary_pdf: Path, pdf_paths: list[Path]) -> None:
+    """Mirror generated primary PDF bytes to extra sync targets when parent folders exist."""
+    for extra_pdf in pdf_paths[1:]:
+        if not extra_pdf.parent.exists():
+            continue
+        try:
+            shutil.copy2(primary_pdf, extra_pdf)
+        except OSError:
+            pass
+
+
 def _write_slides_pdf(
     slide_pngs: list[Path],
     pdf_paths: list[Path],
@@ -901,13 +976,7 @@ def _write_slides_pdf(
     else:
         imgs = [PILImage.open(p).convert("RGB") for p in slide_pngs]
         imgs[0].save(primary_pdf, save_all=True, append_images=imgs[1:], resolution=200.0)
-
-    for extra_pdf in pdf_paths[1:]:
-        if extra_pdf.parent.exists():
-            try:
-                shutil.copy2(primary_pdf, extra_pdf)
-            except OSError:
-                pass
+    _copy_extra_pdfs(primary_pdf, pdf_paths)
 
 
 def export_overview_grid_and_pdf(

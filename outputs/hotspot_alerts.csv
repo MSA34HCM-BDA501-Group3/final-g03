@@ -20,7 +20,7 @@ segment_id,street_name,decaying_hotspot_score,latest_velocity_kmh,latest_los,ale
 47409,Lý Thường Kiệt,5.7988,4.4,F,CRITICAL (E/F)
 83729,Đại lộ ĐHQG TPHCM,5.7239,3.8,F,CRITICAL (E/F)
 47391,Lý Thường Kiệt,5.7184,12.0,F,CRITICAL (E/F)
-5826,Tân Quý,5.551,1.0,F,CRITICAL (E/F)
 37057,Huỳnh Tấn Phát,5.551,2.0,F,CRITICAL (E/F)
+5826,Tân Quý,5.551,1.0,F,CRITICAL (E/F)
 63364,3 Tháng 2,5.5162,1.88,F,CRITICAL (E/F)
 2441,Hẻm 373 Lý Thường Kiệt,5.4595,2.12,F,CRITICAL (E/F)

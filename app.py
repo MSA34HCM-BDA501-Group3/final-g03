@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from datetime import datetime, timedelta
 import json
 import os
+import subprocess
+import sys
+import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 import joblib
 import numpy as np
@@ -15,10 +20,31 @@ except ModuleNotFoundError:  # pragma: no cover
     st = None  # type: ignore[assignment]
 
 from pipeline import find_peer_segments
+from toc_backend.story_scenarios import build_window_semantics
+
+_F = TypeVar("_F", bound=Callable[..., Any])
+
+
+def _cache_data(ttl: int | None = None) -> Callable[[_F], _F]:
+    if st is not None:
+        return st.cache_data(ttl=ttl) if ttl is not None else st.cache_data  # type: ignore[return-value]
+    return lambda fn: fn
+
+
+def _cache_resource() -> Callable[[_F], _F]:
+    if st is not None:
+        return st.cache_resource  # type: ignore[return-value]
+    return lambda fn: fn
+
+
+_REPLAY_LOCK = threading.Lock()
+_ACTIVE_REPLAY_PROC: subprocess.Popen[bytes] | None = None
 
 ROOT = Path(__file__).resolve().parent
 DATASET_PATH = ROOT / "data" / "dataset.csv"
+DATASET_SAMPLE_PATH = ROOT / "data" / "demo_sample" / "sample_windows_23d.csv"
 STATIC_STORE_PATH = ROOT / "data" / "lakehouse" / "segment_static_features.parquet"
+STATIC_SAMPLE_PATH = ROOT / "data" / "demo_sample" / "sample_static_features.parquet"
 SERVING_PARQUET_PATH = ROOT / "data" / "lakehouse" / "serving_traffic_scores.parquet"
 METRICS_PATH = ROOT / "outputs" / "metrics.json"
 MODEL_PATH = ROOT / "outputs" / "model.joblib"
@@ -49,16 +75,47 @@ LOS_ORDER = ["A", "B", "C", "D", "E", "F"]
 ORDINAL_TO_LOS = {index: label for index, label in enumerate(LOS_ORDER)}
 
 
+@_cache_data(ttl=30)
+def _load_csv_cached(path_str: str) -> pd.DataFrame:
+    path = Path(path_str)
+    return pd.read_csv(path) if path.is_file() else pd.DataFrame()
+
+
+@_cache_data(ttl=30)
+def _load_json_cached(path_str: str) -> dict[str, Any]:
+    path = Path(path_str)
+    return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+
+
+@_cache_data(ttl=300)
+def _load_dataset_cached(path_str: str) -> pd.DataFrame:
+    return pd.read_csv(path_str)
+
+
+@_cache_data(ttl=300)
+def _load_static_parquet_cached(path_str: str) -> pd.DataFrame:
+    path = Path(path_str)
+    return pd.read_parquet(path) if path.is_file() else pd.DataFrame()
+
+
+@_cache_resource()
+def _load_model_artifact(model_path_str: str) -> dict[str, Any]:
+    return joblib.load(model_path_str)
+
+
+@_cache_resource()
+def _get_toc_store(root_str: str) -> Any:
+    from toc_backend.data_store import TOCDataStore
+
+    return TOCDataStore(root=Path(root_str))
+
+
 def _read_optional_csv(path: Path) -> pd.DataFrame:
-    if path.is_file():
-        return pd.read_csv(path)
-    return pd.DataFrame()
+    return _load_csv_cached(str(path))
 
 
 def _read_optional_json(path: Path) -> dict[str, Any]:
-    if path.is_file():
-        return json.loads(path.read_text(encoding="utf-8"))
-    return {}
+    return _load_json_cached(str(path))
 
 
 def _format_vn_time(vn_hour_val: Any) -> str:
@@ -87,7 +144,8 @@ def _predict_single_window(row: pd.Series, artifact: dict[str, Any]) -> dict[str
     alt_probs = probs_6.copy()
     if 0 <= persistence_ord < 6:
         alt_probs[persistence_ord] = -1.0
-    cal_ord = int(alt_probs.argmax()) if rf_change_prob >= 0.30 else persistence_ord
+    change_threshold = float(artifact.get("val_selected_change_threshold", 0.30))
+    cal_ord = int(alt_probs.argmax()) if rf_change_prob >= change_threshold else persistence_ord
 
     return {
         "persistence_los": ORDINAL_TO_LOS.get(persistence_ord, "A"),
@@ -132,16 +190,41 @@ def _format_hotspots_display(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def _utc_to_ict_date(date_val: Any, period_val: Any) -> str:
+    d_str = str(date_val or "")
+    p_str = str(period_val or "")
+    if not d_str or not p_str.startswith("period_"):
+        return d_str
+    try:
+        parts = p_str.replace("period_", "", 1).split("_")
+        utc_dt = datetime.strptime(d_str, "%Y-%m-%d") + timedelta(hours=int(parts[0]), minutes=int(parts[1]))
+        return (utc_dt + timedelta(hours=7)).strftime("%Y-%m-%d")
+    except (ValueError, IndexError):
+        return d_str
+
+
+def _derive_ict_date_series(df: pd.DataFrame) -> pd.Series:
+    if "ict_date" in df.columns and bool(df["ict_date"].notna().all()):
+        return df["ict_date"].astype(str)
+    if "date" in df.columns and "period" in df.columns:
+        return pd.Series(
+            [_utc_to_ict_date(d, p) for d, p in zip(df["date"], df["period"])],
+            index=df.index,
+        )
+    return df["date"].astype(str) if "date" in df.columns else pd.Series("", index=df.index)
+
+
 def _format_alerts_display(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty or "segment_id" not in df.columns:
         return df
     vn_times = df["vn_hour"].map(_format_vn_time) if "vn_hour" in df.columns else df.get("period", "")
+    ict_dates = _derive_ict_date_series(df)
     return pd.DataFrame(
         {
             "Mã đoạn": df["segment_id"].astype(int),
             "Tuyến đường": df["street_name"].fillna("N/A"),
             "Cấp": df["street_level"].astype(int),
-            "Ngày": df["date"],
+            "Ngày (ICT)": ict_dates,
             "Giờ (VN)": vn_times,
             "LOS hiện tại": df["current_los"],
             "Dự báo (+30p)": df["predicted_next_los"],
@@ -200,7 +283,7 @@ def _find_similar_segments(
     limit: int = 10,
     static_store_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """Find Top-K peers in 7D K-Means space across all 84,633 segments (including Cold-Start)."""
+    """Find Top-K peers in 7D K-Means space across all 84,206 motorized segments (including Cold-Start)."""
     query_seg_id = int(query_row) if isinstance(query_row, (int, np.integer)) else int(query_row["segment_id"])
     if static_store_df is None and STATIC_STORE_PATH.is_file():
         static_store_df = pd.read_parquet(STATIC_STORE_PATH)
@@ -296,7 +379,7 @@ def _try_query_live_mongo(mongo_uri: str, limit: int) -> tuple[pd.DataFrame, dic
 def query_operational_serving_store(limit: int = 25) -> tuple[pd.DataFrame, dict[str, Any]]:
     """Query live MongoDB 8.0 `bda501.traffic_scores` if available; otherwise explicit offline fallback."""
     env_uri = os.environ.get("MONGO_URI", "").strip()
-    candidate_uris = [env_uri] if env_uri else ["mongodb://127.0.0.1:27017", "mongodb://127.0.0.1:27019"]
+    candidate_uris = [env_uri] if env_uri else ["mongodb://127.0.0.1:27017", "mongodb://mongo:27017"]
     for uri in candidate_uris:
         live_res = _try_query_live_mongo(uri, limit)
         if live_res is not None:
@@ -393,35 +476,51 @@ def _format_live_stream_display(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def _stop_active_replay_locked() -> None:
+    global _ACTIVE_REPLAY_PROC
+    proc = _ACTIVE_REPLAY_PROC
+    if proc is not None and proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=2)
+    _ACTIVE_REPLAY_PROC = None
+
+
 def _trigger_live_kafka_replay_async(mongo_uri: str) -> None:
-    """Reset Bloom/HLL++ state, wait 1s for consumer sync, and launch 200-msg Kafka producer."""
-    import subprocess
-    import sys
-    import time
+    """Stop active replay, reset Bloom/HLL++ state, and launch 200-msg Kafka producer safely under lock."""
+    global _ACTIVE_REPLAY_PROC
     from live_kafka_stream import reset_live_stream_state
 
-    reset_live_stream_state(mongo_uri=mongo_uri, telemetry_path=LIVE_TELEMETRY_PATH, scores_json_path=LIVE_SCORES_PATH)
-    time.sleep(1.0)
     brokers = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "127.0.0.1:9092")
-    subprocess.Popen(
-        [
-            sys.executable,
-            "producer.py",
-            "--mode",
-            "window",
-            "--bootstrap-servers",
-            brokers,
-            "--topic",
-            "hcmc-traffic-events",
-            "--max-messages",
-            "200",
-            "--replay-speed",
-            "0.25",
-        ],
-        cwd=str(Path(__file__).resolve().parent),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    with _REPLAY_LOCK:
+        _stop_active_replay_locked()
+        reset_live_stream_state(
+            mongo_uri=mongo_uri,
+            telemetry_path=LIVE_TELEMETRY_PATH,
+            scores_json_path=LIVE_SCORES_PATH,
+        )
+        _ACTIVE_REPLAY_PROC = subprocess.Popen(
+            [
+                sys.executable,
+                "producer.py",
+                "--mode",
+                "window",
+                "--bootstrap-servers",
+                brokers,
+                "--topic",
+                "hcmc-traffic-events",
+                "--max-messages",
+                "200",
+                "--replay-speed",
+                "0.25",
+            ],
+            cwd=str(Path(__file__).resolve().parent),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
 
 def render_live_kafka_monitor_section() -> None:
@@ -430,19 +529,20 @@ def render_live_kafka_monitor_section() -> None:
     from live_kafka_stream import reset_live_stream_state
 
     st.subheader("2B. 📡 Live Kafka Stream Monitor (Kafka 4.1 → 33 KiB Sketches + RF 23D → MongoDB 8.0)")
-    c_poll, c_play, c_reset, c_info = st.columns([1.2, 1.25, 1.05, 1.9])
+    c_poll, c_play, c_reset, c_info = st.columns([1.15, 1.35, 1.1, 1.8])
     if "live_auto_poll" not in st.session_state:
         st.session_state["live_auto_poll"] = False
     mongo_uri = os.environ.get("MONGO_URI", "mongodb://127.0.0.1:27017")
-    if c_play.button("▶️ Phát ngay 200 tin qua Kafka"):
+    if c_play.button("▶️ Phát 200 tin Kafka"):
         _trigger_live_kafka_replay_async(mongo_uri)
         st.session_state["live_auto_poll"] = True
         st.rerun()
     if c_reset.button("🧹 Reset bộ đếm về 0"):
-        reset_live_stream_state(
-            mongo_uri=mongo_uri, telemetry_path=LIVE_TELEMETRY_PATH, scores_json_path=LIVE_SCORES_PATH
-        )
-        time.sleep(0.9)
+        with _REPLAY_LOCK:
+            _stop_active_replay_locked()
+            reset_live_stream_state(
+                mongo_uri=mongo_uri, telemetry_path=LIVE_TELEMETRY_PATH, scores_json_path=LIVE_SCORES_PATH
+            )
         st.rerun()
     auto_poll = c_poll.checkbox("⚡ Tự động cập nhật (2s)", key="live_auto_poll")
 
@@ -474,8 +574,8 @@ def render_live_kafka_monitor_section() -> None:
         "Cảnh báo v1 ghi MongoDB",
         f"{int(tel.get('sink2_scored_v1', 0)):,} bản ghi",
         (
-            f"Nguy cơ E/F: {int(tel.get('severe_alerts_v1_count', 0)):,} · "
-            f"Bảo vệ v2: {int(tel.get('v2_guard_protected_count', 0)):,}"
+            f"E/F: {int(tel.get('severe_alerts_v1_count', 0)):,} · "
+            f"Khóa v2: {int(tel.get('v2_guard_protected_count', 0)):,}"
         ),
     )
 
@@ -495,8 +595,8 @@ def render_live_kafka_monitor_section() -> None:
         "📋 Lệnh chạy nhanh Live Demo Real-Time (Producer → Kafka 3 Partitions → Consumer → MongoDB → UI)"
     ):
         st.code(
-            "# Bước 1: Khởi động Kafka + MongoDB + Live Consumer + Streamlit UI\n"
-            "docker compose --profile live up -d kafka mongo app live-consumer\n\n"
+            "# Bước 1: Khởi động Kafka + MongoDB + Live Consumer + Web UI\n"
+            "docker compose up -d kafka mongo app toc-web live-consumer\n\n"
             "# Bước 2: Phát 200 sự kiện từ dữ liệu dự án vào Kafka (tốc độ trực quan ~8 giây)\n"
             "python producer.py --mode window --bootstrap-servers localhost:9092 "
             "--topic hcmc-traffic-events --max-messages 200 --replay-speed 0.2",
@@ -516,8 +616,9 @@ def render_overview_tab(data: pd.DataFrame, metrics: dict[str, Any]) -> None:
         "**LOS E–F** (< 35%): Ùn ứ nghiêm trọng đến kẹt cứng."
     )
     m_left, m_right = st.columns([1.22, 1.0])
+    total_segs = int(metrics.get("dataset", {}).get("segments_count", 0))
     with m_left:
-        st.subheader("1. Bản đồ Điểm nóng & Vùng thiếu GPS TP.HCM (84,633 Đoạn đường)")
+        st.subheader(f"1. Bản đồ Điểm nóng & Vùng thiếu GPS TP.HCM ({total_segs:,} Đoạn đường)")
         if MAP_HOTSPOTS_PATH.is_file():
             st.image(str(MAP_HOTSPOTS_PATH))
     with m_right:
@@ -551,8 +652,131 @@ def render_overview_tab(data: pd.DataFrame, metrics: dict[str, Any]) -> None:
         st.image(str(ARCH_IMG_PATH), caption="Kiến trúc Hợp nhất Xử lý Lô & Luồng Trực tuyến (10.5 GB RAM)")
 
 
+def _find_default_case_position(sample_rows: pd.DataFrame, idx_list: list[Any]) -> int:
+    """Locate Case Study #21064 on 2021-04-22 (11:30 ICT) by column values instead of hardcoded index."""
+    date_col = "ict_date" if "ict_date" in sample_rows.columns else "date"
+    case_mask = (sample_rows["segment_id"].astype(int) == 21064) & (
+        sample_rows[date_col].astype(str) == "2021-04-22"
+    )
+    if "vn_hour" in sample_rows.columns:
+        case_mask = case_mask & np.isclose(sample_rows["vn_hour"].fillna(-1).astype(float), 11.5, atol=0.05)
+    matches = sample_rows.index[case_mask]
+    if len(matches) == 0:
+        matches = sample_rows.index[sample_rows["segment_id"].astype(int) == 21064]
+    return idx_list.index(matches[0]) if len(matches) > 0 else 0
+
+
+def _format_dropdown_option(sample_rows: pd.DataFrame, idx: Any) -> str:
+    r = sample_rows.loc[idx]
+    vn_h = float(r.get("vn_hour", 7.0)) if pd.notna(r.get("vn_hour")) else 7.0
+    ict_d = str(r.get("ict_date") or _utc_to_ict_date(r.get("date"), r.get("period")))
+    sem = build_window_semantics(ict_d, vn_h)
+    return (
+        f"Đoạn {int(r['segment_id'])} · {r['street_name'] or 'N/A'} · "
+        f"{sem['collect_window']} ({ict_d} ➔ {sem['issue_time_ict']}) · Hiện tại: LOS {r['LOS']}"
+    )
+
+
+def _render_time_locked_alerts(row: pd.Series) -> None:
+    """Render time-locked Early-Warning alerts at exact `(ict_date, vn_hour)` without 10-month mixing."""
+    store = _get_toc_store(str(ROOT))
+    ict_d = str(row.get("ict_date") or _utc_to_ict_date(row.get("date"), row.get("period")) or "2021-01-05")
+    vn_h = float(row.get("vn_hour", 12.0)) if pd.notna(row.get("vn_hour")) else 12.0
+    frame = store.get_city_frame(ict_date=ict_d, vn_hour=vn_h, alert_filter="early_warning")
+    sem = frame["window_semantics"]
+    worsening_n = frame["summary"]["early_warning_worsening_count"]
+    st.caption(
+        f"⏱️ **Đang khóa đúng thời điểm điều hành:** Thu thập `{sem['collect_window']}` (`{sem['ict_date']}`) ➔ "
+        f"Chốt **`t = {sem['issue_time_ict']}`** ➔ "
+        f"Dự báo cho `{sem['forecast_window']}` (**{worsening_n}** cảnh báo sắp xấu đi)"
+    )
+    if frame["alerts"]:
+        disp = pd.DataFrame(
+            [
+                {
+                    "Mã đoạn": a["segment_id"],
+                    "Tuyến đường": a["street_name"],
+                    "Vận tốc (km/h)": f"{a['mean_velocity']} / {int(a['max_velocity'])}",
+                    "Hiện tại": a["current_los"],
+                    "RF (Argmax)": a["rf_pred_los"],
+                    "RF (Hiệu chỉnh)": a.get("effective_forecast_los", a["rf_cal_los"]),
+                    "Thực tế +30p": a["actual_next_los"] or "—",
+                    "Đổi pha (%)": round(a["change_prob"] * 100.0, 1),
+                    "Nguy cơ E/F (%)": round(a["severe_prob"] * 100.0, 1),
+                    "Phân loại": a["alert_type"],
+                    "Nguồn": a["lifecycle_status"],
+                }
+                for a in frame["alerts"][:12]
+            ]
+        )
+        _render_dataframe(disp)
+
+
+def _render_forecast_header_card(row: pd.Series, pred: dict[str, Any]) -> None:
+    """Render the 6-column KPI header and ICT window summary card for Tab 2."""
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
+    m1.metric("Hiện tại (t)", str(row["LOS"]))
+    m2.metric("Đoán theo Hiện tại", pred["persistence_los"])
+    m3.metric("RF (Argmax mặc định)", pred["rf_los"])
+    m4.metric(
+        "RF (Hiệu chỉnh chuyển pha)",
+        pred["rf_calibrated_los"],
+        f"Đổi pha: {pred['rf_change_prob'] * 100:.1f}%",
+    )
+    m5.metric("Xác suất Kẹt cứng (E/F)", f"{pred['rf_severe_prob'] * 100:.1f}%")
+    m6.metric("Thực tế (t + 30 phút)", pred["actual_next_los"])
+
+    vn_h_num = float(row.get("vn_hour", 7.0)) if pd.notna(row.get("vn_hour")) else 7.0
+    ict_d = str(row.get("ict_date") or _utc_to_ict_date(row.get("date"), row.get("period")))
+    sem = build_window_semantics(ict_d, vn_h_num)
+    st.info(
+        f"**Tuyến đường:** {row['street_name']} (mã đoạn `{row['segment_id']}`, cấp {int(row['street_level'])}) · "
+        f"**Ngày (ICT):** `{sem['ict_date']}` · **Khung thu thập:** `{sem['collect_window']}` ➔ "
+        f"**Chốt `t = {sem['issue_time_ict']}`** ➔ **Dự báo cho `{sem['forecast_window']}`** · "
+        f"**Vận tốc:** {row['mean_velocity']:.1f} / {row['max_velocity']:.0f} km/h · "
+        f"**Đổi pha:** {pred['rf_change_prob'] * 100:.1f}% · **PageRank:** {row['pagerank_score']:.3f}"
+    )
+
+
+def _render_forecast_alerts_panel(row: pd.Series, metrics: dict[str, Any]) -> None:
+    """Render Section 2 time-locked corridor alerts or MongoDB 8.0 IXSCAN serving table."""
+    mv = _read_optional_json(MONGO_VERIFY_PATH)
+    ds_total = int(metrics.get("dataset", {}).get("labeled_windows_count", mv.get("total_rows_upserted", 0)))
+    p95_ms = mv.get("uc2_arterial_query", {}).get("latency_benchmark_ms", {}).get("warm_p95_ms")
+    p95_str = f" · p95 = {p95_ms} ms" if p95_ms is not None else ""
+
+    st.subheader("2. Cảnh báo Trục chính Nguy cơ Kẹt cao < 1 ms (Khóa Thời Điểm t & MongoDB 8.0)")
+    alert_view_mode = st.radio(
+        "Chế độ xem bảng cảnh báo:",
+        [
+            "🎯 Khóa đúng khung giờ t đang chọn & ưu tiên đường sắp đổi trạng thái (Phòng điều hành TOC)",
+            f"⚡ Truy vấn Benchmark MongoDB 8.0 IXSCAN toàn cục ({ds_total:,} bản ghi{p95_str})",
+        ],
+        horizontal=True,
+    )
+    if alert_view_mode.startswith("🎯"):
+        _render_time_locked_alerts(row)
+        return
+    r_col1, r_col2 = st.columns([1, 3])
+    if r_col1.button("🔄 Làm mới dữ liệu trực tuyến (5s)"):
+        st.rerun()
+    alerts_df, serving_meta = query_operational_serving_store(limit=25)
+    lifecycle_txt = _format_lifecycle_summary(serving_meta.get("lifecycle_breakdown", {}))
+    r_col2.caption(
+        f"**Nguồn phục vụ:** `{serving_meta['serving_mode']}` · "
+        f"**Tổng bản ghi:** `{serving_meta['total_serving_docs']:,}` · "
+        f"**Trạng thái đối soát:** {lifecycle_txt}"
+    )
+    if not alerts_df.empty:
+        _render_dataframe(_format_alerts_display(alerts_df.head(10)))
+
+
 def render_forecast_tab(data: pd.DataFrame, artifact: dict[str, Any], metrics: dict[str, Any]) -> None:
     """Tab 2: Live Congestion Forecast (t+30m), MongoDB 8.0 Alerts & State-Change Evaluation."""
+    st.caption(
+        "💡 **Giao diện Phòng Điều Hành TOC thế hệ mới (ReactJS + FastAPI + Bản đồ động & Biểu đồ GPS thô ➔ t+30p):** "
+        "Mở trực tiếp tại <http://localhost:8000>"
+    )
     st.subheader("1. Dự báo Trạng thái Giao thông Trước 30 Phút (t + 30 phút)")
     streets = ["Tất cả tuyến đường"] + sorted(data["street_name"].dropna().astype(str).unique().tolist())
     f1, f2 = st.columns([2, 2])
@@ -569,49 +793,17 @@ def render_forecast_tab(data: pd.DataFrame, artifact: dict[str, Any], metrics: d
         return
 
     idx_list = sample_rows.index.tolist()
-    default_pos = idx_list.index(33410) if 33410 in sample_rows.index else 0
+    default_pos = _find_default_case_position(sample_rows, idx_list)
     selected_idx = st.selectbox(
         "Chọn đoạn đường & khung 30 phút",
         idx_list,
         index=default_pos,
-        format_func=lambda i: (
-            f"Đoạn {int(sample_rows.loc[i, 'segment_id'])} · {sample_rows.loc[i, 'street_name'] or 'N/A'} · "
-            f"{_format_vn_time(sample_rows.loc[i].get('vn_hour', np.nan))} ({sample_rows.loc[i, 'date']}) · "
-            f"Hiện tại: LOS {sample_rows.loc[i, 'LOS']}"
-        ),
+        format_func=lambda i: _format_dropdown_option(sample_rows, i),
     )
     row = sample_rows.loc[selected_idx]
     pred = _predict_single_window(row, artifact)
-
-    m1, m2, m3, m4, m5 = st.columns(5)
-    m1.metric("Hiện tại (t)", str(row["LOS"]))
-    m2.metric("Đoán theo Hiện tại", pred["persistence_los"])
-    m3.metric("Random Forest (23 biến)", pred["rf_los"])
-    m4.metric("Xác suất Kẹt cứng (E/F)", f"{pred['rf_severe_prob'] * 100:.1f}%")
-    m5.metric("Thực tế (t + 30 phút)", pred["actual_next_los"])
-
-    vn_time_str = _format_vn_time(row.get("vn_hour", np.nan))
-    st.info(
-        f"**Tuyến đường:** {row['street_name']} (mã đoạn `{row['segment_id']}`, cấp {int(row['street_level'])}) · "
-        f"**Giờ Việt Nam:** {vn_time_str} (`{row.get('ict_date', row['date'])}`) · "
-        f"**Vận tốc:** {row['mean_velocity']:.1f} / {row['max_velocity']:.0f} km/h · "
-        f"**Xác suất đổi trạng thái:** {pred['rf_change_prob'] * 100:.1f}% · "
-        f"**PageRank:** {row['pagerank_score']:.3f} · **Nhóm hành vi:** #{int(row['cluster_id'])}"
-    )
-
-    st.subheader("2. Cảnh báo Trục chính Nguy cơ Kẹt cao < 1 ms (MongoDB 8.0)")
-    r_col1, r_col2 = st.columns([1, 3])
-    if r_col1.button("🔄 Làm mới dữ liệu trực tuyến (5s)"):
-        st.rerun()
-    alerts_df, serving_meta = query_operational_serving_store(limit=25)
-    lifecycle_txt = _format_lifecycle_summary(serving_meta.get("lifecycle_breakdown", {}))
-    r_col2.caption(
-        f"**Nguồn phục vụ:** `{serving_meta['serving_mode']}` · "
-        f"**Tổng bản ghi:** `{serving_meta['total_serving_docs']:,}` · "
-        f"**Trạng thái đối soát:** {lifecycle_txt}"
-    )
-    if not alerts_df.empty:
-        _render_dataframe(_format_alerts_display(alerts_df.head(10)))
+    _render_forecast_header_card(row, pred)
+    _render_forecast_alerts_panel(row, metrics)
 
     render_live_kafka_monitor_section()
 
@@ -636,8 +828,8 @@ def render_graph_and_rules_tab() -> None:
     with c1:
         st.subheader("1. Top Nút cổ chai Giao lộ Toàn Đô thị (PageRank)")
         st.caption(
-            "Xếp hạng 84,633 đoạn đường một chiều (151,929 hướng rẽ hợp lệ, bù 48 đoạn cụt, "
-            "đã lọc bỏ 525,542 điểm uốn cong trung gian trên bản đồ)."
+            "Xếp hạng 84,206 đoạn đường cơ giới (92,453 hướng rẽ có hướng không quay đầu, bù 314 đoạn cụt, "
+            "đã lọc bỏ 525,786 điểm uốn cong trung gian trên bản đồ)."
         )
         pr_df = _read_optional_csv(PAGERANK_PATH)
         _render_dataframe(pr_df.head(25))
@@ -656,11 +848,13 @@ def render_graph_and_rules_tab() -> None:
 
 
 def render_kmeans_and_cold_start_tab(data: pd.DataFrame, metrics: dict[str, Any]) -> None:
-    """Tab 4: Train-Only 7D K-Means & Peer Search across all 84,633 segments."""
-    static_df = pd.read_parquet(STATIC_STORE_PATH) if STATIC_STORE_PATH.is_file() else pd.DataFrame()
+    """Tab 4: Train-Only 7D K-Means & Peer Search across all network segments."""
+    st_path = STATIC_STORE_PATH if STATIC_STORE_PATH.is_file() else STATIC_SAMPLE_PATH
+    static_df = _load_static_parquet_cached(str(st_path))
+    total_segs = int(metrics.get("dataset", {}).get("segments_count", len(static_df)))
     k_left, k_right = st.columns([1.22, 1.0])
     with k_left:
-        st.subheader("1. Bản đồ 6 Nhóm Hành vi Phủ Kín 84,633 Đoạn Đường")
+        st.subheader(f"1. Bản đồ 6 Nhóm Hành vi Phủ Kín {total_segs:,} Đoạn Đường")
         if MAP_CLUSTERS_PATH.is_file():
             st.image(str(MAP_CLUSTERS_PATH))
     with k_right:
@@ -694,11 +888,14 @@ def render_kmeans_and_cold_start_tab(data: pd.DataFrame, metrics: dict[str, Any]
         return
     obs_cnt = int((~static_df["is_cold_start"]).sum())
     cold_cnt = int(static_df["is_cold_start"].sum())
+    total_static = max(len(static_df), 1)
+    obs_pct = obs_cnt / total_static * 100.0
+    cold_pct = cold_cnt / total_static * 100.0
 
-    st.subheader("3. Tra cứu Đoạn Đường Tương Đồng cho Vùng Thiếu GPS (74,606 Đoạn)")
+    st.subheader(f"3. Tra cứu Đoạn Đường Tương Đồng cho Vùng Thiếu GPS ({cold_cnt:,} Đoạn)")
     st.caption(
-        f"Tổng cộng: {len(static_df):,} đoạn đường · Đã có GPS: {obs_cnt:,} đoạn (11.85%) · "
-        f"Thiếu GPS nhưng đã có điểm PageRank & nhóm hành vi K-Means: {cold_cnt:,} đoạn (88.15%)"
+        f"Tổng cộng: {len(static_df):,} đoạn đường · Đã có GPS: {obs_cnt:,} đoạn ({obs_pct:.2f}%) · "
+        f"Thiếu GPS nhưng đã có điểm PageRank & nhóm hành vi K-Means: {cold_cnt:,} đoạn ({cold_pct:.2f}%)"
     )
     s_col1, s_col2, s_col3 = st.columns([2, 2, 1])
     only_cold = s_col1.checkbox("Chỉ chọn đoạn đường chưa từng có dữ liệu GPS", value=True)
@@ -783,30 +980,38 @@ def main() -> None:
         layout="wide",
     )
     st.title("🚦 Hệ thống Giám sát Hiện trạng & Dự báo Ùn tắc Giao thông TP.HCM")
-    st.caption(
-        "Luồng 4 bước khép kín: Làm sạch GPS & gom khung 30 phút (Spark 3.5.7) · "
-        "Lấp vùng mù 88.15% thiếu GPS (PageRank & K-Means) · "
-        "Dự báo trước 30 phút (Random Forest 23 biến) · "
-        "Cảnh báo trực tuyến < 1 ms & tự động bù tin trễ (Kafka 4.1 · MongoDB 8.0)"
-    )
 
-    if not all(path.is_file() for path in (DATASET_PATH, METRICS_PATH, MODEL_PATH)):
+    ds_active_path = DATASET_PATH if DATASET_PATH.is_file() else DATASET_SAMPLE_PATH
+    if not all(path.is_file() for path in (ds_active_path, METRICS_PATH, MODEL_PATH)):
         st.error(
             "Chưa tìm thấy dữ liệu/mô hình đã xử lý. Hãy chạy `python pipeline.py` "
             "hoặc `docker compose run --rm pipeline`, rồi tải lại trang."
         )
         st.stop()
 
-    data = pd.read_csv(DATASET_PATH)
-    metrics = json.loads(METRICS_PATH.read_text(encoding="utf-8"))
-    artifact = joblib.load(MODEL_PATH)
+    data = _load_dataset_cached(str(ds_active_path))
+    metrics = _load_json_cached(str(METRICS_PATH))
+    artifact = _load_model_artifact(str(MODEL_PATH))
+
+    cold_pct_val = metrics.get("static_feature_store_c13b", {}).get("cold_start_ratio_pct")
+    cold_pct_txt = f"{float(cold_pct_val):.2f}% " if cold_pct_val is not None else ""
+    st.caption(
+        "Luồng 4 bước khép kín: Làm sạch GPS & gom khung 30 phút (Spark 3.5.7) · "
+        f"Lấp vùng mù {cold_pct_txt}thiếu GPS (PageRank & K-Means) · "
+        "Dự báo trước 30 phút (Random Forest 23 biến) · "
+        "Cảnh báo trực tuyến < 1 ms & tự động bù tin trễ (Kafka 4.1 · MongoDB 8.0)"
+    )
 
     ds_info = metrics["dataset"]
     eval_info = metrics["evaluation"]
     top1, top2, top3, top4, top5 = st.columns(5)
     active_nodes = ds_info.get("active_intersection_nodes_count", ds_info["nodes_count"])
     exact_t30m_cnt = ds_info.get("exact_t30m_supervised_windows_count", 7898)
-    top1.metric("Giao lộ thực / Tổng điểm", f"{active_nodes:,} / {ds_info['nodes_count']:,}")
+    top1.metric(
+        "Giao lộ thực (Pruned)",
+        f"{active_nodes:,}",
+        f"Lọc từ {ds_info['nodes_count']:,} điểm",
+    )
     top2.metric("Đoạn đường một chiều", f"{ds_info['segments_count']:,}")
     top3.metric("Bản tin vận tốc GPS", f"{ds_info['segment_status_events']:,}")
     top4.metric("Khung 30p / Cặp +30p", f"{ds_info['labeled_windows_count']:,} / {exact_t30m_cnt:,}")

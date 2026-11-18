@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-import shutil
+import json
 from pathlib import Path
 
 import matplotlib.patches as mpatches
@@ -16,7 +16,7 @@ import numpy as np
 from matplotlib.patches import Circle, FancyBboxPatch, Polygon, Rectangle
 
 REPO_DIR = Path(__file__).resolve().parent.parent
-ARTIFACT_DIR = Path(r"C:\Users\PC\.gemini\antigravity\brain\f813022d-2858-4604-88b6-b1934862999e")
+OUTPUTS_DIR = REPO_DIR / "outputs"
 
 
 def draw_rounded_box(
@@ -47,6 +47,72 @@ def draw_rounded_box(
     return patch
 
 
+def _draw_badge_cloud(ax, cx: float, cy: float, size: float, zorder: int) -> None:
+    specs = [(-0.14, -0.04, 0.16), (0.02, 0.06, 0.19), (size - size * 0.83, -0.04, 0.14)]
+    for idx, (dx, dy, rad) in enumerate(specs):
+        x_pos = cx + dx if idx == 2 else cx + size * dx
+        ax.add_patch(
+            Circle(
+                (x_pos, cy + size * dy),
+                size * rad,
+                facecolor="none",
+                edgecolor="white",
+                lw=1.3,
+                zorder=zorder + 1,
+            )
+        )
+
+
+def _draw_badge_flag(ax, cx: float, cy: float, size: float, zorder: int) -> None:
+    ax.plot(
+        [cx - size * 0.22, cx - size * 0.22],
+        [cy - size * 0.30, cy + size * 0.30],
+        color="white",
+        lw=1.4,
+        zorder=zorder + 1,
+    )
+    poly = Polygon(
+        [
+            [cx - size * 0.22, cy + size * 0.28],
+            [cx + size * 0.26, cy + size * 0.14],
+            [cx - size * 0.22, cy + size * 0.0],
+        ],
+        closed=True,
+        facecolor="none",
+        edgecolor="white",
+        lw=1.3,
+        zorder=zorder + 1,
+    )
+    ax.add_patch(poly)
+
+
+def _draw_badge_vpc(ax, cx: float, cy: float, size: float, zorder: int) -> None:
+    c = Circle((cx, cy), size * 0.26, facecolor="none", edgecolor="white", lw=1.3, zorder=zorder + 1)
+    ax.add_patch(c)
+
+
+def _draw_badge_exec(ax, cx: float, cy: float, size: float, zorder: int) -> None:
+    for dx, dy in [(-0.16, -0.16), (0.16, -0.16), (0.0, 0.16)]:
+        r = Rectangle(
+            (cx + dx * size - size * 0.10, cy + dy * size - size * 0.10),
+            size * 0.20,
+            size * 0.20,
+            facecolor="none",
+            edgecolor="white",
+            lw=1.2,
+            zorder=zorder + 1,
+        )
+        ax.add_patch(r)
+
+
+_BADGE_DRAWERS = {
+    "cloud": _draw_badge_cloud,
+    "flag": _draw_badge_flag,
+    "vpc": _draw_badge_vpc,
+    "exec": _draw_badge_exec,
+}
+
+
 def draw_header_badge(
     ax,
     x: float,
@@ -58,313 +124,240 @@ def draw_header_badge(
 ) -> None:
     rect = Rectangle((x, y), size, size, facecolor=bgcolor, edgecolor="none", zorder=zorder)
     ax.add_patch(rect)
-    cx, cy = x + size / 2, y + size / 2
-    if badge_type == "cloud":
-        c1 = Circle(
-            (cx - size * 0.14, cy - size * 0.04),
-            size * 0.16,
-            facecolor="none",
-            edgecolor="white",
-            lw=1.3,
-            zorder=zorder + 1,
-        )
-        c2 = Circle(
-            (cx + size * 0.02, cy + size * 0.06),
-            size * 0.19,
-            facecolor="none",
-            edgecolor="white",
-            lw=1.3,
-            zorder=zorder + 1,
-        )
-        c3 = Circle(
-            (cx + size - size * 0.83, cy - size * 0.04),
-            size * 0.14,
-            facecolor="none",
-            edgecolor="white",
-            lw=1.3,
-            zorder=zorder + 1,
-        )
-        ax.add_patch(c1)
-        ax.add_patch(c2)
-        ax.add_patch(c3)
-    elif badge_type == "flag":
+    drawer = _BADGE_DRAWERS.get(badge_type)
+    if drawer is not None:
+        drawer(ax, x + size / 2, y + size / 2, size, zorder)
+
+
+def _glyph_kafka(ax, cx: float, cy: float, size: float, _color: str, zorder: int) -> None:
+    c_main = Circle((cx - size * 0.10, cy), size * 0.12, facecolor="none", edgecolor="white", lw=1.5, zorder=zorder + 2)
+    ax.add_patch(c_main)
+    for angle in [45, -45, 180]:
+        rad = np.deg2rad(angle)
+        nx = cx - size * 0.05 + np.cos(rad) * size * 0.24
+        ny = cy + np.sin(rad) * size * 0.24
+        cn = Circle((nx, ny), size * 0.07, facecolor="none", edgecolor="white", lw=1.4, zorder=zorder + 2)
+        ax.add_patch(cn)
         ax.plot(
-            [cx - size * 0.22, cx - size * 0.22],
-            [cy - size * 0.30, cy + size * 0.30],
+            [cx - size * 0.05 + np.cos(rad) * size * 0.11, nx - np.cos(rad) * size * 0.07],
+            [cy + np.sin(rad) * size * 0.11, ny - np.sin(rad) * size * 0.07],
             color="white",
-            lw=1.4,
-            zorder=zorder + 1,
-        )
-        poly = Polygon(
-            [
-                [cx - size * 0.22, cy + size * 0.28],
-                [cx + size * 0.26, cy + size * 0.14],
-                [cx - size * 0.22, cy + size * 0.0],
-            ],
-            closed=True,
-            facecolor="none",
-            edgecolor="white",
             lw=1.3,
             zorder=zorder + 1,
         )
-        ax.add_patch(poly)
-    elif badge_type == "vpc":
-        c = Circle((cx, cy), size * 0.26, facecolor="none", edgecolor="white", lw=1.3, zorder=zorder + 1)
-        ax.add_patch(c)
-    elif badge_type == "exec":
-        for dx, dy in [(-0.16, -0.16), (0.16, -0.16), (0.0, 0.16)]:
-            r = Rectangle(
-                (cx + dx * size - size * 0.10, cy + dy * size - size * 0.10),
-                size * 0.20,
-                size * 0.20,
+
+
+def _glyph_funnel(ax, cx: float, cy: float, size: float, _color: str, zorder: int) -> None:
+    poly = Polygon(
+        [
+            [cx - size * 0.28, cy + size * 0.24],
+            [cx + size * 0.28, cy + size * 0.24],
+            [cx + size * 0.07, cy - size * 0.02],
+            [cx + size * 0.07, cy - size * 0.26],
+            [cx - size * 0.07, cy - size * 0.26],
+            [cx - size * 0.07, cy - size * 0.02],
+        ],
+        closed=True,
+        facecolor="none",
+        edgecolor="white",
+        lw=1.5,
+        zorder=zorder + 2,
+    )
+    ax.add_patch(poly)
+
+
+def _glyph_spark(ax, cx: float, cy: float, size: float, _color: str, zorder: int) -> None:
+    angles = np.linspace(0, 2 * np.pi, 7)[:-1] + np.pi / 6
+    pts = [[cx + np.cos(a) * size * 0.30, cy + np.sin(a) * size * 0.30] for a in angles]
+    ax.add_patch(Polygon(pts, closed=True, facecolor="none", edgecolor="white", lw=1.4, zorder=zorder + 2))
+    bolt = Polygon(
+        [
+            [cx + size * 0.04, cy + size * 0.18],
+            [cx - size * 0.12, cy + size * 0.00],
+            [cx + size * 0.01, cy + size * 0.00],
+            [cx - size * 0.04, cy - size * 0.18],
+            [cx + size * 0.12, cy + size * 0.02],
+            [cx - size * 0.01, cy + size * 0.02],
+        ],
+        closed=True,
+        facecolor="white",
+        edgecolor="white",
+        lw=0.8,
+        zorder=zorder + 3,
+    )
+    ax.add_patch(bolt)
+
+
+def _glyph_ml(ax, cx: float, cy: float, size: float, _color: str, zorder: int) -> None:
+    ax.add_patch(Circle((cx, cy), size * 0.27, facecolor="none", edgecolor="white", lw=1.4, zorder=zorder + 2))
+    ax.plot([cx, cx], [cy - size * 0.25, cy + size * 0.25], color="white", lw=1.2, zorder=zorder + 2)
+    for dx, dy in [(-0.14, 0.10), (-0.14, -0.10), (0.14, 0.10), (0.14, -0.10)]:
+        nd = Circle(
+            (cx + dx * size, cy + dy * size),
+            size * 0.05,
+            facecolor="white",
+            edgecolor="white",
+            zorder=zorder + 3,
+        )
+        ax.add_patch(nd)
+        ax.plot([cx, cx + dx * size], [cy, cy + dy * size], color="white", lw=1.0, zorder=zorder + 2)
+
+
+def _glyph_graph(ax, cx: float, cy: float, size: float, color: str, zorder: int) -> None:
+    pts = [(cx - size * 0.18, cy - size * 0.14), (cx + size * 0.18, cy - size * 0.14), (cx, cy + size * 0.18)]
+    for i, j in [(0, 1), (0, 2), (1, 2)]:
+        ax.plot([pts[i][0], pts[j][0]], [pts[i][1], pts[j][1]], color="white", lw=1.4, zorder=zorder + 2)
+    for px, py in pts:
+        ax.add_patch(Circle((px, py), size * 0.08, facecolor=color, edgecolor="white", lw=1.4, zorder=zorder + 3))
+
+
+def _glyph_recon(ax, cx: float, cy: float, size: float, _color: str, zorder: int) -> None:
+    for sign in (-1, 1):
+        ax.add_patch(
+            Circle(
+                (cx + sign * size * 0.10, cy),
+                size * 0.18,
                 facecolor="none",
                 edgecolor="white",
-                lw=1.2,
-                zorder=zorder + 1,
+                lw=1.4,
+                zorder=zorder + 2,
             )
-            ax.add_patch(r)
+        )
+    ax.plot(
+        [cx - size * 0.06, cx - size * 0.01, cx + size * 0.08],
+        [cy, cy - size * 0.06, cy + size * 0.07],
+        color="white",
+        lw=1.6,
+        zorder=zorder + 3,
+    )
+
+
+def _glyph_bucket(ax, cx: float, cy: float, size: float, _color: str, zorder: int) -> None:
+    poly = Polygon(
+        [
+            [cx - size * 0.24, cy + size * 0.18],
+            [cx + size * 0.24, cy + size * 0.18],
+            [cx + size * 0.17, cy - size * 0.24],
+            [cx - size * 0.17, cy - size * 0.24],
+        ],
+        closed=True,
+        facecolor="none",
+        edgecolor="white",
+        lw=1.5,
+        zorder=zorder + 2,
+    )
+    ax.add_patch(poly)
+    theta = np.linspace(0, np.pi, 30)
+    ax.plot(
+        cx + np.cos(theta) * size * 0.20,
+        cy + size * 0.18 + np.sin(theta) * size * 0.10,
+        color="white",
+        lw=1.3,
+        zorder=zorder + 2,
+    )
+
+
+def _glyph_shield(ax, cx: float, cy: float, size: float, _color: str, zorder: int) -> None:
+    poly = Polygon(
+        [
+            [cx, cy + size * 0.28],
+            [cx + size * 0.24, cy + size * 0.16],
+            [cx + size * 0.20, cy - size * 0.10],
+            [cx, cy - size * 0.28],
+            [cx - size * 0.20, cy - size * 0.10],
+            [cx - size * 0.24, cy + size * 0.16],
+        ],
+        closed=True,
+        facecolor="none",
+        edgecolor="white",
+        lw=1.5,
+        zorder=zorder + 2,
+    )
+    ax.add_patch(poly)
+    ax.plot([cx, cx], [cy - size * 0.06, cy + size * 0.12], color="white", lw=1.6, zorder=zorder + 3)
+    ax.add_patch(Circle((cx, cy - size * 0.15), size * 0.03, facecolor="white", edgecolor="white", zorder=zorder + 3))
+
+
+def _glyph_db(ax, cx: float, cy: float, size: float, _color: str, zorder: int) -> None:
+    for dy in (0.18, -0.18):
+        ell = mpatches.Ellipse(
+            (cx, cy + size * dy),
+            size * 0.44,
+            size * 0.15,
+            facecolor="none",
+            edgecolor="white",
+            lw=1.4,
+            zorder=zorder + 2,
+        )
+        ax.add_patch(ell)
+    for dx in (-0.22, 0.22):
+        ax.plot(
+            [cx + size * dx, cx + size * dx],
+            [cy - size * 0.18, cy + size * 0.18],
+            color="white",
+            lw=1.4,
+            zorder=zorder + 2,
+        )
+
+
+def _glyph_cache(ax, cx: float, cy: float, size: float, _color: str, zorder: int) -> None:
+    r = Rectangle(
+        (cx - size * 0.20, cy - size * 0.20),
+        size * 0.40,
+        size * 0.40,
+        facecolor="none",
+        edgecolor="white",
+        lw=1.4,
+        zorder=zorder + 2,
+    )
+    ax.add_patch(r)
+    for off in [-0.12, 0.0, 0.12]:
+        for ys in ([cy + size * 0.20, cy + size * 0.29], [cy - size * 0.20, cy - size * 0.29]):
+            ax.plot([cx + off * size, cx + off * size], ys, color="white", lw=1.2, zorder=zorder + 2)
+        for xs in ([cx + size * 0.20, cx + size * 0.29], [cx - size * 0.20, cx - size * 0.29]):
+            ax.plot(xs, [cy + off * size, cy + off * size], color="white", lw=1.2, zorder=zorder + 2)
+
+
+def _glyph_ui(ax, cx: float, cy: float, size: float, _color: str, zorder: int) -> None:
+    r = Rectangle(
+        (cx - size * 0.26, cy - size * 0.20),
+        size * 0.52,
+        size * 0.40,
+        facecolor="none",
+        edgecolor="white",
+        lw=1.4,
+        zorder=zorder + 2,
+    )
+    ax.add_patch(r)
+    for dx, top in ((-0.14, 0.06), (0.0, 0.14), (0.14, 0.01)):
+        ax.plot(
+            [cx + size * dx, cx + size * dx],
+            [cy - size * 0.12, cy + size * top],
+            color="white",
+            lw=2.2,
+            zorder=zorder + 3,
+        )
+
+
+_SERVICE_GLYPH_DRAWERS = {
+    "kafka": _glyph_kafka,
+    "funnel": _glyph_funnel,
+    "spark": _glyph_spark,
+    "ml": _glyph_ml,
+    "graph": _glyph_graph,
+    "recon": _glyph_recon,
+    "bucket": _glyph_bucket,
+    "shield": _glyph_shield,
+    "db": _glyph_db,
+    "cache": _glyph_cache,
+    "ui": _glyph_ui,
+}
 
 
 def _draw_service_glyph(ax, cx: float, cy: float, size: float, color: str, glyph: str, zorder: int) -> None:
-    if glyph == "kafka":
-        c_main = Circle(
-            (cx - size * 0.10, cy), size * 0.12, facecolor="none", edgecolor="white", lw=1.5, zorder=zorder + 2
-        )
-        ax.add_patch(c_main)
-        for angle in [45, -45, 180]:
-            rad = np.deg2rad(angle)
-            nx = cx - size * 0.05 + np.cos(rad) * size * 0.24
-            ny = cy + np.sin(rad) * size * 0.24
-            cn = Circle((nx, ny), size * 0.07, facecolor="none", edgecolor="white", lw=1.4, zorder=zorder + 2)
-            ax.add_patch(cn)
-            ax.plot(
-                [cx - size * 0.05 + np.cos(rad) * size * 0.11, nx - np.cos(rad) * size * 0.07],
-                [cy + np.sin(rad) * size * 0.11, ny - np.sin(rad) * size * 0.07],
-                color="white",
-                lw=1.3,
-                zorder=zorder + 1,
-            )
-    elif glyph == "funnel":
-        poly = Polygon(
-            [
-                [cx - size * 0.28, cy + size * 0.24],
-                [cx + size * 0.28, cy + size * 0.24],
-                [cx + size * 0.07, cy - size * 0.02],
-                [cx + size * 0.07, cy - size * 0.26],
-                [cx - size * 0.07, cy - size * 0.26],
-                [cx - size * 0.07, cy - size * 0.02],
-            ],
-            closed=True,
-            facecolor="none",
-            edgecolor="white",
-            lw=1.5,
-            zorder=zorder + 2,
-        )
-        ax.add_patch(poly)
-    elif glyph == "spark":
-        angles = np.linspace(0, 2 * np.pi, 7)[:-1] + np.pi / 6
-        pts = [[cx + np.cos(a) * size * 0.30, cy + np.sin(a) * size * 0.30] for a in angles]
-        hex_poly = Polygon(pts, closed=True, facecolor="none", edgecolor="white", lw=1.4, zorder=zorder + 2)
-        ax.add_patch(hex_poly)
-        bolt = Polygon(
-            [
-                [cx + size * 0.04, cy + size * 0.18],
-                [cx - size * 0.12, cy + size * 0.00],
-                [cx + size * 0.01, cy + size * 0.00],
-                [cx - size * 0.04, cy - size * 0.18],
-                [cx + size * 0.12, cy + size * 0.02],
-                [cx - size * 0.01, cy + size * 0.02],
-            ],
-            closed=True,
-            facecolor="white",
-            edgecolor="white",
-            lw=0.8,
-            zorder=zorder + 3,
-        )
-        ax.add_patch(bolt)
-    elif glyph == "ml":
-        c = Circle((cx, cy), size * 0.27, facecolor="none", edgecolor="white", lw=1.4, zorder=zorder + 2)
-        ax.add_patch(c)
-        ax.plot([cx, cx], [cy - size * 0.25, cy + size * 0.25], color="white", lw=1.2, zorder=zorder + 2)
-        for dx, dy in [(-0.14, 0.10), (-0.14, -0.10), (0.14, 0.10), (0.14, -0.10)]:
-            nd = Circle(
-                (cx + dx * size, cy + dy * size),
-                size * 0.05,
-                facecolor="white",
-                edgecolor="white",
-                zorder=zorder + 3,
-            )
-            ax.add_patch(nd)
-            ax.plot([cx, cx + dx * size], [cy, cy + dy * size], color="white", lw=1.0, zorder=zorder + 2)
-    elif glyph == "graph":
-        pts = [(cx - size * 0.18, cy - size * 0.14), (cx + size * 0.18, cy - size * 0.14), (cx, cy + size * 0.18)]
-        for i in range(3):
-            for j in range(i + 1, 3):
-                ax.plot([pts[i][0], pts[j][0]], [pts[i][1], pts[j][1]], color="white", lw=1.4, zorder=zorder + 2)
-        for px, py in pts:
-            ax.add_patch(Circle((px, py), size * 0.08, facecolor=color, edgecolor="white", lw=1.4, zorder=zorder + 3))
-    elif glyph == "recon":
-        c1 = Circle((cx - size * 0.10, cy), size * 0.18, facecolor="none", edgecolor="white", lw=1.4, zorder=zorder + 2)
-        c2 = Circle((cx + size * 0.10, cy), size * 0.18, facecolor="none", edgecolor="white", lw=1.4, zorder=zorder + 2)
-        ax.add_patch(c1)
-        ax.add_patch(c2)
-        ax.plot(
-            [cx - size * 0.06, cx - size * 0.01, cx + size * 0.08],
-            [cy, cy - size * 0.06, cy + size * 0.07],
-            color="white",
-            lw=1.6,
-            zorder=zorder + 3,
-        )
-    else:
-        _draw_storage_or_ui_glyph(ax, cx, cy, size, glyph, zorder)
-
-
-def _draw_storage_or_ui_glyph(ax, cx: float, cy: float, size: float, glyph: str, zorder: int) -> None:
-    if glyph == "bucket":
-        poly = Polygon(
-            [
-                [cx - size * 0.24, cy + size * 0.18],
-                [cx + size * 0.24, cy + size * 0.18],
-                [cx + size * 0.17, cy - size * 0.24],
-                [cx - size * 0.17, cy - size * 0.24],
-            ],
-            closed=True,
-            facecolor="none",
-            edgecolor="white",
-            lw=1.5,
-            zorder=zorder + 2,
-        )
-        ax.add_patch(poly)
-        theta = np.linspace(0, np.pi, 30)
-        ax.plot(
-            cx + np.cos(theta) * size * 0.20,
-            cy + size * 0.18 + np.sin(theta) * size * 0.10,
-            color="white",
-            lw=1.3,
-            zorder=zorder + 2,
-        )
-    elif glyph == "shield":
-        poly = Polygon(
-            [
-                [cx, cy + size * 0.28],
-                [cx + size * 0.24, cy + size * 0.16],
-                [cx + size * 0.20, cy - size * 0.10],
-                [cx, cy - size * 0.28],
-                [cx - size * 0.20, cy - size * 0.10],
-                [cx - size * 0.24, cy + size * 0.16],
-            ],
-            closed=True,
-            facecolor="none",
-            edgecolor="white",
-            lw=1.5,
-            zorder=zorder + 2,
-        )
-        ax.add_patch(poly)
-        ax.plot([cx, cx], [cy - size * 0.06, cy + size * 0.12], color="white", lw=1.6, zorder=zorder + 3)
-        ax.add_patch(
-            Circle((cx, cy - size * 0.15), size * 0.03, facecolor="white", edgecolor="white", zorder=zorder + 3)
-        )
-    elif glyph == "db":
-        ell_top = mpatches.Ellipse(
-            (cx, cy + size * 0.18),
-            size * 0.44,
-            size * 0.15,
-            facecolor="none",
-            edgecolor="white",
-            lw=1.4,
-            zorder=zorder + 2,
-        )
-        ell_bot = mpatches.Ellipse(
-            (cx, cy - size * 0.18),
-            size * 0.44,
-            size * 0.15,
-            facecolor="none",
-            edgecolor="white",
-            lw=1.4,
-            zorder=zorder + 2,
-        )
-        ax.add_patch(ell_top)
-        ax.add_patch(ell_bot)
-        ax.plot(
-            [cx - size * 0.22, cx - size * 0.22],
-            [cy - size * 0.18, cy + size * 0.18],
-            color="white",
-            lw=1.4,
-            zorder=zorder + 2,
-        )
-        ax.plot(
-            [cx + size * 0.22, cx + size * 0.22],
-            [cy - size * 0.18, cy + size * 0.18],
-            color="white",
-            lw=1.4,
-            zorder=zorder + 2,
-        )
-    elif glyph == "cache":
-        r = Rectangle(
-            (cx - size * 0.20, cy - size * 0.20),
-            size * 0.40,
-            size * 0.40,
-            facecolor="none",
-            edgecolor="white",
-            lw=1.4,
-            zorder=zorder + 2,
-        )
-        ax.add_patch(r)
-        for off in [-0.12, 0.0, 0.12]:
-            ax.plot(
-                [cx + off * size, cx + off * size],
-                [cy + size * 0.20, cy + size * 0.29],
-                color="white",
-                lw=1.2,
-                zorder=zorder + 2,
-            )
-            ax.plot(
-                [cx + off * size, cx + off * size],
-                [cy - size * 0.20, cy - size * 0.29],
-                color="white",
-                lw=1.2,
-                zorder=zorder + 2,
-            )
-            ax.plot(
-                [cx + size * 0.20, cx + size * 0.29],
-                [cy + off * size, cy + off * size],
-                color="white",
-                lw=1.2,
-                zorder=zorder + 2,
-            )
-            ax.plot(
-                [cx - size * 0.20, cx - size * 0.29],
-                [cy + off * size, cy + off * size],
-                color="white",
-                lw=1.2,
-                zorder=zorder + 2,
-            )
-    elif glyph == "ui":
-        r = Rectangle(
-            (cx - size * 0.26, cy - size * 0.20),
-            size * 0.52,
-            size * 0.40,
-            facecolor="none",
-            edgecolor="white",
-            lw=1.4,
-            zorder=zorder + 2,
-        )
-        ax.add_patch(r)
-        ax.plot(
-            [cx - size * 0.14, cx - size * 0.14],
-            [cy - size * 0.12, cy + size * 0.06],
-            color="white",
-            lw=2.2,
-            zorder=zorder + 3,
-        )
-        ax.plot([cx, cx], [cy - size * 0.12, cy + size * 0.14], color="white", lw=2.2, zorder=zorder + 3)
-        ax.plot(
-            [cx + size * 0.14, cx + size * 0.14],
-            [cy - size * 0.12, cy + size * 0.01],
-            color="white",
-            lw=2.2,
-            zorder=zorder + 3,
-        )
+    drawer = _SERVICE_GLYPH_DRAWERS.get(glyph)
+    if drawer is not None:
+        drawer(ax, cx, cy, size, color, zorder)
 
 
 def draw_service_icon(
@@ -765,7 +758,9 @@ def _draw_arch_zones_and_components(ax) -> None:
         zorder=6,
     )
 
-    draw_service_icon(ax, 4.675, 1.96, ZONE_F_COLOR, "ui", ["Streamlit Dashboard", "BI & Query Gateway"], size=0.60)
+    draw_service_icon(
+        ax, 4.675, 1.96, ZONE_F_COLOR, "ui", ["TOC Web & Streamlit", "FastAPI :8000 · UI :8501"], size=0.60
+    )
     draw_service_icon(
         ax, 7.80, 1.96, ZONE_F_COLOR, "shield", ["Quarantine & WAL", "Dead-Letter & Checkpoints"], size=0.60
     )
@@ -852,6 +847,99 @@ def build_detailed_reference_png(out_path: Path) -> None:
     build_architecture_png(out_path)
 
 
+def _load_walkthrough_metrics() -> dict[str, str]:
+    m = json.loads((OUTPUTS_DIR / "metrics.json").read_text(encoding="utf-8"))
+    mv = json.loads((OUTPUTS_DIR / "mongo_verify.json").read_text(encoding="utf-8"))
+    ds = m["dataset"]
+    qf = m["quality_funnel_c5"]
+    ev = m["evaluation"]
+    tr = ev["transition_analysis"]
+    rec = m["streaming_mmds"]["reconciliation"]
+    lat = mv["uc2_arterial_query"]["latency_benchmark_ms"]
+    return {
+        "miss_pct": f"{qf['missing_max_velocity_train_pct']:.2f}%",
+        "cold_pct": f"{m['static_feature_store_c13b']['cold_start_ratio_pct']:.2f}%",
+        "windows": f"{ds['labeled_windows_count']:,}",
+        "segs": f"{ds['segments_count']:,}",
+        "edges": f"{ds['line_graph_transition_edges']:,}",
+        "co_rules": f"{m['graph_and_patterns']['co_congestion_rules_found']}",
+        "fp_rules": f"{m['spark_runtime_verification']['spark_fpgrowth_rules_count']}",
+        "cold_segs": f"{ds['cold_start_segments_count']:,}",
+        "roc": f"{ev['roc_auc']:.4f}",
+        "det_auc": f"{tr['rf_23d_transition_detect_roc_auc']:.4f}",
+        "p95_ms": f"{lat['warm_p95_ms']:.3f} ms",
+        "late_cnt": f"{rec['affected_late_segment_windows_recomputed']:,}",
+        "heal_cnt": f"{rec['healed_downstream_lag_windows']:,}",
+    }
+
+
+def _walkthrough_steps(wm: dict[str, str]) -> list[tuple[float, str, str, str, str, list[str]]]:
+    return [
+        (
+            0.22,
+            "RAW INPUT (ZONE A)",
+            "1. Bản tin GPS & Bản đồ GIS",
+            "#1E293B",
+            "#F8FAFC",
+            [
+                "• Lúc 07:08 sáng, xe qua đoạn\n  Lý Thường Kiệt #47407 gửi:\n  velocity = 4 km/h.",
+                f"• EC-1: {wm['miss_pct']} cửa sổ\n  khuyết max_velocity.",
+                f"• EC-6: {wm['cold_pct']} đoạn nhánh\n  bị Cold-Start (0 GPS).",
+            ],
+        ),
+        (
+            3.92,
+            "P1 · QUALITY & MONOID",
+            "2. Chuẩn hóa & Gán nhãn LOS",
+            "#0284C7",
+            "#F0F9FF",
+            [
+                "• 3-Tier Imputation nội suy\n  max_velocity = 40 km/h (TRAIN).",
+                "• 5-Tuple Monoid gộp cửa sổ\n  07:00–07:30: mean_v = 4 km/h.",
+                f"• r = 4/40 = 0.10 (< 0.20) → LOS F\n  trên {wm['windows']} cửa sổ (89.19% khớp).",
+            ],
+        ),
+        (
+            7.62,
+            "P2 · GRAPH & K-MEANS",
+            "3. Khai phá Đồ thị & Hành vi",
+            "#0D9488",
+            "#F0FDFA",
+            [
+                f"• Line-Graph PageRank trên\n  {wm['segs']} đoạn & {wm['edges']} cạnh.",
+                f"• {wm['fp_rules']} luật FPGrowth / {wm['co_rules']} đồng kẹt;\n  7D K-Means gom k=6 cụm.",
+                f"• Cấp Static Features cho đủ\n  {wm['cold_segs']} đoạn Cold-Start.",
+            ],
+        ),
+        (
+            11.32,
+            "P3 · CAUSAL ML (+30M)",
+            "4. Dự báo Nhân quả t+30m",
+            "#15803D",
+            "#ECFDF5",
+            [
+                "• Ghép 14 biến cục bộ + 9 biến\n  PageRank, K-Means & Priors\n  thành 23D Feature Vector.",
+                (
+                    f"• Frozen RF (Organic Train)\n  dự báo t+30m: ROC-AUC {wm['roc']},\n  Detect AUC {wm['det_auc']}."
+                ),
+                f"• Phủ 100% {wm['segs']} đoạn cơ giới.",
+            ],
+        ),
+        (
+            15.02,
+            "P4 · STREAM & SERVING",
+            "5. O(1) Sketches & IXSCAN",
+            "#7C3AED",
+            "#FAF5FF",
+            [
+                "• 32KB Bloom + 1KB HLL++\n  + EWMA Hotspot (score = 6.67).",
+                f"• MongoDB 8.0 IXSCAN p95 {wm['p95_ms']};\n  TOC Web (:8000) & UI (:8501).",
+                f"• Two-Tier Recon bù {wm['late_cnt']} trễ,\n  heal {wm['heal_cnt']} lag (100%).",
+            ],
+        ),
+    ]
+
+
 def build_concrete_example_flow_png(out_path: Path) -> None:
     """Render an intuitive step-by-step visual example tracing 1 real street (Lý Thường Kiệt #47407) for newcomers."""
     fig, ax = plt.subplots(figsize=(18.6, 5.18), dpi=240)
@@ -872,75 +960,11 @@ def build_concrete_example_flow_png(out_path: Path) -> None:
     )
     subtitle_txt = (
         "Theo dõi đoạn đường Lý Thường Kiệt (segment_id = 47407, Quận 10) "
-        "từ Raw GPS Ping đến cảnh báo dự báo trên MongoDB 8.0 & Streamlit UI"
+        "từ Raw GPS Ping đến cảnh báo trên MongoDB 8.0, TOC Web (:8000) & Streamlit (:8501)"
     )
     ax.text(9.30, 4.48, subtitle_txt, ha="center", va="center", fontsize=10.0, color="#475569")
 
-    steps = [
-        (
-            0.22,
-            "RAW INPUT (ZONE A)",
-            "1. Bản tin GPS & Bản đồ GIS",
-            "#1E293B",
-            "#F8FAFC",
-            [
-                "• Lúc 07:08 sáng, xe qua đoạn\n  Lý Thường Kiệt #47407 gửi:\n  velocity = 4 km/h.",
-                "• Edge Case EC-1: Cột max_velocity\n  bị khuyết 85.21%.",
-                "• Edge Case EC-6: 88.15% đoạn\n  lân cận bị Cold-Start (0 GPS).",
-            ],
-        ),
-        (
-            3.92,
-            "P1 · QUALITY & MONOID",
-            "2. Chuẩn hóa & Gán nhãn LOS",
-            "#0284C7",
-            "#F0F9FF",
-            [
-                "• 3-Tier Imputation nội suy\n  max_velocity = 40 km/h (TRAIN).",
-                "• 5-Tuple Monoid Combiner gộp\n  cửa sổ 07:00–07:30: mean_v = 4.",
-                "• Velocity Ratio r = 4/40 = 0.10\n  (< 0.20) → Nhãn LOS F (Kẹt cứng)\n  trên 33,441 cửa sổ 30m.",
-            ],
-        ),
-        (
-            7.62,
-            "P2 · GRAPH & K-MEANS",
-            "3. Khai phá Đồ thị & Hành vi",
-            "#0D9488",
-            "#F0FDFA",
-            [
-                "• Line-Graph PageRank xếp hạng\n  84,633 segments & 151,929 edges.",
-                "• SON / FPGrowth tìm 40 luật;\n  7D K-Means gom k=6 cụm hành vi.",
-                "• Cấp Static Features cho cả\n  74,606 đoạn Cold-Start (88.15%).",
-            ],
-        ),
-        (
-            11.32,
-            "P3 · CAUSAL ML (+30M)",
-            "4. Dự báo Nhân quả t+30m",
-            "#15803D",
-            "#ECFDF5",
-            [
-                "• Kết hợp 14 biến cục bộ + 9 biến\n  PageRank, K-Means & Causal Priors\n  thành 23D Feature Vector.",
-                (
-                    "• Frozen Random Forest (.transform)\n  dự báo lúc 07:30: tiếp tục LOS F\n  (ROC-AUC = 0.9882, "
-                    "Lift 9.35x)."
-                ),
-                "• Phủ 100% mạng lưới 84,633 đoạn.",
-            ],
-        ),
-        (
-            15.02,
-            "P4 · STREAM & SERVING",
-            "5. O(1) Sketches & IXSCAN",
-            "#7C3AED",
-            "#FAF5FF",
-            [
-                "• 32KB Bloom Filter + 1KB HLL++\n  + EWMA Hotspot (score = 6.67).",
-                "• Upsert vào MongoDB 8.0, truy vấn\n  IXSCAN phản hồi trong 0.636 ms.",
-                "• Two-Tier Reconciliation tự động\n  backfill 501 bản tin trễ (100%).",
-            ],
-        ),
-    ]
+    steps = _walkthrough_steps(_load_walkthrough_metrics())
 
     for idx, (x, badge, title, col, bg, bullets) in enumerate(steps):
         w, y, h = 3.24, 0.22, 4.02
@@ -1004,12 +1028,12 @@ def build_concrete_example_flow_png(out_path: Path) -> None:
 
 
 if __name__ == "__main__":
+    import shutil
+
     primary = REPO_DIR / "outputs" / "system_architecture.png"
     detailed = REPO_DIR / "outputs" / "slide_charts" / "arch_detailed_reference.png"
     concrete_flow = REPO_DIR / "outputs" / "slide_charts" / "chart_concrete_example_flow.png"
     build_architecture_png(primary)
     shutil.copy2(primary, detailed)
     build_concrete_example_flow_png(concrete_flow)
-    if ARTIFACT_DIR.exists():
-        shutil.copy2(primary, ARTIFACT_DIR / "system_architecture.png")
     print(f"Rendered AWS architecture: {primary} ({primary.stat().st_size:,} bytes)")

@@ -6,8 +6,10 @@ import argparse
 import csv
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
+import shutil
 import statistics
 import time
 
@@ -84,10 +86,25 @@ def _measure_join_plans(root: Path, windows, segments, lookup, streets):
     return optimized, timings, node_names, join_diff
 
 
+_PROTECTED_DIR_NAMES = frozenset(
+    {"", "raw_data", "data", "outputs", "traffic_data", "tests", "docs", "product", "scripts", "evidence"}
+)
+
+
+def _prepare_output_root(root: Path, overwrite: bool) -> None:
+    """Create output snapshot directory, safely clearing an existing snapshot only when --overwrite is set."""
+    if overwrite and root.exists():
+        resolved = root.resolve()
+        if resolved == resolved.parent or resolved == Path.cwd().resolve() or resolved.name in _PROTECTED_DIR_NAMES:
+            raise ValueError(f"Refusing to overwrite protected directory: {resolved}")
+        shutil.rmtree(root)
+    root.mkdir(parents=True, exist_ok=False)
+
+
 def execute(args):
     root = Path(args.output_root)
-    # Never overwrite a previous snapshot or the legacy data/outputs tree.
-    root.mkdir(parents=True, exist_ok=False)
+    # Never overwrite a previous snapshot or protected tree unless --overwrite / TRAFFIC_OVERWRITE=1 is explicit.
+    _prepare_output_root(root, bool(getattr(args, "overwrite", False)))
     log_dir = root / "spark_events"
     log_dir.mkdir()
     spark = (
@@ -192,57 +209,67 @@ def _event_log_sort_key(path: Path) -> list[int | str]:
     return [int(part) if part.isdigit() else part for part in re.split(r"(\d+)", str(path))]
 
 
+def _handle_event_log_record(event: dict, groups: dict[int, str | None], tasks: list[dict]) -> None:
+    """Process one parsed SparkListener JSON record into stage job groups or task metrics."""
+    event_type = event.get("Event")
+    if event_type == "SparkListenerJobStart":
+        group = (event.get("Properties") or {}).get("spark.jobGroup.id")
+        for stage in event["Stage IDs"]:
+            groups[stage] = group
+        return
+    if event_type != "SparkListenerTaskEnd":
+        return
+    info, metric = event["Task Info"], event.get("Task Metrics", {})
+    read = metric.get("Shuffle Read Metrics", {})
+    write = metric.get("Shuffle Write Metrics", {})
+    tasks.append(
+        {
+            "stage": event["Stage ID"],
+            "partition": info["Index"],
+            "duration_ms": info["Finish Time"] - info["Launch Time"],
+            "executor_run_ms": metric.get("Executor Run Time"),
+            "shuffle_read_bytes": read.get("Remote Bytes Read", 0) + read.get("Local Bytes Read", 0),
+            "shuffle_write_bytes": write.get("Shuffle Bytes Written", 0),
+            "shuffle_records_read": read.get("Total Records Read", 0),
+            "successful": event.get("Task End Reason", {}).get("Reason") == "Success",
+        }
+    )
+
+
 def _parse_event_log_file(path: Path, groups: dict[int, str | None], tasks: list[dict]) -> None:
     """Parse a single Spark event log file into stage job-group map and task end records."""
     with path.open(encoding="utf-8") as handle:
         for line in handle:
-            if not line.strip():
-                continue
-            event = json.loads(line)
-            event_type = event.get("Event")
-            if event_type == "SparkListenerJobStart":
-                group = (event.get("Properties") or {}).get("spark.jobGroup.id")
-                for stage in event["Stage IDs"]:
-                    groups[stage] = group
-            elif event_type == "SparkListenerTaskEnd":
-                info, metric = event["Task Info"], event.get("Task Metrics", {})
-                read = metric.get("Shuffle Read Metrics", {})
-                write = metric.get("Shuffle Write Metrics", {})
-                tasks.append(
-                    {
-                        "stage": event["Stage ID"],
-                        "partition": info["Index"],
-                        "duration_ms": info["Finish Time"] - info["Launch Time"],
-                        "executor_run_ms": metric.get("Executor Run Time"),
-                        "shuffle_read_bytes": (read.get("Remote Bytes Read", 0) + read.get("Local Bytes Read", 0)),
-                        "shuffle_write_bytes": write.get("Shuffle Bytes Written", 0),
-                        "shuffle_records_read": read.get("Total Records Read", 0),
-                        "successful": event.get("Task End Reason", {}).get("Reason") == "Success",
-                    }
-                )
+            if line.strip():
+                _handle_event_log_record(json.loads(line), groups, tasks)
+
+
+def _summarize_single_stage(stage: int, measured: list[dict]) -> dict | None:
+    """Summarize duration and shuffle metrics for one successful Spark stage."""
+    stage_tasks = [t for t in measured if t["stage"] == stage and t["successful"]]
+    if not stage_tasks:
+        return None
+    durations = [t["duration_ms"] for t in stage_tasks]
+    median = statistics.median(durations)
+    return {
+        "stage": stage,
+        "job_group": stage_tasks[0]["job_group"],
+        "successful_tasks": len(stage_tasks),
+        "median_duration_ms": median,
+        "max_duration_ms": max(durations),
+        "max_to_median_duration": max(durations) / median if median else None,
+        "shuffle_read_bytes": sum(t["shuffle_read_bytes"] for t in stage_tasks),
+        "shuffle_write_bytes": sum(t["shuffle_write_bytes"] for t in stage_tasks),
+    }
 
 
 def _summarize_stage_metrics(measured: list[dict]) -> list[dict]:
     """Compute stage-level duration and shuffle summaries from measured tasks."""
     summaries = []
     for stage in sorted({t["stage"] for t in measured}):
-        stage_tasks = [t for t in measured if t["stage"] == stage and t["successful"]]
-        if not stage_tasks:
-            continue
-        durations = [t["duration_ms"] for t in stage_tasks]
-        median = statistics.median(durations)
-        summaries.append(
-            {
-                "stage": stage,
-                "job_group": stage_tasks[0]["job_group"],
-                "successful_tasks": len(stage_tasks),
-                "median_duration_ms": median,
-                "max_duration_ms": max(durations),
-                "max_to_median_duration": max(durations) / median if median else None,
-                "shuffle_read_bytes": sum(t["shuffle_read_bytes"] for t in stage_tasks),
-                "shuffle_write_bytes": sum(t["shuffle_write_bytes"] for t in stage_tasks),
-            }
-        )
+        summary = _summarize_single_stage(stage, measured)
+        if summary is not None:
+            summaries.append(summary)
     return summaries
 
 
@@ -270,6 +297,12 @@ def main():
     parser.add_argument("--train-end", required=True, help="Exclusive UTC warmup/fit cutoff, e.g. 2020-08-01T00:00:00Z")
     parser.add_argument("--master", default="local[2]")
     parser.add_argument("--partitions", type=int, default=8)
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        default=os.environ.get("TRAFFIC_OVERWRITE", "").strip().lower() in {"1", "true", "yes"},
+        help="Safely remove an existing output-root snapshot before running (or set TRAFFIC_OVERWRITE=1)",
+    )
     execute(parser.parse_args())
 
 

@@ -11,20 +11,20 @@
 
 ---
 
-### Tóm Tắt Cốt Lõi (Toàn Cảnh Bài Toán & Lời Giải Trong 4 Bước)
+### Tóm Tắt Cốt Lõi (Toàn Cảnh Bài Toán & Lời Giải Trong 4 Bước — Wave 2 Verified)
 
-> **Mục tiêu của hệ thống** là giám sát hiện trạng và dự báo trước `30 phút` nguy cơ kẹt xe trên toàn mạng lưới **`84,633` đoạn đường một chiều** tại TP.HCM từ dữ liệu hành trình GPS của xe cộ (chẳng hạn lúc `07:08` sáng trên đoạn đường Lý Thường Kiệt mã `47407` tại Quận 10, một chiếc xe gửi về tín hiệu báo đang di chuyển chậm ở vận tốc `4 km/h`).
+> **Mục tiêu của hệ thống** là giám sát hiện trạng và dự báo trước `30 phút` nguy cơ kẹt xe trên toàn mạng lưới **`84,206` đoạn đường cơ giới một chiều** tại TP.HCM (làm sạch từ `84,633` đoạn đường thô) từ dữ liệu hành trình GPS của xe cộ (chẳng hạn lúc `07:08` sáng trên đoạn đường Lý Thường Kiệt mã `47407` tại Quận 10, một chiếc xe gửi về tín hiệu báo đang di chuyển chậm ở vận tốc `4 km/h`).
 >
-> Tuy nhiên, dữ liệu thực tế ngoài đường gặp **3 rào cản lớn**:
-> 1. **Thiếu hụt thông tin:** Gần **`88.15%`** đoạn đường (`74,606 / 84,633` đoạn, chủ yếu là đường nhánh và hẻm dân cư) không có xe gửi GPS về, và đa số đường bị thiếu thông tin tốc độ tối đa cho phép;
-> 2. **Đứt quãng thời gian:** Xe gửi tín hiệu không đều, lúc cách nhau `30 phút`, lúc ngắt quãng nhiều giờ đến nhiều ngày;
-> 3. **Nhiễu đường truyền:** Bản tin gửi về theo thời gian thực thường bị trùng lặp hoặc đến trễ quá hạn.
+> Tuy nhiên, dữ liệu thực tế ngoài đường gặp **4 rào cản lớn**:
+> 1. **Thiếu hụt thông tin:** **`88.13%`** đoạn đường cơ giới (`74,211 / 84,206` đoạn, chủ yếu là đường nhánh và hẻm dân cư) không có xe gửi GPS về, và `88.34%` đoạn đường bị thiếu thông tin tốc độ tối đa cho phép;
+> 2. **Đứt quãng thời gian & Đợt burst tổng hợp:** Xe gửi tín hiệu không đều, lúc cách nhau `30 phút`, lúc ngắt quãng nhiều giờ/ngày, đồng thời xuất hiện `7,192` cửa sổ burst đồng loạt (`2020-08-02 23:30` & `2020-08-03 00:00`) làm nhiễu phân bố huấn luyện;
+> 3. **Nhiễu đường truyền:** Bản tin gửi về theo thời gian thực thường bị trùng lặp hoặc đến trễ quá hạn (`Watermark 30m`).
 >
 > Để giải quyết trọn vẹn, hệ thống vận hành qua **4 bước nối tiếp nhau**:
-> - **Bước 1 – Chuẩn hóa bức tranh hiện trạng (Spark Batch ETL):** Làm sạch `90,938` bản tin GPS thô, tự động ước lượng tốc độ tối đa cho từng loại đường, và gom dữ liệu theo từng khung `30 phút` (`33,441` cửa sổ) để xác định đường đang Thông thoáng (mức `A–B`), Đông đúc (`C–D`) hay Kẹt cứng (`E–F`).
-> - **Bước 2 – Lấp đầy "vùng mù" bằng cấu trúc bản đồ (Đồ thị & Phân cụm):** Với `88.15%` đoạn đường không có GPS, hệ thống phân tích cấu trúc giao lộ (`PageRank`) để tìm các "nút cổ chai" tự nhiên, đồng thời gom nhóm các đoạn đường có đặc điểm giống nhau (`K-Means`) để suy đoán hành vi giao thông cho những nơi thiếu cảm biến và làm biến đầu vào cho Bước 3.
-> - **Bước 3 – Dự báo trước 30 phút (Machine Learning):** Kết hợp trạng thái hiện tại trên đường, khung giờ trong ngày và đặc trưng nút cổ chai ở Bước 2 để huấn luyện mô hình `Random Forest` dự báo xác suất một đoạn đường sẽ bị kẹt cứng sau đúng `30 phút` nữa (đạt **`ROC-AUC = 0.9882`**, **`PR-AUC = 0.9471`**).
-> - **Bước 4 – Cảnh báo trực tuyến & Tự động bù dữ liệu trễ (Kafka Streaming & Dashboard):** Đưa mô hình vào chấm điểm trực tiếp luồng dữ liệu GPS đổ về liên tục để hiển thị cảnh báo tức thì dưới `1 mili-giây` (**`0.636 ms`**) trên Dashboard điều hành; đồng thời lưu trữ các bản tin đến muộn để cuối ngày đối soát và cập nhật lại lịch sử chính xác **`100%`**.
+> - **Bước 1 – Chuẩn hóa bức tranh hiện trạng (Spark Batch ETL):** Làm sạch `90,938` bản tin GPS thô thành **`90,787` bản tin cơ giới hợp lệ** (cách ly `151` bản tin rơi vào `427` đoạn phi đường bộ), ước lượng tốc độ tối đa trên `TRAIN` hữu cơ, và gom bằng Pure 5-Tuple Monoid thành **`33,394` cửa sổ 30 phút UTC** (`BkTraffic urban 5 km/h LOS` khớp **`89.19%`** bảng tham chiếu `train.csv`; `0` sai lệch so với `baseline.py`).
+> - **Bước 2 – Lấp đầy "vùng mù" bằng cấu trúc bản đồ (Đồ thị & Phân cụm):** Tỉa bỏ `90.97%` nút uốn cong/mồ côi (`525,786` nút), dựng đồ thị đường bộ **đã loại cung U-turn** (`92,453` cạnh, `314` đoạn cụt), tính `PageRank` (`#1`: `21969 — Nguyễn Kiệm`, `PR = 2.7799`), khai phá luật kết hợp trên `TRAIN` hữu cơ, và gom nhóm `K-Means` ($k=6$) trên `3,609` đoạn hữu cơ để phủ kín `74,211` đoạn thiếu GPS (`88.13%`).
+> - **Bước 3 – Lọc burst & Dự báo trung thực `+30 phút` (Machine Learning):** Loại `3,596` cặp burst khi huấn luyện (`1,885` cặp `TRAIN` hữu cơ / `1,167` `VAL` / `1,182` `TEST`, `7,885` cặp đúng `+30m`), huấn luyện sạch không dùng `sample_weight` nhân tạo (`class_weight` lũy thừa `0.65`) cho `Random Forest (23D)` đạt **`ROC-AUC = 0.9900`**, **`PR-AUC = 0.9595`**, **`Severe F1 = 0.9301`**.
+> - **Bước 4 – Cảnh báo trực tuyến & Tự động bù dữ liệu trễ (Kafka, MongoDB & Dual Web UI):** Chấm điểm trực tuyến qua `Kafka 4.1` + `32 KiB RotatingBloom` + `1 KiB 64-bit HLL` + `EWMA`, `WAL = 73.7 KB`, phục vụ dưới `1 ms` trên `MongoDB 8.0` (**`warm median = 0.389 ms / p95 = 0.692 ms`**) qua **Web TOC `ReactJS + FastAPI (:8000)`** và **`Streamlit (:8501)`**, đồng thời tự động bù `500` cửa sổ trễ và hàn gắn `609` cửa sổ hạ lưu để đạt độ đầy đủ **`100.0%`**.
 
 ---
 
@@ -37,52 +37,52 @@ Tại siêu đô thị TP. Hồ Chí Minh, mật độ phương tiện rất l�
 Để thấy rõ thách thức từ dữ liệu thực địa trước khi đi vào giải pháp, hãy nhìn vào một dòng dữ liệu gốc trong bảng `segment_status.csv`:
 - Vào lúc **`07:08:28` sáng giờ Việt Nam** ngày `03/08/2020` (bản ghi mã `15281`), một chiếc xe đi ngang qua **đoạn đường Lý Thường Kiệt số `47407`** (dài `16m` tại Quận 10) gửi về vận tốc tức thời chỉ **`4 km/h`**; hoặc lúc **`11:30` trưa** tại **Công Trường Quốc Tế (đoạn `21064`, Quận 3)**, xe báo vận tốc **`12 km/h`**.
 
-Để biến hàng chục nghìn con số vận tốc rời rạc như vậy thành bức tranh điều hành thống nhất trên toàn mạng lưới **`84,633` đoạn đường một chiều**, hệ thống quy đổi tỷ lệ giữa vận tốc lưu thông thực tế so với tốc độ tối đa cho phép của đoạn đường sang **6 mức phục vụ giao thông (`Level of Service` — `LOS` từ `A` đến `F`)**:
-- **Mức `LOS A` và `LOS B` (vận tốc đạt từ `65%` tốc độ tối đa trở lên):** Đường thông thoáng, xe cộ lưu thông tự do.
-- **Mức `LOS C` và `LOS D` (vận tốc đạt từ `35%` đến dưới `65%` tốc độ tối đa):** Đường đông đúc ổn định vào khung giờ cao điểm.
-- **Mức `LOS E` và `LOS F` (vận tốc tụt xuống dưới `35%` tốc độ tối đa, riêng mức `F` dưới `20%` hoặc xe dừng hẳn):** Đường ùn ứ nghiêm trọng đến kẹt cứng tê liệt.
+Để biến hàng chục nghìn con số vận tốc rời rạc như vậy thành bức tranh điều hành thống nhất trên toàn mạng lưới **`84,206` đoạn đường cơ giới một chiều** (`84,633` đoạn thô sau lọc `427` đoạn phi đường bộ), hệ thống đối chiếu theo **6 mức phục vụ giao thông (`Level of Service` — `LOS` từ `A` đến `F`)** theo chuẩn **BkTraffic Urban 5 km/h** (`derive_urban_los`, khớp **`89.19%`** nhãn gốc `train.csv`), đồng thời tách riêng hàm chuẩn hóa tỷ lệ `derive_los` (`0.80/0.65/0.50/0.35/0.20`):
+- **Mức `LOS A` và `LOS B` (vận tốc đạt từ `65%` tốc độ tối đa hoặc `≥ 30 km/h` đô thị):** Đường thông thoáng, xe cộ lưu thông tự do.
+- **Mức `LOS C` và `LOS D` (`35%–65%` tốc độ tối đa hoặc `20–30 km/h`):** Đường đông đúc ổn định vào khung giờ cao điểm.
+- **Mức `LOS E` và `LOS F` (`< 35%` tốc độ tối đa hoặc `< 20 km/h`, riêng `LOS F < 15 km/h` hoặc dừng hẳn):** Đường ùn ứ nghiêm trọng đến kẹt cứng tê liệt.
 
-![Hình 1.1. Bản đồ giao thông TP.HCM 84,633 đoạn đường, vùng Cold-Start 88.15% và các điểm nóng kẹt xe](../../outputs/slide_charts/map_hcmc_hotspots_coldstart.png)
+![Hình 1.1. Bản đồ giao thông TP.HCM 84,206 đoạn cơ giới, vùng Cold-Start 88.13% và các điểm nóng kẹt xe](../../outputs/slide_charts/map_hcmc_hotspots_coldstart.png)
 
-*Hình 1.1. Bản đồ giao thông TP.HCM tái tạo từ `84,633` đoạn đường thực tế trên nền sông Sài Gòn, kênh Tàu Hủ – Bến Nghé và các quận trung tâm: phần nền xám nhạt là `74,606` đoạn đường nhánh không có xe gửi GPS (`88.15% Cold-Start`), các trục đỏ là điểm nóng thường xuyên kẹt cứng (Lý Thường Kiệt, Lê Lai – Bến Thành, Nguyễn Kiệm, Phú Định, Quốc lộ 1, Kha Vạn Cân).*
+*Hình 1.1. Bản đồ giao thông TP.HCM tái tạo trên nền sông Sài Gòn, kênh Tàu Hủ – Bến Nghé và các quận trung tâm: phần nền xám nhạt là **`74,211` đoạn đường nhánh không có xe gửi GPS (`88.13% Cold-Start`)**, các trục đỏ là điểm nóng thường xuyên kẹt cứng (Lý Thường Kiệt, Trương Định, Nguyễn Kiệm, Quốc lộ 1, Hoàng Văn Thụ).*
 
 > **Vai trò mẫu chuẩn kiểm chứng quy mô (`Proof-of-Scale` — Tại sao xây dựng kiến trúc `Spark + Kafka` trên bộ dữ liệu mẫu `~38.5 MB`?):**
 > Năm bảng công khai của bộ dữ liệu giao thông TP.HCM trên Kaggle có tổng dung lượng **`38.50 MB`** (riêng bảng vận tốc `segment_status.csv` nặng **`3.58 MB`** với `90,938` bản tin GPS). Nếu chỉ tính toán một lần trên tệp tĩnh này, thư viện `Pandas` trên máy cá nhân chỉ mất vài chục mili-giây. Tuy nhiên, trong khuôn khổ môn học `BDA501 — Big Data Analytics`, bộ dữ liệu này đóng vai trò **mẫu chuẩn kiểm chứng quy mô (`Proof-of-Scale`)**:
-> 1. **Quy mô thực tế toàn đô thị TP.HCM:** Khi kết nối luồng định vị thực tế từ hơn `1` triệu xe buýt, taxi, xe công nghệ và xe tải phát tín hiệu mỗi `5–10` giây, hệ thống sẽ tiếp nhận **`8–17` tỷ bản tin/ngày (`~1.5–3.0 TB/ngày`)**. Ở quy mô đó, hiện tượng lệch tải giờ cao điểm (gấp `687.43` lần trung vị) và bộ nhớ lọc bản tin trùng không giới hạn sẽ làm tràn RAM máy đơn.
-> 2. **Kiểm chứng sai số toán học bằng `0.0` trước khi nhân rộng:** Thử nghiệm kiến trúc phân tán trên mẫu chuẩn `90,938` bản tin cho phép đối chiếu từng con số với bộ đối chứng độc lập `baseline.py` để chứng minh **sai số bằng `0.0`** trước khi mở rộng ngang ra cụm máy chủ lớn.
+> 1. **Quy mô thực tế toàn đô thị TP.HCM:** Khi kết nối luồng định vị thực tế từ hơn `1` triệu xe buýt, taxi, xe công nghệ và xe tải phát tín hiệu mỗi `5–10` giây, hệ thống sẽ tiếp nhận **`8–17` tỷ bản tin/ngày (`~1.5–3.0 TB/ngày`)**. Ở quy mô đó, hiện tượng lệch tải giờ cao điểm (gấp **`684.95` lần** trung vị) và bộ nhớ lọc bản tin trùng không giới hạn sẽ làm tràn RAM máy đơn.
+> 2. **Kiểm chứng sai số toán học bằng `0.0` trước khi nhân rộng:** Thử nghiệm kiến trúc phân tán trên mẫu chuẩn `90,787` bản tin sạch (`90,938` thô) cho phép đối chiếu từng con số với bộ đối chứng độc lập `baseline.py` để chứng minh **sai số bằng `0.0`** trước khi mở rộng ngang ra cụm máy chủ lớn.
 
 ### 1.2. Sự Liên Kết Nhân Quả Giữa Bốn Bài Toán Trong Cùng Một Hệ Thống (Coupled Sub-Problems P1 → P4)
 
-Bốn bài toán `P1`, `P2`, `P3`, `P4` không phải là bốn đồ án nhỏ tách rời, mà là **bốn mắt xích nối tiếp nhau trong một dây chuyền thống nhất**: kết quả chuẩn hóa của `P1` nuôi dữ liệu cho `P2`; đặc trưng nút cổ chai và nhóm đường phố ở `P2` truyền thẳng làm biến đầu vào cho mô hình dự báo ở `P3`; và mô hình `P3` được đưa vào chấm điểm trực tuyến kết hợp theo dõi điểm nóng ở `P4`:
+Bốn bài toán `P1`, `P2`, `P3`, `P4` là **bốn mắt xích nối tiếp nhau trong một dây chuyền thống nhất**: kết quả chuẩn hóa của `P1` nuôi dữ liệu cho `P2`; đặc trưng nút cổ chai và nhóm đường phố ở `P2` truyền thẳng làm biến đầu vào cho mô hình dự báo ở `P3`; và mô hình `P3` được đưa vào chấm điểm trực tuyến kết hợp theo dõi điểm nóng ở `P4`:
 
 | Mắt xích Hệ thống | Câu hỏi Thực tiễn Cần Giải quyết | Dữ liệu Đầu vào Thực tế | Kết quả Sinh ra & Mối Nối Sang Bước Sau |
 |---|---|---|---|
-| **`P1: Descriptive` (Batch Layer)** | **Hiện tại và trong lịch sử, đoạn đường nào đang thông thoáng hay kẹt cứng?** | `90,938` bản tin GPS thô gửi không đều; `88.34%` đoạn đường thiếu tốc độ tối đa. | `33,441` cửa sổ `30 phút` gắn mức `LOS A–F` chuẩn xác (sai số `0.0` so với đối chứng), tạo nền dữ liệu sạch cho `P2` và `P3`. |
-| **`P2: Diagnostic` (Graph & Clustering)** | **Làm sao hiểu các nút cổ chai và `88.15%` đoạn đường nhánh `Cold-Start` không có xe gửi GPS?** | Bản đồ giao lộ `84,633` đoạn đường một chiều và lịch sử các khung giờ kẹt cứng. | Điểm nút cổ chai `Line-Graph PageRank`, luật `SON / FPGrowth` và `6` cụm hành vi `7D K-Means` — vừa phục vụ Sở GTVT, vừa truyền làm biến không gian cho `P3`. |
-| **`P3: Predictive` (+30m Forecasting)** | **Đúng 30 phút nữa, đoạn đường nào sẽ chuyển sang kẹt cứng?** | `7,898` cặp quan sát cách nhau đúng `30 phút`, giờ Việt Nam và đặc trưng bản đồ từ `P2`. | Mô hình `Random Forest` (`23D`) dự báo mức `LOS` và xác suất kẹt cứng sau `30 phút` (**`ROC-AUC = 0.9882`**, **`PR-AUC = 0.9471`**), bàn giao cho `P4`. |
-| **`P4: Prescriptive` (Speed & Serving Layer)** | **Làm sao vừa cảnh báo dưới `1 ms` trên màn hình trực ban, vừa không mất tin đến trễ?** | Luồng bản tin GPS đổ về liên tục có lẫn `1.0%` tin trùng và `1.5%` tin trễ quá `30 phút`. | `O(1) Stream Sketches` (`33.0 KiB`), cảnh báo `MongoDB IXSCAN` dưới `1 ms` (`0.636 ms`) trên Dashboard và `Two-Tier Reconciliation` bù đủ `501` cửa sổ trễ vào cuối ngày. |
+| **`P1: Descriptive` (Batch Layer)** | **Hiện tại và trong lịch sử, đoạn đường nào đang thông thoáng hay kẹt cứng?** | `90,938` bản tin GPS thô (`90,787` hợp lệ sau lọc `427` đoạn phi đường bộ); `88.34%` đoạn đường thiếu tốc độ tối đa. | **`33,394` cửa sổ `30 phút UTC`** gắn mức `LOS A–F` (`89.19%` khớp `BkTraffic`), Pure Monoid sai số `0.0` so với `baseline.py`. |
+| **`P2: Diagnostic` (Graph & Clustering)** | **Làm sao hiểu các nút cổ chai và `88.13%` đoạn đường nhánh `Cold-Start` không có xe gửi GPS?** | Bản đồ giao lộ **`84,206` đoạn cơ giới sạch** (`92,453` cạnh bỏ U-turn, `314` đoạn cụt) và `3,609` đoạn `TRAIN` hữu cơ. | Nút cổ chai `PageRank` (`#1`: `21969 Nguyễn Kiệm`), `12+14` luật trên `TRAIN` hữu cơ và `6` cụm `7D K-Means` phủ `100%` mạng lưới cho `P3`. |
+| **`P3: Predictive` (+30m Forecasting)** | **Đúng 30 phút nữa, đoạn đường nào sẽ chuyển sang kẹt cứng?** | `7,885` cặp đúng `+30m`; lọc bỏ `3,596` cặp burst giữ **`1,885` `TRAIN` hữu cơ / `1,167` `VAL` / `1,182` `TEST`**. | Mô hình sạch `Random Forest (23D)` không `sample_weight` nhân tạo (**`ROC-AUC = 0.9900`**, **`PR-AUC = 0.9595`**, **`Severe F1 = 0.9301`**), bàn giao cho `P4`. |
+| **`P4: Prescriptive` (Speed & Serving Layer)** | **Làm sao vừa cảnh báo dưới `1 ms` trên màn hình trực ban, vừa không mất tin đến trễ?** | Luồng bản tin GPS (`33,727` sự kiện cửa sổ / `91,694` pings thô) lẫn `~1%` tin trùng và `~5%` tin trễ. | `32 KiB RotatingBloom` + `1 KiB 64-bit HLL`, `MongoDB IXSCAN` **`0.389 / 0.692 ms` (`23.55x` vs COLLSCAN)**, bù `500` cửa sổ trễ và hàn gắn `609` cửa sổ hạ lưu. |
 
 ### 1.3. Sáu Kịch Bản Vận Hành Thực Tế (Operational Use Cases UC-1–UC-6)
 
 | Use Case | Người Sử dụng (Actor) | Thông tin Nhận được trên Màn hình | Quyết định Xử lý Ngoài Đời thực |
 |---|---|---|---|
-| **`UC-1` — EWMA Hotspot Alerting** | Cán bộ Trung tâm Điều hành (`TOC`) | Danh sách `25` đoạn đường đang kẹt cứng liên tiếp nhiều khung giờ chưa giải tỏa (tiêu biểu: Lý Thường Kiệt, Trương Định). | Phát cảnh báo sớm lên bảng điện tử ngoài đường và điều lực lượng cảnh sát giao thông ra giải tỏa tại nút giao. |
-| **`UC-2` — Proactive Signal Priority** | Kỹ sư Tín hiệu Đèn giao thông | Danh sách các trục đại lộ cấp 1–2 được dự báo có xác suất kẹt cứng `≥ 70%` trong `30 phút` tới, phản hồi dưới `1 ms` (`IXSCAN`). | Chủ động kéo dài pha đèn xanh cho hướng trục chính trước khi dòng xe kịp dồn ứ khóa chặt ngã tư. |
-| **`UC-3` — Bottleneck & Sensor Planning** | Chuyên viên Quy hoạch (`Sở GTVT`) | Bản đồ xếp hạng nút cổ chai `Line-Graph PageRank` (Phú Định, Lê Lai, Châu Văn Liêm, Nguyễn Kiệm) ngay cả nơi chưa có xe gửi GPS. | Xác định đúng vị trí trọng yếu để ưu tiên lắp mới camera giám sát và biển báo phân luồng tải trọng theo giờ. |
-| **`UC-4` — Spillover Detour Routing** | Ứng dụng Bản đồ & Dẫn đường | Cảnh báo các cặp tuyến đường thường kẹt đồng thời (`Cộng Hòa ↔ Trường Chinh`, `Cao Thắng ↔ Cống Quỳnh`) hoặc lan sau `30 phút`. | Gợi ý người lái xe rẽ sang lộ trình thay thế từ các ngã tư phía xa trước khi đi vào hành lang đang ùn tắc. |
-| **`UC-5` — Cluster-Based Patrol Dispatch** | Đội Tuần tra & Điều tiết Giao thông | Bản đồ chia toàn bộ `84,633` đoạn đường thành `6` cụm hành vi `7D K-Means` (giao lộ nội đô kẹt mãn tính, đại lộ cửa ngõ, phố thương mại...). | Tập trung lực lượng chốt trực đúng nhóm `2,352` giao lộ nội đô nghẽn mãn tính vào giờ cao điểm thay vì rải đều. |
-| **`UC-6` — Late-Data Reconciliation** | Kỹ sư Dữ liệu & Vận hành hệ thống | Báo cáo `Two-Tier Reconciliation` cuối ngày: `501` cửa sổ đến muộn đã backfill và `377` dự báo lịch sử đã re-score. | Đảm bảo `100%` số liệu báo cáo tổng kết cuối ngày của Sở GTVT và kho dữ liệu huấn luyện đạt độ chính xác tuyệt đối. |
+| **`UC-1` — EWMA Hotspot Alerting** | Cán bộ Trung tâm Điều hành (`TOC`) | Danh sách `25` đoạn đường đang kẹt cứng liên tiếp nhiều khung giờ (`#1`: `47407` Lý Thường Kiệt `6.6652`, `#2`: `21263` Trương Định `6.6635`). | Phát cảnh báo sớm lên bảng điện tử ngoài đường và điều lực lượng cảnh sát giao thông ra giải tỏa tại nút giao. |
+| **`UC-2` — Proactive Signal Priority** | Kỹ sư Tín hiệu Đèn giao thông | Danh sách các trục đại lộ cấp `1–2` có xác suất kẹt cứng `≥ 70%` trong `30 phút` tới (`1,202` cửa sổ, `IXSCAN warm_median = 0.389 ms`, `p95 = 0.692 ms`). | Chủ động kéo dài pha đèn xanh cho hướng trục chính trước khi dòng xe kịp dồn ứ khóa chặt ngã tư. |
+| **`UC-3` — Bottleneck & Sensor Planning** | Chuyên viên Quy hoạch (`Sở GTVT`) | Bản đồ xếp hạng nút cổ chai `Line-Graph PageRank` (`#1`: `21969` Nguyễn Kiệm `2.7799`, `#2`: `37345` Cầu vượt Gò Dưa `2.7196`, `#3`: `34723` Quốc lộ 1 `2.6894`) ngay cả nơi thiếu GPS. | Xác định đúng vị trí trọng yếu để ưu tiên lắp mới camera giám sát và biển báo phân luồng tải trọng theo giờ. |
+| **`UC-4` — Spillover Detour Routing** | Ứng dụng Bản đồ & Dẫn đường | Cảnh báo các cặp đường thường kẹt đồng thời (`Nguyễn Thị Minh Khai ↔ Cống Quỳnh`, `Lift = 15.23`) hoặc lan sau `30 phút` (`Lê Quang Định → Trần Quang Khải`, `Lift = 24.0`). | Gợi ý người lái xe rẽ sang lộ trình thay thế từ các ngã tư phía xa trước khi đi vào hành lang đang ùn tắc. |
+| **`UC-5` — Cluster-Based Patrol Dispatch** | Đội Tuần tra & Điều tiết Giao thông | Bản đồ chia toàn bộ `84,206` đoạn đường thành `6` cụm hành vi `7D K-Means` (`Cluster 2` có tỷ lệ kẹt `42.01%` trên `10,621` cửa sổ; `Cluster 5` có `PageRank` cao `1.61`). | Tập trung lực lượng chốt trực đúng nhóm giao lộ nội đô nghẽn mãn tính vào giờ cao điểm thay vì rải đều. |
+| **`UC-6` — Late-Data Reconciliation** | Kỹ sư Dữ liệu & Vận hành hệ thống | Báo cáo `Two-Tier Reconciliation` cuối ngày: `tier1_exceptAll_diff = 0`, bù `500` cửa sổ trễ (`226` khung giờ), hàn gắn `609` cửa sổ hạ lưu, chấm lại `384` (`185` đổi xác suất). | Đảm bảo `100%` số liệu báo cáo tổng kết cuối ngày của Sở GTVT và kho dữ liệu huấn luyện đạt độ chính xác tuyệt đối. |
 
 ### 1.4. System Boundary (2 Nguồn Dữ Liệu Đầu Vào → 4 Nhóm Kết Quả Đầu Ra)
 
 - **Hai nguồn dữ liệu đầu vào thực tế (`External Inputs`):**
-  1. **Luồng bản tin vận tốc GPS (`producer.py`, `seed = 42`):** Phát `90,938` bản tin GPS thực tế từ `raw_data/segment_status.csv` vào hệ thống hàng đợi `Apache Kafka 4.1.0 KRaft`, tái hiện môi trường mạng di động có `1.0%` bản tin gửi trùng và `5.0%` bản tin đến trễ.
-  2. **Bản đồ số đường bộ TP.HCM (`GIS Topology`):** Gồm 3 bảng địa lý `nodes.csv` (`577,967` điểm tọa độ), `streets.csv` (`5,553` tuyến đường) và `segments.csv` (`84,633` đoạn đường một chiều). Riêng bảng `train.csv` (`33,441` dòng) được tách hoàn toàn khỏi dây chuyền xử lý và chỉ dùng làm **bảng đối chứng độc lập** để kiểm tra độ khớp khóa `100.0%`.
+  1. **Luồng bản tin vận tốc GPS (`producer.py`, `seed = 42`):** Phát `90,787` bản tin GPS cơ giới hợp lệ (`90,938` thô từ `segment_status.csv`) vào `Apache Kafka 4.1.0 KRaft`, tái hiện môi trường mạng di động có `~1%` bản tin gửi trùng và `~5%` bản tin đến trễ.
+  2. **Bản đồ số đường bộ TP.HCM (`GIS Topology`):** Gồm 3 bảng địa lý `nodes.csv` (`577,967` điểm tọa độ $\to$ `52,181` giao lộ hoạt động), `streets.csv` (`5,553` tuyến đường) và `segments.csv` (`84,633` đoạn thô $\to$ `84,206` đoạn cơ giới sạch). Riêng bảng `train.csv` (`33,441` dòng) chỉ dùng làm **bảng đối chứng tham chiếu độc lập** (`89.19%` khớp `BkTraffic urban 5 km/h LOS` và `100.0%` khóa `33,394` cửa sổ cơ giới).
 - **Bốn nhóm kết quả đầu ra chính thức (`System Outputs`):**
-  1. **`Medallion Lakehouse` (`data/lakehouse/`):** Gồm tầng `Bronze`, `Silver`, `Gold` chia theo `10` phân vùng tháng (`2020-07` đến `2021-04`), cùng bảng đặc trưng `data/dataset.csv` (`33,441` dòng × `59` cột).
-  2. **`Frozen Model & Static Feature Registry`:** Gồm `model.joblib`, `vmax_lookup.json` và `segment_static_features.parquet` phủ đủ `84,633` đoạn đường.
-  3. **`Quarantine & WAL Checkpoints`:** Lưu đầy đủ mọi bản ghi vi phạm quy tắc kiểm định và trạng thái hồi phục luồng.
-  4. **`MongoDB 8.0.34 Serving Store` & `Streamlit 5-Tab UI` (`:8501`):** Phục vụ `33,441` bản ghi trạng thái và dự báo với độ trễ truy vấn dưới `1 ms`, làm mới trực tiếp trên trình duyệt.
+  1. **`Medallion Lakehouse` (`data/lakehouse/`):** Gồm `bronze_raw_events/events.parquet` (`90,787` pings), `stream_replay_windows/replay.parquet` (`33,727` cửa sổ), `silver_cleaned_windows/windows.parquet` (`33,394` × `86`), `curated_gold/year_month=*` (`10` phân vùng tháng đọc sạch bởi cả PyArrow và Spark 3.5.7), cùng bảng `data/dataset.csv` (`33,394` dòng × `60` cột).
+  2. **`Frozen Model & Static Feature Registry`:** Gồm `model.joblib` (`rf_full_23d_v3`), `vmax_lookup.json` và `segment_static_features.parquet` phủ đủ `84,206` đoạn cơ giới.
+  3. **`Quarantine & WAL Checkpoints`:** Lưu `580` bản ghi GIS cách ly (`quarantine_events.parquet`) và trạng thái hồi phục `WAL` (`73.7 KB`).
+  4. **`MongoDB 8.0.34 Serving Store`, `Web TOC (:8000)` & `Streamlit (:8501)`:** Phục vụ `33,394` bản ghi trạng thái và dự báo với độ trễ **`IXSCAN warm median = 0.389 ms / p95 = 0.692 ms`**, làm mới trực tiếp trên trình duyệt.
 
 *Hình 1.2. Sơ đồ System Boundary: 2 nguồn dữ liệu thực tế đi qua Unified Pipeline (P1 → P4) tạo ra 4 nhóm kết quả phục vụ điều hành trực tuyến và phân tích lịch sử.*
 
@@ -94,10 +94,10 @@ Theo quy trình nghiên cứu thuận chiều (**Xác định bài toán thực 
 |---|---|---|---|
 | **1. Quan trắc Hạ tầng Cố định & Đèn Thích ứng (`Fixed-Sensor ITS`)** | Cảm biến vòng từ, Camera CCTV; hệ thống đèn `SCATS` (*Sims & Dobinson, 1980*), `SCOOT` (*Hunt et al., 1981*). | Đo đạc lưu lượng liên tục, chính xác cao tại các nút giao có lắp thiết bị để điều chỉnh chu kỳ đèn cục bộ. | Chi phí đầu tư và bảo trì rất lớn; chỉ bao phủ số ít trục chính, để trống gần `90%` mạng lưới đường nhánh và khu dân cư (*vùng mù quan trắc*). |
 | **2. Giám sát Từ Dữ liệu Hành trình (`Floating Car / Probe GPS`)** | Định vị GPS từ xe buýt, taxi, bản đồ số (*Herrera et al., 2010; Zheng, 2015*). | Mở rộng độ phủ giám sát diện rộng không cần đào đường lắp cảm biến, phản ánh trực tiếp vận tốc dòng xe. | Phân bố lệch mạnh về đại lộ, tín hiệu ngắt quãng dài theo thời gian, khuyết thông tin tốc độ chuẩn và mới dừng ở bản đồ hiện trạng. |
-| **3. Nghiên cứu Dự báo Ùn tắc Ngắn hạn (`Short-Term Forecasting`)** | Chuỗi thời gian `ARIMA` / Quán tính (*Vlahogianni et al., 2014*); mạng đồ thị sâu `DCRNN`, `Graph WaveNet` (*Li et al., 2018*). | Dự báo vận tốc hoặc mức độ ùn tắc trước `15–60 phút` dựa trên tương quan không gian – thời gian. | Phần lớn thử nghiệm trên cao tốc có cảm biến dày đặc, liên tục (`PeMS`, `METR-LA`); suy giảm mạnh khi dữ liệu đô thị thưa (`88.15%` đoạn trống chuỗi GPS) và đứt quãng (`66.27%` cặp cách `≥ 60 phút`). |
+| **3. Nghiên cứu Dự báo Ùn tắc Ngắn hạn (`Short-Term Forecasting`)** | Chuỗi thời gian `ARIMA` / Quán tính (*Vlahogianni et al., 2014*); mạng đồ thị sâu `DCRNN`, `Graph WaveNet` (*Li et al., 2018*). | Dự báo vận tốc hoặc mức độ ùn tắc trước `15–60 phút` dựa trên tương quan không gian – thời gian. | Phần lớn thử nghiệm trên cao tốc có cảm biến dày đặc, liên tục (`PeMS`, `METR-LA`); suy giảm mạnh khi dữ liệu đô thị thưa (**`88.13%` đoạn trống chuỗi GPS**) và đứt quãng. |
 | **4. Nền tảng Hỗ trợ Quyết định Điều hành (`Urban Traffic DSS`)** | Trung tâm điều hành `TOC` & nền tảng dữ liệu lớn đô thị (*Lv et al., 2015; Amini et al., 2017*). | Hợp nhất lưu trữ lịch sử phục vụ quy hoạch với bảng điều khiển giám sát trực tuyến cho điều hành viên. | Mô hình dự báo học thuật thường tách rời khỏi luồng vận hành thực tế (bản tin GPS di động trễ/trùng); thiếu sự gắn kết giữa cảnh báo tức thời và quy hoạch điểm nghẽn dài hạn. |
 
-> **Khoảng trống nghiên cứu & Lý do cần nền tảng tích hợp `HCMC Smart Traffic`:** Các công trình dự báo ngắn hạn thường giả định dữ liệu cảm biến sạch và liên tục, trong khi hệ thống giám sát đô thị thực tế lại thiếu dự báo sớm `+30 phút` và bỏ trống vùng đường nhánh không có GPS. Việc triển khai rời rạc từng công nghệ đơn lẻ không giải quyết được bài toán: một mô hình học máy độc lập không thể tự làm sạch luồng GPS di động nhiễu/đến trễ, không thể suy diễn trạng thái cho `74,606` đoạn đường vùng mù nếu tách rời phân tích cấu trúc đồ thị mạng lưới đường, và không thể phục vụ đồng thời cả trực ban `TOC` lẫn quy hoạch `Sở GTVT`. Đây chính là cơ sở khoa học để đồ án đề xuất kiến trúc nền tảng tích hợp ở các chương tiếp theo.
+> **Khoảng trống nghiên cứu & Lý do cần nền tảng tích hợp `HCMC Smart Traffic`:** Các công trình dự báo ngắn hạn thường giả định dữ liệu cảm biến sạch và liên tục, trong khi hệ thống giám sát đô thị thực tế lại thiếu dự báo sớm `+30 phút` và bỏ trống vùng đường nhánh không có GPS. Việc triển khai rời rạc từng công nghệ đơn lẻ không giải quyết được bài toán: một mô hình học máy độc lập không thể tự làm sạch luồng GPS di động nhiễu/đến trễ, không thể suy diễn trạng thái cho **`74,211` đoạn đường vùng mù** nếu tách rời phân tích cấu trúc đồ thị mạng lưới đường, và không thể phục vụ đồng thời cả trực ban `TOC` lẫn quy hoạch `Sở GTVT`. Đây chính là cơ sở khoa học để đồ án đề xuất kiến trúc nền tảng tích hợp ở các chương tiếp theo.
 
 ---
 
@@ -107,11 +107,11 @@ Theo quy trình nghiên cứu thuận chiều (**Xác định bài toán thực 
 
 | Bảng Dữ liệu | Số Bản ghi | Số Cột | Dung lượng | Khóa Chính / Khóa Ngoại | Đặc điểm Phân bố Khi Khảo sát Thực tế |
 |---|---:|---:|---:|---|---|
-| **`nodes.csv`** | `577,967` | `3` | `19.44 MB` | PK: `_id` · Cột: `_id, long, lat` | Có tới **`525,542` điểm (`90.93%`) chỉ là `intermediate shape points`** (điểm uốn cong trung gian trên OpenStreetMap, không phải giao lộ); chỉ có **`52,425` giao lộ thực sự** (`52,181` giao lộ sau khi tách lối đi bộ). |
-| **`streets.csv`** | `5,553` | `5` | `0.20 MB` | PK: `_id` · Cột: `_id, level, max_velocity, name, type` | Cấp đường từ `1` đến `4`; **`82.23%` (`4,566` tuyến) khuyết tốc độ tối đa**; tồn tại `695` tên đường thô lệch chuẩn dấu tiếng Việt cần gộp về `649` tên chuẩn `Unicode NFC`. |
-| **`segments.csv`** | `84,633` | `11` | `10.29 MB` | PK: `_id`; FK: `s_node_id, e_node_id, street_id` | **`88.34%` (`74,762` đoạn) thiếu tốc độ tối đa**; **`154` đoạn chiều dài `≤ 0m`**; **`427` đoạn lối đi bộ/nội bộ** (`580` đoạn lỗi địa lý). Chỉ `10,027` đoạn (`11.85%`) có GPS, còn **`74,606` đoạn (`88.15% Cold-Start`) không có dữ liệu GPS**. |
-| **`segment_status.csv`** | `90,938` | `4` | `3.58 MB` | PK: `_id`; FK: `segment_id` · Cột: `updated_at, velocity` | Chuỗi bản tin vận tốc GPS theo giờ `UTC` (`07/2020–04/2021`); chứa `151` bản tin thuộc lối đi bộ (`90,787` bản tin trên đường cơ giới); giờ cao điểm lệch tải (`Data Skew`) lên tới **`687.43` lần** trung vị. |
-| **`train.csv`** | `33,441` | `18` | `4.99 MB` | Khóa cửa sổ `(segment_id, date, period)` kèm nhãn `LOS` | *Bảng đối chứng độc lập* · Khớp `100.0%` khóa cửa sổ với kết quả tổng hợp từ `segment_status.csv`; **`85.21%` (`28,495` dòng) thiếu tốc độ tối đa**; `631` dòng mang tên `Phường/Quận`; `4,320` dòng đổi ngày khi chuyển sang giờ Việt Nam `UTC+7`. |
+| **`nodes.csv`** | `577,967` | `3` | `19.44 MB` | PK: `_id` · Cột: `_id, long, lat` | Có tới **`525,786` nút (`90.97%`) là `intermediate shape points` / nút mồ côi** trên OpenStreetMap; giữ đúng **`52,181` giao lộ thực sự** của mạng đường cơ giới. |
+| **`streets.csv`** | `5,553` | `5` | `0.20 MB` | PK: `_id` · Cột: `_id, level, max_velocity, name, type` | Cấp đường từ `1` đến `4`; **`82.23%` (`4,566` tuyến) khuyết tốc độ tối đa**; tồn tại `695` tên đường thô lệch chuẩn dấu tiếng Việt cần gộp về **`641` tên chuẩn `Unicode NFC`** (`54` biến thể gộp). |
+| **`segments.csv`** | `84,633` | `11` | `10.29 MB` | PK: `_id`; FK: `s_node_id, e_node_id, street_id` | **`88.34%` (`74,762` đoạn) thiếu tốc độ tối đa**; **`154` đoạn chiều dài `≤ 0m`**; **`427` đoạn phi đường cơ giới** (`580` đoạn lỗi cách ly). Mạng cơ giới sạch còn **`84,206` đoạn**: `9,995` (`11.87%`) có GPS, **`74,211` đoạn (`88.13% Cold-Start`) không có dữ liệu GPS**. |
+| **`segment_status.csv`** | `90,938` | `4` | `3.58 MB` | PK: `_id`; FK: `segment_id` · Cột: `updated_at, velocity` | Chuỗi bản tin GPS theo giờ `UTC` (`07/2020–04/2021`); cách ly **`151` bản tin rơi ngoài đường cơ giới**, còn **`90,787` bản tin hợp lệ**; giờ cao điểm lệch tải (`Data Skew`) lên tới **`684.95` lần** trung vị. |
+| **`train.csv`** | `33,441` | `18` | `4.99 MB` | Khóa cửa sổ `(segment_id, date, period)` kèm nhãn `LOS` | *Bảng đối chứng tham chiếu* · Khớp `100.0%` khóa của **`33,394` cửa sổ cơ giới** (chênh đúng `47` cửa sổ phi đường bộ); `85.21%` (`28,495` dòng) thiếu `max_velocity`; `631` dòng tên `Phường/Quận`; **`4,305` cửa sổ cơ giới (`12.89%`)** đổi ngày khi chuyển `UTC → ICT`. |
 
 ![Hình 2.1. Hồ sơ khuyết thiếu và đặc thù dữ liệu trên 5 bảng gốc](../../outputs/slide_charts/chart_eda_anomalies.png)
 
@@ -121,46 +121,45 @@ Theo quy trình nghiên cứu thuận chiều (**Xác định bài toán thực 
 
 | Edge Case | Hiện tượng Dữ liệu Thực tế | Quy mô Ghi nhận Định lượng | Giải pháp Kỹ thuật Đã Triển khai & Kiểm chứng |
 |---|---|---|---|
-| **`EC-1`** | Thiếu thông tin tốc độ tối đa diện rộng (`Missing max_velocity`) | `28,495 / 33,441` cửa sổ (`85.21%`) & `74,762 / 84,633` đoạn (`88.34%`) | **Train-Only 3-Tier Imputation (`vmax_lookup.json`):** Giữ tốc độ gốc hợp lệ (`4,946` cửa sổ) → Phân vị `P85` lịch sử đoạn đường trên `TRAIN` (`8,164` cửa sổ) → Trung vị theo `(level, street_type)` trên `TRAIN` (`20,124` cửa sổ) → Chuẩn đô thị `{80, 60, 50, 40} km/h` (`207` cửa sổ). |
-| **`EC-2`** | Đoạn đường chiều dài `≤ 0m` hoặc thuộc lối đi bộ (`Non-road OSM tags`) | `154` đoạn `≤ 0m` & `427` đoạn phi cơ giới (`580` đoạn lỗi địa lý) | Lưu vết vào `quarantine_events.parquet` theo mã quy tắc vi phạm đầu tiên; điền chiều dài trung vị (`27.0m`); luồng Spark độc lập lọc tách `151` bản tin lối đi bộ (`33,394` cửa sổ). |
-| **`EC-3`** | Tên đường chứa nhãn `Phường/Quận` & lệch chuẩn `Unicode NFD/NFC` | `631` cửa sổ `Phường/Quận` & `2,071` cửa sổ biến thể dấu/khoảng trắng | Chuẩn hóa dấu `Unicode NFC`, đồng nhất ký tự `Ð → Đ` (`695` tên thô gộp về `649` tên chuẩn, hợp nhất `46` biến thể); loại bỏ nhãn `Phường/Quận` khỏi giỏ `SON / FPGrowth`. |
-| **`EC-4`** | Đổi ngày qua nửa đêm khi chuyển giờ `UTC` sang giờ Việt Nam (`UTC+7`) | `4,320 / 33,441` cửa sổ (`12.92%`) rơi vào khung `17:00–23:30 UTC` | Giữ nguyên ngày `UTC` làm khóa chuẩn, đồng thời tính chính xác giờ Việt Nam `vn_hour = (hour_utc + minute/60 + 7) mod 24` và cộng `+1 ngày` cho `ict_date` khi `hour_utc ≥ 17`. |
-| **`EC-5`** | Tín hiệu GPS ngắt quãng trên `30 phút` (`Non-contiguous temporal gaps`) | `15,516 / 23,414` cặp liên tiếp (`66.27%`) cách từ `60 phút` đến nhiều ngày | Ghép nhãn dự báo bằng phép nối chính xác trên khóa `(segment_id, slot_ts + 30 phút)`, giữ đúng `7,898` cặp chuẩn xác `exact t+30m`; không dùng lệnh trượt dòng `shift(-1)` ngây thơ. |
-| **`EC-6`** | `88.15%` đoạn đường nhánh không có xe gửi GPS (`Cold-Start Segments`) | `74,606 / 84,633` đoạn đường không có bản tin GPS nào | Xây dựng kho đặc trưng bản đồ tĩnh (`segment_static_features.parquet`) phủ kín `84,633` đoạn đường nhờ điểm `Line-Graph PageRank`, số nhánh vào/ra và tâm cụm `7D K-Means`. |
-| **`EC-7`** | Điểm uốn cong trung gian (`Intermediate Shape Points`) & `Dangling Sinks` | `525,542 / 577,967` shape points (`90.93%`) & `48` đoạn cụt | Lọc bỏ toàn bộ `525,542` shape points trước khi dựng đồ thị; chia đều lại xác suất của `48` đoạn cụt ở mỗi vòng lặp `PageRank`, bảo toàn tổng điểm `84,633.0`. |
-| **`EC-8`** | Lệch tải giờ cao điểm (`Data Skew`) & bẫy trung bình từng phần | Lệch tải `687.43x`; trung bình từng phần gây sai số `11.11 km/h` | Gộp song song bằng `5-Tuple Commutative Monoid Combiner` kết hợp `2-Stage Key Salting` (`8` buckets) kéo độ lệch tải giờ cao điểm về **`1.023x` (`CV = 0.0057`)**, sai số bằng `0.0`. |
-| **`EC-9`** | Bản tin mạng di động gửi trùng (`1%`) và đến trễ (`> 30m Watermark`) | `334` cửa sổ trùng lặp & `501` cửa sổ đến trễ trải trên `219` khung giờ | Chặn `334/334` tin trùng bằng `BitPackedBloomFilter` (`32.0 KiB`); lưu `100%` tin thô vào `Medallion Lakehouse`; cuối ngày backfill đủ `501` cửa sổ trễ, cập nhật lịch sử cho `3,953` cửa sổ kế tiếp và re-score `377` cửa sổ. |
-| **`EC-10`** | Sập tiến trình luồng đột ngột & tin cũ đến muộn ghi đè (`Stale Overwrite`) | Ngắt cưỡng bức giữa chừng hoặc tin tạm thời đến muộn sau đối soát | Hồi phục chính xác vị trí đọc từ `WAL Checkpoint` với `0` bản ghi nhân đôi; `Monotonic Version Guard` (`status_version`) trong `MongoDB` chặn đứng `25/25` bản tin cũ ghi đè kết quả v2. |
+| **`EC-1`** | Thiếu thông tin tốc độ tối đa diện rộng (`Missing max_velocity`) | `28,495 / 33,441` cửa sổ (`85.21%`) & `74,762 / 84,633` đoạn (`88.34%`) | **Train-Only 3-Tier Imputation (`vmax_lookup.json`):** Giữ tốc độ gốc (`4,946` cửa sổ) → Phân vị `P85` trên `TRAIN` hữu cơ (`9,376` cửa sổ) → Trung vị `(level, street_type)` (`17,693` cửa sổ) → Chuẩn đô thị `{80, 60, 50, 40}` (`1,379` cửa sổ). |
+| **`EC-2`** | Đoạn đường chiều dài `≤ 0m` hoặc thuộc lối đi bộ (`Non-road OSM tags`) | `154` đoạn `≤ 0m` & `427` đoạn phi cơ giới (`580` đoạn lỗi cách ly) | Lưu vết vào `quarantine_events.parquet` theo lỗi đầu tiên; điền trung vị `27.0m`; loại `427` đoạn phi cơ giới & `151` bản tin GPS tương ứng ngay từ đầu (`84,206` đoạn, `90,787` pings, `33,394` cửa sổ). |
+| **`EC-3`** | Tên đường chứa nhãn `Phường/Quận` & lệch chuẩn `Unicode NFD/NFC` | `631` cửa sổ `Phường/Quận` & **`2,247` cửa sổ** biến thể dấu/khoảng trắng | Chuẩn hóa dấu `Unicode NFC`, đồng nhất `Ð → Đ` (`695` tên thô gộp về **`641` tên chuẩn**, hợp nhất **`54` biến thể**); loại bỏ nhãn `Phường/Quận` khỏi giỏ `SON / FPGrowth`. |
+| **`EC-4`** | Đổi ngày qua nửa đêm khi chuyển giờ `UTC` sang giờ Việt Nam (`UTC+7`) | **`4,305 / 33,394` cửa sổ (`12.89%`)** rơi vào khung `17:00–23:30 UTC` | Giữ nguyên ngày `UTC` làm khóa chuẩn, đồng thời tính chính xác giờ Việt Nam `vn_hour` và cộng `+1 ngày` cho `ict_date` khi `hour_utc ≥ 17`. |
+| **`EC-5`** | Tín hiệu GPS ngắt quãng & Đợt burst tổng hợp tháng 08/2020 | `7,885` cặp chuẩn `+30m`; **`7,192` cửa sổ burst** (`2020-08-02 23:30` & `08-03 00:00`, mỗi slot `3,609` thô / `3,596` cơ giới) | Ghép nhãn chính xác `(segment_id, slot_ts + 30m)` và loại **`3,596` cặp burst** khi huấn luyện ML (`1,885` `TRAIN` hữu cơ / `1,167` `VAL` / `1,182` `TEST`). |
+| **`EC-6`** | `88.13%` đoạn đường nhánh không có xe gửi GPS (`Cold-Start Segments`) | **`74,211 / 84,206` đoạn cơ giới** không có bản tin GPS nào | Xây dựng kho tĩnh `segment_static_features.parquet` phủ kín **`84,206` đoạn** (`100%`) nhờ `PageRank`, bậc vào/ra và tâm cụm `7D K-Means`. |
+| **`EC-7`** | Điểm uốn cong trung gian (`Shape Points`), `U-turn` & `Dangling Sinks` | **`525,786 / 577,967` nút (`90.97%`)** & **`314` `Dangling Nodes`** | Lọc bỏ `525,786` nút phụ và loại cung quay đầu `U-turn` trên đoạn hai chiều (`92,453` cạnh); chia đều xác suất `314` đoạn cụt trong `PageRank`. |
+| **`EC-8`** | Lệch tải giờ cao điểm (`Data Skew`) & bẫy trung bình từng phần | Lệch tải **`684.95x`**; trung bình từng phần gây sai số `11.11 km/h` | Gộp song song bằng **Pure 5-Tuple Monoid** + `8` salt buckets kéo lệch tải giỏ cao điểm về **`1.0197x`** (`salted_partition_skew_ratio = 1.0123x`, `CV = 0.0059`), sai số `0.0`. |
+| **`EC-9`** | Bản tin mạng di động gửi trùng (`~1%`) và đến trễ (`> 30m Watermark`) | `333` cửa sổ trùng lặp & **`500` cửa sổ trễ** trải trên **`226` khung giờ** | Chặn `333/333` tin trùng bằng `32.0 KiB Bloom` (`FPR = 0.611%`); cuối ngày bù `500` cửa sổ trễ, hàn gắn **`609` cửa sổ hạ lưu** và chấm lại **`384` cửa sổ** (`185` đổi xác suất). |
+| **`EC-10`** | Sập tiến trình luồng đột ngột & tin cũ đến muộn ghi đè (`Stale Overwrite`) | Ngắt cưỡng bức giữa chừng hoặc bản ghi `v1` đến muộn sau đối soát | Hồi phục chính xác từ **`WAL 73.7 KB`** (`0` nhân đôi); atomic **`$status_version` pipeline guard** trong `MongoDB 8.0` chặn `25/25` bản tin `v1` cũ ghi đè `v2`. |
 
 ### 2.3. Ordered Quality Funnel (Bảo Toàn 100% Quân Số Bản Ghi)
 
-Toàn bộ dữ liệu thô đi vào hệ thống đều được ép kiểu an toàn `try_cast` dưới chế độ `spark.sql.ansi.enabled = true`. Sáu quy tắc kiểm định được thực thi theo thứ tự cố định (`R1` → `R6`) sao cho mỗi bản ghi lỗi chỉ nhận đúng một mã lỗi đầu tiên, bảo đảm tổng đầu vào luôn bằng tổng bản trùng cộng bản hợp lệ cộng bản lưu vết cách ly:
+Toàn bộ dữ liệu thô đi vào hệ thống đều được ép kiểu an toàn `try_cast` dưới chế độ `spark.sql.ansi.enabled = true`. Sáu quy tắc kiểm định thực thi theo thứ tự (`R1` → `R6`) sao cho mỗi bản ghi lỗi chỉ nhận đúng một mã lỗi đầu tiên:
 
 | Thứ tự | Mã Quy tắc Kiểm định | Nguồn Kiểm tra | Điều kiện Phát hiện (`ANSI try_cast`) | Quy mô Ghi nhận (`quarantine_summary.csv`) | Hành động Chuẩn hóa |
 |---:|---|---|---|---:|---|
-| `1` | **`R1_NONPOSITIVE_SEGMENT_LENGTH`** | `segments.csv` | `try_cast(length AS DOUBLE) <= 0 OR NULL` | `154` đoạn (`57` cửa sổ liên quan) | Lưu vết lỗi chiều dài và điền trung vị `27.0m`. |
-| `2` | **`R2_NON_ROAD_OSM_TAG`** | `segments.csv` | `street_type IN ('service','footway','path','steps','pedestrian','track')` | `427` đoạn tổng (`580` đoạn lỗi địa lý) | Lưu vết địa lý; trong `spark_batch.py` lọc tách `151` bản tin lối đi bộ (`33,394` cửa sổ). |
-| `3` | **`R3_ADMIN_POLYGON_STREET_NAME`** | `streets / windows` | `street_name` khớp mẫu hành chính `^(Phường\|Quận)\b` | `631` cửa sổ (`1.89%`) | Giữ cho bài toán vận tốc đoạn đường nhưng loại khỏi giỏ khai phá cặp đường hay kẹt cùng lúc. |
-| `4` | **`R4_UNICODE_NFD_AND_PREFIX_DRIFT`** | Chuẩn hóa tên | `street_name != NFC(collapse_spaces(name))` | `2,071` cửa sổ (`46` tên đường được hợp nhất) | Chuẩn hóa về dạng chính tắc `Unicode NFC` (`695` tên thô → `649` tên chuẩn). |
-| `5` | **`R5_MISSING_MAX_VELOCITY`** | `segments / windows` | `max_velocity IS NULL OR max_velocity <= 0` | `28,495` cửa sổ (`85.21%`) & `74,762` đoạn (`88.34%`) | Điền khuyết không rò rỉ dữ liệu bằng quy tắc 3 bậc học duy nhất từ tập `TRAIN`. |
-| `6` | **`R6_STATIONARY_OR_LATE_EVENT`** | `status / luồng` | `velocity < 1.0 km/h` (`517` bản tin) hoặc trễ quá `30 phút` (`501` cửa sổ) | `517` bản tin dừng xe & `501` cửa sổ đến muộn | Giữ bản tin dừng xe (phản ánh kẹt cứng `LOS F`); lưu bản tin trễ vào hồ dữ liệu thô chờ bù cuối ngày. |
+| `1` | **`R1_NONPOSITIVE_SEGMENT_LENGTH`** | `segments.csv / train` | `try_cast(length AS DOUBLE) <= 0 OR NULL` | `154` đoạn (`154` first-failing, `57` cửa sổ) | Lưu vết lỗi chiều dài và điền trung vị `27.0m`. |
+| `2` | **`R2_NON_ROAD_OSM_TAG`** | `segments.csv` | `street_type IN ('service','footway','path','steps','pedestrian','track')` | `427` đoạn (`426` first-failing, `47` cửa sổ) | Cách ly và loại khỏi đồ thị + ETL (`84,633 → 84,206` đoạn cơ giới). |
+| `3` | **`R3_ADMIN_POLYGON_STREET_NAME`** | `streets / train` | `street_name` khớp mẫu hành chính `^(Phường\|Quận)\b` | `631` cửa sổ | Giữ cho bài toán vận tốc nhưng loại khỏi luật kết hợp & top PageRank. |
+| `4` | **`R4_UNICODE_NFD_AND_PREFIX_DRIFT`** | Chuẩn hóa tên | `street_name != NFC(collapse_spaces(name))` | **`2,247` cửa sổ** (`54` biến thể gộp) | Chuẩn hóa về dạng chính tắc `Unicode NFC` (`695 → 641` tên chuẩn). |
+| `5` | **`R5_MISSING_MAX_VELOCITY`** | `segments / train` | `max_velocity IS NULL OR max_velocity <= 0` | `28,495` cửa sổ & `74,762` đoạn | Điền khuyết không rò rỉ bằng quy tắc 3 bậc học từ `TRAIN` hữu cơ. |
+| `6` | **`R6_STATIONARY_OR_INVALID_PING`** | `segment_status.csv` | Ping rơi vào đoạn phi đường bộ hoặc `velocity = 0` | `517` bản tin (`151` cách ly phi đường bộ; `448` cửa sổ) | Cách ly `151` ping phi đường bộ (`90,938 → 90,787`); giữ nguyên ping `0 km/h` trên đường cơ giới. |
 
-> **Giải trình sự thống nhất toán học giữa `33,441` và `33,394` cửa sổ:** Trên toàn bộ `90,938` bản tin của `segment_status.csv`, luồng chuẩn hóa chính `pipeline.py` tạo ra đúng **`33,441` cửa sổ 30 phút** (khớp `100.0%` khóa với bảng đối chứng `train.csv`). Trong khi đó, tác vụ `spark_batch.py` lọc tách riêng `427` đoạn lối đi bộ/nội bộ trước khi gộp, qua đó tách đúng `151` bản tin thuộc các đoạn này (`90,938 - 151 = 90,787` bản tin đường cơ giới) và tạo ra **`33,394` cửa sổ** (chênh đúng `47` cửa sổ lối đi bộ, đạt sai lệch `0.0` trên toàn bộ mạng đường cơ giới).
+> **Thống nhất toán học giữa `33,441` và `33,394` cửa sổ:** Trên `90,938` bản tin của `segment_status.csv`, sau khi loại bỏ `427` đoạn phi đường cơ giới (`R2`) và tách `151` bản tin GPS rơi vào các đoạn này (`90,938 - 151 = 90,787` bản tin cơ giới hợp lệ), toàn bộ hệ thống (`pipeline.py`, `spark_batch.py`, `baseline.py`) thống nhất hoàn toàn tại **`33,394` cửa sổ 30 phút UTC** (chênh đúng `47` cửa sổ phi đường bộ so với bảng gốc `train.csv` `33,441`, sai lệch `0.0` trên toàn mạng đường cơ giới).
 
-### 2.4. Ước Lượng Tốc Độ Tối Đa Chỉ Học Từ Tập TRAIN & Quy Tắc Xác Định Mức LOS A–F
+### 2.4. Ước Lượng Tốc Độ Tối Đa Chỉ Học Từ TRAIN Hữu Cơ & Quy Tắc Xác Định Mức LOS A–F
 
-Để điền khuyết tốc độ tối đa mà tuyệt đối không nhìn trộm dữ liệu kiểm định, hàm `fit_train_vmax_lookup` chỉ trích xuất thống kê trên các cửa sổ thuộc tập `TRAIN` ($\tau \le \text{2020-12-12T08:00:00Z}$) và khóa cố định vào `outputs/vmax_lookup.json`:
+Hàm `fit_train_vmax_lookup` chỉ học thống kê trên các cửa sổ **`TRAIN` hữu cơ** (`slot_ts <= 2020-12-12T08:00:00Z` và `is_synthetic_burst == 0`) và khóa vào `outputs/vmax_lookup.json`:
 
 ![Công thức ước lượng tốc độ tối đa và quy đổi mức LOS](../../outputs/slide_charts/eq_vmax_los.png)
 
-- **Phân bổ thực nghiệm 3 bậc ước lượng tốc độ tối đa:** Bậc 1a giữ tốc độ gốc hợp lệ cho **`4,946` cửa sổ** (`9,871` đoạn); Bậc 1b điền bằng phân vị `P85` lịch sử đoạn đường trên `TRAIN` ($n \ge 5$) cho **`8,164` cửa sổ** (`519` đoạn); Bậc 2 điền bằng trung vị cùng cấp và loại đường trên `TRAIN` cho **`20,124` cửa sổ** (`72,726` đoạn); Bậc 3 áp dụng chuẩn đô thị theo cấp đường `{1: 80, 2: 60, 3: 50, 4: 40} km/h` cho **`207` cửa sổ** (`1,517` đoạn).
-- **Phân bố 6 mức phục vụ giao thông (`LOS A–F`) tính từ tỷ lệ vận tốc $r_{s,w} = \bar{v}_{s,w} / \hat{v}_{\max}(s)$:**
-  - **`LOS A` ($r \ge 0.80$ — Thông thoáng tự do):** `13,405` cửa sổ (đối chứng `train.csv`: `13,278`).
-  - **`LOS B` ($0.65 \le r < 0.80$ — Lưu thông ổn định tốc độ cao):** `2,571` cửa sổ (đối chứng: `4,700`).
-  - **`LOS C` ($0.50 \le r < 0.65$ — Lưu lượng trung bình ổn định):** `4,858` cửa sổ (đối chứng: `3,839`).
-  - **`LOS D` ($0.35 \le r < 0.50$ — Đông đúc giờ cao điểm):** `6,098` cửa sổ (đối chứng: `3,707`).
-  - **`LOS E` ($0.20 \le r < 0.35$ — Ùn ứ nghiêm trọng):** `3,463` cửa sổ (đối chứng: `3,828`).
-  - **`LOS F` ($r < 0.20$ hoặc $v = 0$ — Kẹt cứng tê liệt):** `3,046` cửa sổ (đối chứng: `4,089`). Nhãn nhị phân kẹt cứng `is_severe = 1` khi $\text{LOS} \in \{E, F\}$.
+- **Phân bổ thực nghiệm 3 bậc (`33,394` cửa sổ / `84,206` đoạn cơ giới):**
+  - `TIER_1_SEGMENT_OBSERVED`: **`4,946` cửa sổ** (`9,869` đoạn)
+  - `TIER_1_SEGMENT_TRAIN_P85` ($n \ge 5$ trên `TRAIN` hữu cơ): **`9,376` cửa sổ** (`791` đoạn)
+  - `TIER_2_LEVEL_ROADTYPE_MEDIAN`: **`17,693` cửa sổ** (`51,615` đoạn)
+  - `TIER_3_HIERARCHICAL_LEVEL_PRIOR` (`{1: 80, 2: 60, 3: 50, 4: 40} km/h`): **`1,379` cửa sổ** (`21,931` đoạn)
+- **Định nghĩa `LOS A–F` theo chuẩn `BkTraffic Urban 5 km/h` (`derive_urban_los`, khớp `89.19%` với `train.csv`):**
+  - Áp dụng ngưỡng chuẩn đô thị TP.HCM (`35 / 30 / 25 / 20 / 15 km/h`, dịch `+5` nếu `raw_max >= 60` và `+10` nếu `raw_max >= 70`), phân bố tham chiếu trên `33,394` cửa sổ là: **`LOS A` = `13,267` (`39.73%`)**, **`LOS B` = `4,694` (`14.06%`)**, **`LOS C` = `3,827` (`11.46%`)**, **`LOS D` = `3,701` (`11.08%`)**, **`LOS E` = `3,821` (`11.44%`)**, **`LOS F` = `4,084` (`12.23%`)** (nhãn suy diễn `derive_urban_los`: `A=13,309, B=4,926, C=2,657, D=3,730, E=3,401, F=5,371`; tách bạch rõ với hàm chuẩn hóa tỷ lệ `derive_los`). Nhãn nhị phân kẹt cứng `is_severe = 1` khi $\text{LOS} \in \{E, F\}$ (`7,905 / 33,394 = 23.67%`).
 
 ---
 
@@ -168,7 +167,7 @@ Toàn bộ dữ liệu thô đi vào hệ thống đều được ép kiểu an 
 
 ### 3.1. Sơ Đồ Kiến Trúc Tổng Quan Dễ Đọc & Bảng Tham Chiếu 17 Mô-đun Kỹ Thuật
 
-Để người đọc hình dung ngay luồng chảy dữ liệu xuyên suốt 4 bước chỉ trong vài giây, Hình 3.1 trình bày **Sơ đồ Kiến trúc Tổng quan** vận hành trên cụm `Docker Compose` gọn nhẹ **`10.5 / 16.0 GB RAM`** (thống nhất `Apache Kafka 4.1.0 KRaft`, **`Apache Spark 3.5.7 (Java 17)`**, hồ dữ liệu `Parquet`, `MongoDB 8.0.34` và `Streamlit :8501`):
+Để người đọc hình dung ngay luồng chảy dữ liệu xuyên suốt 4 bước chỉ trong vài giây, Hình 3.1 trình bày **Sơ đồ Kiến trúc Tổng quan** vận hành trên cụm `Docker Compose` 6 dịch vụ mặc định **`12.0 / 16.0 GB RAM`** (`Apache Kafka 4.1.0 KRaft`, **`Apache Spark 3.5.7 (hcmc-traffic-spark:3.5.7)`**, hồ dữ liệu `Parquet`, `MongoDB 8.0.34`, **Web TOC `ReactJS + FastAPI (:8000)`**, `Streamlit (:8501)` và `live-consumer`):
 
 ![Hình 3.1. Sơ đồ kiến trúc tổng thể hệ thống theo luồng 4 bước](../../outputs/system_architecture.png)
 
@@ -178,54 +177,56 @@ Toàn bộ dữ liệu thô đi vào hệ thống đều được ép kiểu an 
 
 | Mã Mô-đun | Zone | Tên Thành phần Kỹ thuật | Cơ chế Thực thi Cốt lõi | Tệp Mã nguồn Chính | Kết quả Đầu ra |
 |---|---|---|---|---|---|
-| **`[C1]`** | Zone A | `GPS Telemetry Producer` | Phát lại sự kiện (`seed=42`, `1%` trùng, `5%` trễ) | `producer.py` | Topic `hcmc-traffic-events`, `replay_stream_summary.json` |
-| **`[C2]`** | Zone A | `HCMC GIS Topology` | 3 bảng địa lý gốc (`nodes`, `streets`, `segments`) | `raw_data/*.csv` | Mạng lưới `52,425` giao lộ & `84,633` đoạn đường một chiều |
-| **`[C3]`** | Zone A | `Traffic Consumers` | Trung tâm `TOC`, Kỹ sư đèn, Chuyên viên `Sở GTVT` | Trình duyệt Web | Truy cập giao diện điều hành tại `http://localhost:8501` |
+| **`[C1]`** | Zone A | `GPS Telemetry Producer` | Phát lại sự kiện (`seed=42`, `~1%` trùng, `~5%` trễ) | `producer.py` | Topic `hcmc-traffic-events`, `replay_stream_summary.json` |
+| **`[C2]`** | Zone A | `HCMC GIS Topology` | 3 bảng địa lý gốc lọc phi đường bộ | `raw_data/*.csv` | Mạng cơ giới sạch **`52,181` giao lộ & `84,206` đoạn đường** |
+| **`[C3]`** | Zone A | `Traffic Consumers` | Trung tâm `TOC`, Kỹ sư đèn, Chuyên viên `Sở GTVT` | Trình duyệt Web | Truy cập **Web TOC `:8000`** & **Streamlit `:8501`** |
 | **`[C4]`** | Zone B | `Kafka 4.1.0 KRaft Broker` | Chế độ `KRaft` không cần ZooKeeper, `3` partitions | `docker-compose.yml` | Chia đều tải theo khóa `segment_id` |
-| **`[C5]`** | Zone B | `Quality Funnel & Validator` | Cổng kiểm tra chung Batch/Stream: `ANSI try_cast`, `NFC`, `UTC+7` | `traffic_data/spark_etl.py`, `starter_stream.py`, `pipeline.py` | Chuyển bản ghi sạch sang `[C6]`/`[C9]` & cách ly lỗi vào `[C15]` |
-| **`[C6]`** | Zone C | `Watermark (30m) & Dual Sink` | Ngưỡng `Watermark 30m`, tách song song lưu thô & chấm nhanh | `starter_stream.py`, `spark_engine.py` | Nhánh 1 lưu thô `100%` & Nhánh 2 chấm điểm tức thời |
-| **`[C7]`** | Zone C | `O(1) Stream Sketches (33.0 KiB)` | `BitPackedBloomFilter` (`32.0 KiB`), `HLL++` (`1.0 KiB`), `EWMA` $\alpha=0.15$ | `starter_stream.py`, `pipeline.py` | Chặn tin trùng, đếm đường hoạt động & xuất `hotspot_alerts.csv` |
-| **`[C8]`** | Zone C | `Online Scoring Engine` | Chỉ đọc `[C13a]/[C13b]` kèm kiểm tra `SHA-256` mỗi micro-batch | `starter_stream.py` | Xuất cảnh báo tạm thời `STREAM_PROVISIONAL (v1)` |
-| **`[C9]`** | Zone D | `5-Tuple Monoid & 2-Stage Salting` | `5-Tuple Monoid Combiner`, `8` salt buckets, `BroadcastHashJoin` | `spark_batch.py`, `spark_engine.py`, `baseline.py` | `33,441` cửa sổ chuẩn, `monoid_baseline_verification.json` |
-| **`[C10]`** | Zone D | `Line-Graph PageRank & 7D K-Means` | `Line-Graph PageRank`, `Spark FPGrowth`, `2-Pass SON`, `7D K-Means` | `pipeline.py`, `spark_engine.py` | `road_pagerank_top.csv`, `co/lagged_congestion_rules.csv` |
-| **`[C11]`** | Zone D | `Causal Priors & +30m Forecast` | Ghép đúng `exact t+30m`, cắt mẫu biên, `Random Forest` (`23D`) | `pipeline.py`, `spark_engine.py` | `ablation_results.csv`, `transition_evaluation.csv`, khóa `[C13a]` |
-| **`[C12]`** | Zone D | `Two-Tier Reconciliation` | Khớp đúng hạn `100%`, backfill `501` cửa sổ trễ & re-score `377` cửa sổ | `pipeline.py`, `starter_stream.py` | `reconciliation_audit.csv`, nâng cấp bản chuẩn `v2` |
+| **`[C5]`** | Zone B | `Quality Funnel & Validator` | Cổng kiểm tra chung: `ANSI try_cast`, `NFC`, `UTC+7`, lọc burst | `traffic_data/spark_etl.py`, `starter_stream.py`, `pipeline.py` | Chuyển `90,787` pings sạch sang `[C6]`/`[C9]` & cách ly lỗi `[C15]` |
+| **`[C6]`** | Zone C | `Watermark (30m) & Dual Sink` | Ngưỡng `Watermark 30m`, tách song song lưu thô & chấm nhanh | `starter_stream.py`, `spark_engine.py` | Nhánh 1 lưu thô `100%` & Nhánh 2 watermark `2020-12-01T12:30:00Z` |
+| **`[C7]`** | Zone C | `O(1) Stream Sketches (33.0 KiB)` | `RotatingBloom` (`32.0 KiB`), `64-bit HLL` (`1.0 KiB`), `EWMA` $\alpha=0.15$ | `starter_stream.py`, `live_kafka_stream.py`, `pipeline.py` | Chặn tin trùng, đếm đường hoạt động & xuất `hotspot_alerts.csv` |
+| **`[C8]`** | Zone C | `Online Scoring Engine` | Chỉ đọc `[C13a]/[C13b]` kèm kiểm tra `SHA-256` mỗi micro-batch | `starter_stream.py`, `live_kafka_stream.py` | Xuất cảnh báo tạm thời `STREAM_PROVISIONAL (v1)` |
+| **`[C9]`** | Zone D | `Pure 5-Tuple Monoid & Salting` | `5-Tuple Monoid Combiner`, `8` salt buckets, `BroadcastHashJoin` | `spark_batch.py`, `spark_engine.py`, `baseline.py` | **`33,394` cửa sổ chuẩn**, `monoid_baseline_verification.json` |
+| **`[C10]`** | Zone D | `Line-Graph PageRank & 7D K-Means` | `PageRank` (bỏ U-turn), `FPGrowth/SON` trên `TRAIN` hữu cơ, `K-Means` | `pipeline.py`, `spark_engine.py` | `road_pagerank_top.csv`, `co/lagged_congestion_rules.csv` |
+| **`[C11]`** | Zone D | `Burst-Free Priors & +30m Forecast` | Loại `3,596` cặp burst, giữ `1,885` hữu cơ, `RF (23D)` sạch | `pipeline.py`, `spark_engine.py` | `ablation_results.csv`, `transition_evaluation.csv`, khóa `[C13a]` |
+| **`[C12]`** | Zone D | `Two-Tier Reconciliation` | `tier1_exceptAll_diff = 0`, bù `500` cửa sổ trễ, hàn gắn `609`, chấm lại `384` | `pipeline.py`, `starter_stream.py` | `reconciliation_audit.csv`, nâng cấp bản chuẩn `v2` |
 | **`[C13a]`** | Zone E | `Frozen Model Registry` | Chỉ học `.fit()` đúng một lần duy nhất ở `Phase A` | `pipeline.py` | `model.joblib`, `spark_pipeline_model/`, `vmax_lookup.json` |
-| **`[C13b]`** | Zone E | `Static Feature Store` | Điểm `PageRank` và cụm `7D K-Means` cho đủ `84,633` đoạn đường | `pipeline.py` | `data/lakehouse/segment_static_features.parquet` |
-| **`[C14]`** | Zone F | `Medallion Lakehouse (Parquet)` | Lưu trữ cột nén `Snappy` chia `10` phân vùng tháng `year_month` | `pipeline.py`, `spark_batch.py` | `bronze_raw_events`, `silver_cleaned_windows`, `curated_gold` |
-| **`[C15]`** | Zone F | `Quarantine & WAL Checkpoints` | Lưu vết mã lỗi đầu tiên, `offset_log.json`, `state_wal.json` | `starter_stream.py`, `spark_engine.py` | `quarantine_events.parquet`, `query_progress.json` |
-| **`[C16]`** | Zone F | `MongoDB 8.0.34 Serving Store` | `Idempotent Upsert`, `Monotonic Version Guard` & `Compound Index IXSCAN` | `pipeline.py`, `starter_stream.py` | Bảng `bda501.traffic_scores` (`33,441` bản ghi), `mongo_verify.json` |
-| **`[C17]`** | Zone F | `Streamlit 5-Tab UI (:8501)` | Kết nối trực tiếp `MongoDB` làm mới `5 giây` | `app.py` | Cổng điều hành trực tuyến tại `http://localhost:8501` |
+| **`[C13b]`** | Zone E | `Static Feature Store` | Điểm `PageRank` và cụm `7D K-Means` cho đủ `84,206` đoạn cơ giới | `pipeline.py` | `data/lakehouse/segment_static_features.parquet` |
+| **`[C14]`** | Zone F | `Medallion Lakehouse (Parquet)` | `bronze_raw_events`, `stream_replay_windows`, `curated_gold/year_month=*` | `pipeline.py`, `spark_batch.py` | Đọc sạch bởi cả `PyArrow/Pandas` lẫn `Spark 3.5.7` |
+| **`[C15]`** | Zone F | `Quarantine & WAL Checkpoints` | `580` bản ghi cách ly, `offset_log.json`, `state_wal.json` (`73.7 KB`) | `starter_stream.py`, `spark_engine.py` | `quarantine_events.parquet`, `query_progress.json` |
+| **`[C16]`** | Zone F | `MongoDB 8.0.34 Serving Store` | Atomic `$status_version` pipeline guard & `IXSCAN` | `pipeline.py`, `starter_stream.py` | `bda501.traffic_scores` (`33,394` docs), `mongo_verify.json` |
+| **`[C17]`** | Zone F | `Web TOC (:8000) & Streamlit (:8501)` | `ReactJS + FastAPI + Leaflet` (`toc-web`) & `Streamlit 5-Tab` (`app`) | `toc_backend/`, `toc_frontend/`, `app.py` | Cổng điều hành trực tuyến song song `:8000` & `:8501` |
 
 ### 3.2. Quy Trình Ba Pha Không Xung Đột & Khóa Chữ Ký Toàn Vẹn SHA-256
 
 Để ngăn xung đột ghi giữa luồng trực tuyến và xử lý lô cuối ngày, hệ thống tách bạch rõ 3 pha vận hành:
-1. **`Pha A — Huấn luyện một lần trên lịch sử`:** Chỉ duy nhất `[C10]` và `[C11]` được gọi `.fit()` trên tập `TRAIN` (`slot_ts <= 2020-12-12T08:00:00Z` và `target_ts <= 2020-12-12T08:00:00Z`, gồm `5,494` mẫu hợp lệ), sau đó khóa chữ ký `SHA-256` vào `outputs/model_registry_manifest.json`:
-   - `outputs/model.joblib` (`sha256 = 86195ec9e1a882f10946b35d0ea9eb74c06f6856fba8740e19d3f601c0c2410d`)
-   - `data/lakehouse/segment_static_features.parquet` (`sha256 = 2877a4dd11022e353c6d7277e6e7e87a049e6e585c33a0ece7d2d430308b0251`, phủ đủ `84,633` đoạn đường)
-   - `outputs/vmax_lookup.json` (`sha256 = d00c68e39a3cbe78d2cba8d2c26fcf1de5523f5d396c8298a7bced97501ab94e`)
-2. **`Pha B — Chấm điểm luồng trực tuyến chỉ đọc`:** Tiến trình `starter_stream.py` kiểm tra chữ ký `SHA-256` trước và sau mỗi lô nhỏ, chỉ gọi `.predict_proba()` để xuất cảnh báo tạm thời (`status_version = 1`).
-3. **`Pha C — Đối soát cuối ngày & bù dữ liệu trễ`:** Quét lại hồ dữ liệu thô, bù đủ `501` cửa sổ đến trễ, cập nhật lại biến lịch sử cho `3,953` cửa sổ kế tiếp, chấm điểm lại `377` cửa sổ bằng chính mô hình đã khóa ở `Pha A` và nâng cấp lên bản chuẩn (`status_version = 2`).
+1. **`Pha A — Huấn luyện một lần trên lịch sử`:** Chỉ duy nhất `[C10]` và `[C11]` được gọi `.fit()` trên tập `TRAIN` hữu cơ (`slot_ts <= 2020-12-12T08:00:00Z` và `target_ts <= 2020-12-12T08:00:00Z` và `is_synthetic_burst == 0`, gồm **`1,885` cặp hữu cơ** sau khi loại `3,596` cặp burst), sau đó khóa chữ ký `SHA-256` vào `outputs/model_registry_manifest.json`:
+   - `outputs/model.joblib` (`sha256 = a2e12b7c032acff65b2285d50499cc8a142cbfa1d4549c4f888ce473aac264de`)
+   - `data/lakehouse/segment_static_features.parquet` (`sha256 = 71a5565e272f0b5cd71440f752ab7a80d1240c43838c315a95d3cb6535de3ac2`, phủ đủ `84,206` đoạn cơ giới)
+   - `outputs/vmax_lookup.json` (`sha256 = 41577e2ecb960133c1836da323e3e1a7c8e8e3939bf06315e4f388e90404257f`)
+2. **`Pha B — Chấm điểm luồng trực tuyến chỉ đọc`:** Tiến trình `starter_stream.py` và `live_kafka_stream.py` kiểm tra chữ ký `SHA-256` trước và sau mỗi lô nhỏ, chỉ gọi `.predict_proba()` để xuất cảnh báo tạm thời (`status_version = 1`).
+3. **`Pha C — Đối soát cuối ngày & bù dữ liệu trễ`:** Quét lại `bronze_raw_events`, bù đủ **`500` cửa sổ đoạn đường đến trễ** (`226` khung giờ), hàn gắn biến trễ cho **`609` cửa sổ hạ lưu**, chấm điểm lại **`384` cửa sổ** (`185` đổi xác suất) bằng chính mô hình đã khóa ở `Pha A` và nâng cấp lên bản chuẩn (`status_version = 2`).
 
 *Hình 3.2. Tách biệt rạch ròi quyền huấn luyện tại Pha A và quyền chấm điểm chỉ đọc tại Pha B, Pha C.*
 
-### 3.3. Bước 1B — Gộp Song Song Chính Xác Bằng Bộ 5 Đại Lượng & Chia 8 Giỏ Chống Lệch Tải
+### 3.3. Bước 1B — Gộp Song Song Chính Xác Bằng Pure 5-Tuple Monoid & Chia 8 Giỏ Chống Lệch Tải
 
-Khi gộp dữ liệu trên nhiều máy tính song song, nếu mỗi máy tự tính trung bình vận tốc cục bộ rồi lấy trung bình cộng lần hai, sự chênh lệch số bản tin giữa các phân vùng sẽ gây sai số lớn (thử nghiệm trên 3 phân vùng lệch kích thước `[1, 2, 3]` gây sai số tới **`11.111111 km/h`**). Để gộp song song chính xác tuyệt đối, hệ thống nâng mỗi bản tin vận tốc hợp lệ $v > 0$ lên bộ `5` đại lượng giao hoán và kết hợp (`5-Tuple Commutative Monoid`: số bản tin, tổng vận tốc, vận tốc nhỏ nhất, vận tốc lớn nhất, số bản tin kẹt):
+Khi gộp dữ liệu trên nhiều máy tính song song, nếu mỗi máy tự tính trung bình vận tốc cục bộ rồi lấy trung bình cộng lần hai, sự chênh lệch số bản tin giữa các phân vùng sẽ gây sai số lớn (thử nghiệm trên 3 phân vùng lệch kích thước `[1, 2, 3]` gây sai số tới **`11.111111 km/h`**). Để gộp song song chính xác tuyệt đối, hệ thống dùng **Pure 5-Tuple Monoid**:
+$$\mathbf{m} = (\text{cnt}, \sum v, \min v, \max v, \text{severe\_cnt}), \qquad \mathbf{e} = (0, 0.0, +\infty, -\infty, 0)$$
 
 ![Bộ 5 đại lượng giao hoán và kết hợp](../../outputs/slide_charts/eq_monoid.png)
 
-- **Kiểm chứng đối chiếu độc lập (`baseline.py`):** Trên toàn bộ `90,938` bản tin GPS (`33,441` cửa sổ, tích lũy `42,170` bản tin kẹt), kết quả gộp song song khớp `100%` với `baseline.py` (**sai số bằng `0.0`** trên cả 5 đại lượng và vận tốc trung bình).
-- **Cân bằng tải giờ cao điểm bằng chia `8` giỏ khóa (`2-Stage Key Salting`):** Khung giờ cao điểm nhất chứa `2,062` bản tin trong khi khung trung vị chỉ có `3.0` bản tin (lệch tải **`687.43` lần**). Ở Bước 1, hệ thống chia ngẫu nhiên tất định vào `8` giỏ $b \in \{0,\dots,7\}$ tạo `59,895` nhóm trung gian, kéo tỷ số lệch tải xuống chỉ còn **`1.023` lần (`CV = 0.0057`)**. Ở Bước 2, hệ thống bỏ giỏ và cộng gộp bộ 5 đại lượng về đúng `33,441` cửa sổ (`exceptAll == 0`).
+- **Kiểm chứng đối chiếu độc lập (`baseline.py`, `monoid_baseline_verification.json`):** Trên **`90,787` bản tin cơ giới sạch** (`33,394` cửa sổ UTC, tích lũy `42,124` bản tin kẹt), kết quả gộp khớp **`100.0%`** với `baseline.py` (`0` missing/extra/duplicate keys, `0` discrepancies trên cả 5 đại lượng và `mean_velocity`, `max_abs_velocity_diff = 0.0 km/h`).
+- **Cân bằng tải giờ cao điểm bằng chia `8` giỏ khóa (`2-Stage Key Salting`):** Độ lệch tải khung giờ cao điểm đạt **`684.95` lần** trung vị. Ở Bước 1, chia `8` giỏ $b \in \{0,\dots,7\}$ tạo `59,655` nhóm trung gian (`59,714` trong Spark), kéo tỷ số lệch tải giỏ cao điểm xuống **`1.0197x`** (`salted_partition_skew_ratio = 1.0123x`, `CV = 0.0059`, 8-partition hash skew `1.0846x → 1.0167x`). Ở Bước 2, cộng gộp về đúng `33,394` cửa sổ (`exceptAll == 0`).
 
 ### 3.4. Tối Ưu Hóa Kế Hoạch Thực Thi Trên Apache Spark 3.5.7 & Hồ Dữ Liệu Parquet 10 Tháng
 
-| Hạng mục Kiểm chứng trên `Apache Spark 3.5.7` | Kết quả trên `spark_engine.py` (`spark_runtime_evidence.json`) | Kết quả trên `spark_batch.py` (`quyen_validation/manifest.json`) |
+| Hạng mục Kiểm chứng trên `Apache Spark 3.5.7` | Kết quả trên `spark_engine.py` (`outputs/spark_runtime_evidence.json`) | Kết quả trên `spark_batch.py` (`outputs/quyen_validation/manifest.json`) |
 |---|---|---|
-| **Ghép bảng bản đồ tĩnh (`BroadcastHashJoin`)** | Chuyển từ `SortMergeJoin` (`10` bước truyền mạng `Shuffle`, `0.946s`) sang **`BroadcastHashJoin` (`2` bước `Exchange`, `0` `SortMergeJoin`, `0.506s`)** | Chuyển từ `SortMergeJoin` (`5` bước `Shuffle`, `0.932s`) sang **`3` nút `BroadcastHashJoin` (`0` bước `Shuffle`, `0.666s`)** |
-| **Đối chiếu tương đương tập hợp (`exceptAll`)** | `dsl_except_sql_count = 0` và `sql_except_dsl_count = 0` (`33,441` dòng) | `join_difference = {left_only: 0, right_only: 0}` và `monoid_difference = 0` (`33,394` dòng) |
-| **Cắt tỉa phân vùng theo tháng** | `PartitionFilters: [year_month = 2020-08]` — chỉ đọc đúng **`7,294` dòng** của tháng `2020-08` thay vì quét `33,441` dòng | Xuất chuẩn `10` phân vùng tháng `year_month=2020-07..2021-04` định dạng `Parquet Snappy` |
-| **Chỉ đọc đúng cột cần thiết** | Chỉ nạp `4 / 59` cột từ đĩa (`segment_id, date, period, LOS`) | Chỉ nạp `2` cột từ đĩa (`segment_id, mean_velocity`) |
+| **Ghép bảng bản đồ tĩnh (`Catalyst Join`)** | Chuyển từ `SortMergeJoin` (`5` Exchange, `2` Shuffle Joins, `145.24 ms`, IQR `12.83 ms`) sang **`BroadcastHashJoin` (`1` Exchange, `2` BHJ, `120.45 ms`, IQR `4.59 ms`, `17.07%` speedup)** | Chuyển từ `SortMergeJoin` (`5` Exchange, `0.932s`) sang **`3` nút `BroadcastHashJoin` (`3` BroadcastExchange, `0` shuffle Exchange, `0.666s`)** |
+| **Monoid Salting trên Spark** | Unsalted `33,394` (`147.11 ms`, IQR `31.29 ms`) vs 8-Bucket Salted `59,714 → 33,394` (`222.60 ms`, IQR `11.27 ms`) | 1-stage `0.409s` vs 2-stage salted `0.509s` |
+| **Đối chiếu tương đương tập hợp (`exceptAll`)** | `two_way_exceptAll_diff = 0` (cả Join & Monoid trên `33,394` dòng) | `monoid_difference = 0` & `join_difference = 0` (`33,394` dòng) |
+| **Cắt tỉa phân vùng & cột `Parquet`** | `PartitionFilters: [year_month = 2020-08]` (`7,268` dòng) & `ReadSchema` chỉ `4` cột (`segment_id, date, period, LOS`) | Xuất chuẩn `10` phân vùng tháng `2020-07..2021-04` trên `Spark 3.5.7` / `PySpark 4.2.0` |
+| **Streaming Sink 2 Watermark thực** | `spark_sink2_watermark = 2020-12-01T12:30:00.000Z`, `batches_committed = 3`, WAL đã tạo | Lưu `bronze_raw_events`, `silver_cleaned_windows`, `curated_gold` |
 
 ![Hình 3.3. Cân bằng tải giờ cao điểm và loại bỏ truyền mạng dư thừa](../../outputs/slide_charts/chart_spark_skew_catalyst.png)
 
@@ -233,82 +234,83 @@ Khi gộp dữ liệu trên nhiều máy tính song song, nếu mỗi máy tự 
 
 ---
 
-## Chương 4. Bước 2 — Lấp Đầy "Vùng Mù" 88.15% Đường Thiếu GPS Bằng Đồ Thị PageRank & Phân Cụm K-Means
+## Chương 4. Bước 2 — Lấp Đầy "Vùng Mù" 88.13% Đường Thiếu GPS Bằng Đồ Thị PageRank & Phân Cụm K-Means
 
 > **Sợi dây liên kết nhân quả từ Chương 3 sang Chương 5:**
-> Sau khi hoàn tất Bước 1 ở Chương 2–3, hệ thống mới chỉ có số đo vận tốc trên `10,027` đoạn đường có xe gửi GPS, còn **`74,606` đoạn đường nhánh (`88.15%` mạng lưới TP.HCM) hoàn toàn không có dữ liệu cảm biến**. Chương 4 không phải là các thống kê rời rạc mà thực hiện **hai nhiệm vụ nối tiếp trực tiếp**:
-> 1. **Cung cấp bức tranh quy hoạch cho Sở GTVT:** Tìm các "nút cổ chai" tự nhiên do cấu trúc đấu nối giao lộ (`PageRank`), nhận diện các cặp đường hay kẹt dây chuyền (`SON / FPGrowth`), và phân loại hành vi cho toàn bộ `74,606` đoạn đường thiếu GPS (`K-Means`).
+> Sau khi hoàn tất Bước 1 ở Chương 2–3, hệ thống mới chỉ có số đo vận tốc trên **`9,995` đoạn đường cơ giới có GPS (`11.87%`)**, còn **`74,211` đoạn đường nhánh (`88.13%` mạng lưới cơ giới TP.HCM) hoàn toàn không có dữ liệu cảm biến**. Chương 4 thực hiện **hai nhiệm vụ nối tiếp trực tiếp**:
+> 1. **Cung cấp bức tranh quy hoạch cho Sở GTVT:** Tìm các "nút cổ chai" tự nhiên do cấu trúc đấu nối giao lộ (`PageRank` không U-turn), nhận diện các cặp đường hay kẹt dây chuyền trên `TRAIN` hữu cơ, và phân loại hành vi cho toàn bộ `74,211` đoạn đường thiếu GPS (`K-Means`).
 > 2. **Tạo biến đầu vào không gian cho mô hình dự báo ở Chương 5:** Điểm `pagerank_score`, số nhánh vào/ra (`in_degree`, `out_degree`) và mã nhóm hành vi `cluster_id` từ Chương 4 được đóng gói vào kho đặc trưng bản đồ tĩnh và **ghép trực tiếp vào vector `23` biến đầu vào của mô hình `Random Forest` ở Chương 5**.
 
-### 4.1. Lọc Bỏ Điểm Uốn Cong Trung Gian & Xếp Hạng Nút Cổ Chai Bằng Đồ Thị PageRank
+### 4.1. Lọc Bỏ Điểm Uốn Cong Trung Gian, Loại U-Turn & Xếp Hạng Nút Cổ Chai Bằng PageRank
 
-- **Lọc bỏ điểm uốn cong trung gian trên bản đồ:** Trong `577,967` điểm tọa độ của `nodes.csv` trích xuất từ OpenStreetMap, có tới **`525,542` điểm (`90.93%`) chỉ là điểm hình học trung gian nằm dọc thân đường để vẽ độ uốn cong** (*shape points*), hoàn toàn không phải ngã rẽ giao lộ. Hệ thống lọc bỏ toàn bộ các điểm vẽ cong này và giữ lại đúng **`52,425` giao lộ thực sự**.
-- **Dựng đồ thị nối đoạn đường một chiều:** Mỗi đoạn đường trong **`84,633` đoạn đường một chiều** trở thành một đỉnh của đồ thị; một cung có hướng $(u \to s)$ được nối khi điểm cuối đoạn $u$ trùng với điểm đầu đoạn $s$, tạo thành **`151,929` hướng rẽ hợp lệ** và **`48` đoạn đường cụt** không có lối ra. Thuật toán `PageRank` chạy `25` vòng lặp ($\beta = 0.85$) có chia đều lại xác suất của `48` đoạn cụt để bảo toàn tổng điểm toàn mạng đúng bằng **`84,633.0`**:
+- **Lọc bỏ điểm uốn cong trung gian & nút mồ côi trên bản đồ:** Trong `577,967` điểm tọa độ của `nodes.csv` trích xuất từ OpenStreetMap, hệ thống loại bỏ **`525,786` điểm (`90.97%`)** không phải giao lộ đường cơ giới và giữ lại đúng **`52,181` giao lộ hoạt động**.
+- **Dựng đồ thị nối đoạn đường một chiều (loại cung quay đầu U-turn):** Mỗi đoạn đường trong **`84,206` đoạn đường cơ giới sạch** trở thành một đỉnh của đồ thị; một cung có hướng $(u \to s)$ được nối khi điểm cuối đoạn $u$ trùng với điểm đầu đoạn $s$ **và** `dst_e_node != src_s_node` (loại bỏ vòng quay đầu ngay trên cùng đoạn hai chiều), tạo thành **`92,453` cạnh chuyển tiếp** và **`314` đoạn đường cụt (`dangling nodes`)**. Thuật toán `PageRank` ($\beta = 0.85$) chia đều lại xác suất của `314` đoạn cụt ở mỗi vòng lặp để bảo toàn tổng điểm toàn mạng đúng bằng **`84,206.0`**:
 
 ![Công thức đệ quy PageRank bảo toàn khối lượng](../../outputs/slide_charts/eq_pagerank.png)
 
-| Hạng | `segment_id` | Tuyến Đường | Cấp Đường | Nhánh Vào / Ra | Điểm `PageRank` | Ý nghĩa Giao thông Thực tế tại TP.HCM (`UC-3`) |
+| Hạng | `segment_id` | Tuyến Đường (`outputs/road_pagerank_top.csv`) | Cấp Đường | Nhánh Vào / Ra | Điểm `PageRank` | Ý nghĩa Giao thông Thực tế tại TP.HCM (`UC-3`) |
 |---:|---:|---|---:|---:|---:|---|
-| `#1` | `61781` | **Phú Định** | Cấp `4` | `3 → 2` | **`3.7515`** | Cửa ngõ hội tụ luồng xe tải và kho bãi ven kênh Quận 6 – Quận 8 |
-| `#2` | `50017` | **Lê Lai** | Cấp `4` | `2 → 2` | **`3.4650`** | Trục gom lưu lượng hướng thẳng về chợ Bến Thành – trung tâm Quận 1 |
-| `#3` | `62682` | **Châu Văn Liêm** | Cấp `3` | `3 → 2` | **`2.9246`** | Hành lang thương mại huyết mạch kết nối khu vực Chợ Lớn – Quận 5 |
-| `#4` | `21969` | **Nguyễn Kiệm** | Cấp `2` | `3 → 1` | **`2.7313`** | Nút thắt cổ chai chụm 3 nhánh vào 1 hướng về vòng xoay Tân Sơn Nhất |
-| `#5` | `34723` | **Quốc lộ 1** | Cấp `1` | `2 → 1` | **`2.6430`** | Vành đai vận tải hàng hóa liên tỉnh chịu tải trọng xe đầu kéo lớn |
-| `#6` | `69417` | **Lê Văn Chí** | Cấp `4` | `3 → 2` | **`2.6031`** | Tuyến kết nối khu công nghệ cao và cụm đại học cửa ngõ Thủ Đức |
-| `#7` | `17428` | **Lê Văn Chí** | Cấp `4` | `3 → 2` | **`2.6031`** | Đoạn đối xứng phân luồng tại giao lộ Lê Văn Chí – Linh Trung |
-| `#8` | `50018` | **Lê Lai** | Cấp `4` | `3 → 1` | **`2.5843`** | Nhánh tiếp cận trực tiếp giao lộ Phạm Hồng Thái – Ngã sáu Phù Đổng |
-| `#9` | `21160` | **Phạm Hồng Thái** | Cấp `4` | `3 → 1` | **`2.5843`** | Nút chuyển tiếp dòng xe nội đô Quận 1 từ hành lang Lê Lai |
-| `#10` | `77224` | **Kha Vạn Cân** | Cấp `4` | `3 → 3` | **`2.5599`** | Giao điểm trung chuyển mật độ cao dọc hành lang đường sắt Thủ Đức |
+| `#1` | `21969` | **Nguyễn Kiệm** | Cấp `2` | `3 → 1` | **`2.7799`** | Nút thắt cổ chai chụm 3 nhánh vào 1 hướng về vòng xoay Tân Sơn Nhất |
+| `#2` | `37345` | **Cầu vượt Ngã tư Gò Dưa** | Cấp `3` | `2 → 1` | **`2.7196`** | Nút giao cầu vượt kết nối Quốc lộ 1 – Tỉnh lộ 43 cửa ngõ Đông Bắc |
+| `#3` | `34723` | **Quốc lộ 1** | Cấp `1` | `2 → 1` | **`2.6894`** | Vành đai vận tải hàng hóa liên tỉnh chịu tải trọng xe đầu kéo lớn |
+| `#4` | `40948` | **Quốc lộ 1** | Cấp `1` | `2 → 1` | **`2.6516`** | Trục hội tụ hai nhánh đường gom hướng cầu Bình Phước |
+| `#5` | `81815` | **Song Hành Xa lộ Hà Nội** | Cấp `4` | `2 → 2` | **`2.6508`** | Đường gom song hành tiếp nhận luồng xe ra vào trục Xa lộ Hà Nội |
+| `#6` | `41134` | **Dương Bá Trạc** | Cấp `2` | `2 → 1` | **`2.6435`** | Trục nối Quận 8 – cầu Kênh Xáng đổ về cầu Nguyễn Văn Cừ |
+| `#7` | `15011` | **Phan Đăng Lưu** | Cấp `2` | `2 → 2` | **`2.6159`** | Hành lang xuyên tâm Phú Nhuận – Bình Thạnh hướng Ngã tư Hàng Xanh |
+| `#8` | `40916` | **Quốc lộ 1** | Cấp `1` | `2 → 1` | **`2.5677`** | Đoạn gom giao cắt trên hành lang Quốc lộ 1 |
+| `#9` | `30616` | **Quốc Lộ 50** | Cấp `3` | `2 → 1` | **`2.5502`** | Cửa ngõ kết nối Bình Chánh – Quận 8 về cầu Nhị Thiên Đường |
+| `#10` | `51321` | **Hoàng Văn Thụ** | Cấp `2` | `3 → 2` | **`2.5432`** | Trục gom lưu lượng cửa ngõ Tân Bình hướng Lăng Cha Cả – Công viên Hoàng Văn Thụ |
 
-### 4.2. Khai Phá Các Cặp Đường Hay Kẹt Cùng Lúc (`SON / FPGrowth`) & Lưu Ý Trung Thực Về Cỡ Mẫu Nhỏ
+### 4.2. Khai Phá Luật Trên `TRAIN` Hữu Cơ (`SON / FPGrowth`) & Kiểm Chứng Hold-Out
 
-- Mỗi khung `30 phút` tạo thành một giỏ gồm tất cả các tuyến đường đã chuẩn hóa dấu `Unicode NFC` (loại bỏ tên `Phường/Quận`) có ít nhất một đoạn đang kẹt cứng (`LOS E/F`), giữ nguyên toàn bộ giỏ thực tế (tối đa **`57` tuyến đường/khung**).
-- Trên `Apache Spark 3.5.7`, thuật toán `FPGrowth` tìm ra **`286` tập phổ biến** và **`335` luật kết hợp**; thuật toán phân tán `2-Pass SON` trích xuất `30` luật đồng kẹt xe hai chiều (`outputs/co_congestion_rules.csv`) và `20` luật kẹt nối tiếp sau `30 phút` (`outputs/lagged_congestion_rules.csv`):
+- Luật kết hợp được khai phá **nghiêm ngặt chỉ trên các khung giờ `TRAIN` hữu cơ (loại burst)** để chống rò rỉ tương lai, sau đó kiểm chứng độ lặp lại trên phần `hold-out` (`VAL + TEST`). Trên `Apache Spark 3.5.7`, `FPGrowth` tìm ra **`335` luật**; thuật toán `2-Pass SON` xuất **`12` luật đồng kẹt (`outputs/co_congestion_rules.csv`)** và **`14` luật lan truyền trễ `+30m` có kiểm soát tính dai dẳng (`persistence_controlled = True` trong `outputs/lagged_congestion_rules.csv`)**:
 
-| Loại Tương tác | Cặp Tuyến Đường Điển hình | Số Cửa sổ Chung | Tần suất | Độ tin cậy | Hệ số `Lift` | Ý nghĩa Tham khảo Điều tiết (`UC-4`) |
+| Loại Tương tác | Cặp Tuyến Đường (`TRAIN` hữu cơ) | Khung `TRAIN` | `Support` | `Confidence` | Hệ số `Lift` | Kiểm chứng Hold-out / Ghi chú |
 |---|---|---:|---:|---:|---:|---|
-| **Đồng thời (`t ↔ t`)** | `Lý Chính Thắng ↔ Nguyễn Thông` *(chiều ngược: `66.67%`)* | `8` cửa sổ | `0.0233` | `100.00%` | **`28.5833x`** | Hai trục giao cắt hành lang kênh Nhiêu Lộc – Quận 3 kẹt cùng pha |
-| **Đồng thời (`t ↔ t`)** | `Cầu vượt Lý Thái Tổ - NTP ↔ Lý Thái Tổ` *(ngược: `50.0%`)* | `8` cửa sổ | `0.0233` | `80.00%` | **`17.1500x`** | Ùn ứ lan tỏa trực tiếp giữa mặt cầu vượt và nhánh dẫn bên dưới |
-| **Đồng thời (`t ↔ t`)** | `Cao Thắng ↔ Cống Quỳnh` *(chiều ngược: `55.56%`)* | `10` cửa sổ | `0.0292` | `83.33%` | **`15.8796x`** | Liên thông cụm giao lộ Quận 3 – Quận 1 qua Ngã sáu Cộng Hòa |
-| **Đồng thời (`t ↔ t`)** | `Hải Thượng Lãn Ông ↔ 3 Tháng 2` *(chiều ngược: `50.0%`)* | `12` cửa sổ | `0.0350` | `85.71%` | **`12.2500x`** | Tương tác lưu lượng thương mại Chợ Lớn sang trục Quận 10 |
-| **Đồng thời (`t ↔ t`)** | `Cộng Hòa ↔ Trường Chinh` *(chiều ngược: `64.00%`)* | `16` cửa sổ | `0.0466` | `88.89%` | **`12.1956x`** | Cặp trục xương sống cửa ngõ sân bay Tân Sơn Nhất – Mũi Tàu |
-| **Trễ (`t → t+30p`)** | `Nguyễn Ngọc Lộc (t) → Hải Thượng Lãn Ông (t+30p)` | `5` cửa sổ | `0.0127` | `83.33%` | **`32.9167x`** | Giả thuyết sóng ùn tắc lan từ Quận 10 xuống trục Quận 5 |
-| **Trễ (`t → t+30p`)** | `Lê Quang Định (t) → Trần Quốc Toản (t+30p)` | `5` cửa sổ | `0.0127` | `41.67%` | **`32.9167x`** | Giả thuyết dòng xe từ Bình Thạnh đổ vào nội đô Quận 3 |
-| **Trễ (`t → t+30p`)** | `Nguyễn Văn Đậu (t) → Trần Hưng Đạo (t+30p)` | `5` cửa sổ | `0.0127` | `100.00%` | **`24.6875x`** | Giả thuyết tín hiệu báo trước 30 phút trên hành lang xuyên tâm |
-| **Trễ (`t → t+30p`)** | `Hải Thượng Lãn Ông (t) → 3 Tháng 2 (t+30p)` | `7` cửa sổ | `0.0177` | `77.78%` | **`18.0719x`** | Giả thuyết dịch chuyển ùn tắc liên quận khu vực Tây Nam |
+| **Đồng thời (`t ↔ t`)** | `Nguyễn Thị Minh Khai ↔ Cống Quỳnh` | `9` | `0.0292` | `69.23%` *(ngược `64.29%`)* | **`15.2308`** | Hold-out: `1` khung (`10.0% / 25.0%`) |
+| **Đồng thời (`t ↔ t`)** | `Cống Quỳnh ↔ Trần Hưng Đạo` | `10` | `0.0325` | `71.43%` *(ngược `55.56%`)* | **`12.2222`** | Hold-out: `1` khung (`25.0% / 12.5%`) |
+| **Đồng thời (`t ↔ t`)** | `Nguyễn Thị Minh Khai ↔ Trần Hưng Đạo` | `9` | `0.0292` | `69.23%` *(ngược `50.00%`)* | **`11.8462`** | Hold-out: `0` khung (hiếm đồng thời ở TEST) |
+| **Đồng thời (`t ↔ t`)** | `Nguyễn Đình Chiểu ↔ Trần Hưng Đạo` | `8` | `0.0260` | `66.67%` *(ngược `44.44%`)* | **`11.4074`** | Hold-out: `3` khung (`6.82% / 37.50%`) |
+| **Đồng thời (`t ↔ t`)** | `Tô Hiến Thành ↔ Lý Thường Kiệt` | `17` | `0.0552` | `89.47%` *(ngược `20.00%`)* | **`3.2421`** | **Hold-out bền vững: `20` khung (`54.05%`)** |
+| **Đồng thời (`t ↔ t`)** | `Lạc Long Quân ↔ Lý Thường Kiệt` | `12` | `0.0390` | `85.71%` *(ngược `14.12%`)* | **`3.1059`** | **Hold-out bền vững: `8` khung (`88.89%`)** |
+| **Trễ (`t → t+30p`)** | `Lê Quang Định → Trần Quang Khải` | `5` | `0.0298` | `71.43%` | **`24.0000`** | `persistence_controlled = True` |
+| **Trễ (`t → t+30p`)** | `Lê Quang Định → Trần Quốc Toản` | `5` | `0.0298` | `71.43%` | **`24.0000`** | `persistence_controlled = True` |
+| **Trễ (`t → t+30p`)** | `Phan Văn Trị → Cách Mạng Tháng Tám` | `6` | `0.0357` | `54.55%` | **`6.5455`** | `persistence_controlled = True` |
+| **Trễ (`t → t+30p`)** | `Lý Thường Kiệt → Tô Hiến Thành` | `8` | `0.0476` | `14.04%` | **`1.5719`** | `persistence_controlled = True` |
 
-> **Nhận định khoa học thẳng thắn về hạn chế cỡ mẫu nhỏ:**
-> Dù các luật lan truyền sau `+30 phút` đạt hệ số `Lift` rất cao (`18.07x` đến `32.92x`), mỗi cặp thực chất mới cùng xuất hiện trong **`5` đến `8` cửa sổ 30 phút** (tương đương **`2.5` đến `4.0` giờ quan sát** trong 10 tháng) do độ phủ GPS gốc thưa (`11.85%`). Với cỡ mẫu nhỏ như vậy, chưa thể loại trừ sự trùng hợp ngẫu nhiên vào giờ cao điểm chung. Vì vậy, báo cáo chỉ sử dụng các luật trễ này như **giả thuyết cảnh báo thăm dò** kết hợp đối chiếu trên đồ thị đường bộ chứ không khẳng định là quy luật nhân quả cứng.
+> **Nhận định khoa học thẳng thắn về hạn chế cỡ mẫu nhỏ & khả năng tổng quát hóa:**
+> Các luật lan truyền trễ (`persistence_controlled = True`, tức loại bỏ trường hợp đường đích đã kẹt sẵn từ $t$) mới xuất hiện trên **`5–8` khung giờ 30 phút** trong `TRAIN` hữu cơ, và một số cặp đồng thời Lift cao (`Nguyễn Thị Minh Khai ↔ Trần Hưng Đạo`) chỉ xuất hiện `0–1` lần ở phần hold-out, trong khi cặp **`Tô Hiến Thành ↔ Lý Thường Kiệt`** (`20` khung hold-out) và **`Lạc Long Quân ↔ Lý Thường Kiệt`** (`8` khung hold-out, `conf = 88.89%`) bền vững qua thời gian. Do đó, các luật này được trình bày như **giả thuyết cảnh báo tham khảo** kết hợp kiểm chứng trên đồ thị đường bộ.
 
-### 4.3. Phân 6 Nhóm Hành Vi Đường Phố Bằng K-Means (Học Trên TRAIN) Phủ Kín 84,633 Đoạn Đường
+### 4.3. Phân 6 Nhóm Hành Vi Đường Phố Bằng K-Means (TRAIN Hữu Cơ) Phủ Kín 84,206 Đoạn Đường
 
-Pipeline `StandardScaler + KMeans(k=6, random_state=42)` chỉ học trên **`6,926` đoạn đường thuộc tập `TRAIN`** trong không gian 7 đặc trưng chuẩn hóa `(mean_los_ordinal, severe_rate, mean_velocity, velocity_ratio, length_m, max_velocity, pagerank_score)`, đạt **`Silhouette = 0.2853`**, **`Davies-Bouldin = 1.1181`** và **`Calinski-Harabasz = 2,044.85`**. Nhờ đó, toàn bộ **`84,633` đoạn đường** (gồm `10,027` đoạn có GPS và **`74,606` đoạn thiếu GPS**) được gán nhóm hành vi đầy đủ tại `data/lakehouse/segment_static_features.parquet`:
+Pipeline `StandardScaler + KMeans(k=6, random_state=42)` chỉ học trên **`3,609` đoạn đường `TRAIN` hữu cơ** trong không gian 7 đặc trưng `(mean_los_ordinal, severe_rate, mean_velocity, velocity_ratio, length_m, max_velocity, pagerank_score)`, đạt **`Silhouette = 0.2197`**, **`Davies-Bouldin = 1.3592`** và **`Calinski-Harabasz = 767.5843`** (`Inertia = 12,232.7036`; phân bổ đoạn `TRAIN`: `{0: 361, 1: 1147, 2: 1017, 3: 142, 4: 711, 5: 231}`). Nhờ đó, toàn bộ **`84,206` đoạn cơ giới** (`9,995` có GPS + **`74,211` Cold-Start = `88.13%`**) được gán nhóm đầy đủ trong `data/lakehouse/segment_static_features.parquet`:
 
-![Hình 4.1. Bản đồ 6 nhóm hành vi đường phố K-Means phủ kín 84,633 đoạn đường TP.HCM](../../outputs/slide_charts/map_hcmc_clusters_7d.png)
+![Hình 4.1. Bản đồ 6 nhóm hành vi đường phố K-Means phủ kín mạng lưới TP.HCM](../../outputs/slide_charts/map_hcmc_clusters_7d.png)
 
-*Hình 4.1. Bản đồ không gian 6 nhóm hành vi đường phố (`K-Means`, $k=6$) phủ kín `100%` mạng lưới `84,633` đoạn đường TP.HCM trên nền sông Sài Gòn và các quận, tách bạch rõ giao lộ nội đô kẹt mãn tính (đỏ), đại lộ tốc độ cao (xanh đậm), hành lang thông thoáng (xanh lá) và đường nhánh dân cư (xám).*
+*Hình 4.1. Bản đồ không gian 6 nhóm hành vi đường phố (`K-Means`, $k=6$) phủ kín `100%` mạng lưới `84,206` đoạn cơ giới TP.HCM trên nền sông Sài Gòn và các quận.*
 
-| Nhóm Đường | Cửa sổ Quan sát | Vận tốc TB | Tốc độ Tối đa TB | Tỷ lệ Kẹt `E/F` | `PageRank` TB | Đoạn Có / Thiếu GPS | Đặc tính Hành vi Giao thông Thực tế (`UC-5`) |
-|---|---:|---:|---:|---:|---:|---:|---|
-| **Nhóm 0** | `1,130` | `19.12 km/h` | `52.68 km/h` | `54.16%` | `0.6372` | `2,803` / `56,846` | Đường nhánh và hẻm dân cư tốc độ trung bình thấp, dễ nghẽn cục bộ |
-| **Nhóm 1** | `2,420` | `10.52 km/h` | `36.36 km/h` | **`96.98%`** | `1.0219` | `946` / `1,406` | Giao lộ nội đô kẹt mãn tính (đoạn ngắn `~26.8m` sát ngã tư lớn) |
-| **Nhóm 2** | `19,006` | **`44.25 km/h`** | `50.14 km/h` | `3.54%` | `1.0041` | `349` / `3,448` | Hành lang lưu thông thông thoáng ổn định (`LOS A/B` chiếm ưu thế) |
-| **Nhóm 3** | `300` | `14.86 km/h` | `44.31 km/h` | `81.33%` | `0.9796` | `2,672` / `4,123` | Đoạn đường dài (`~188.3m`) chịu tải dồn ứ kéo dài giờ cao điểm |
-| **Nhóm 4** | `4,460` | `24.68 km/h` | **`79.26 km/h`** | `33.59%` | **`1.1077`** | `2,842` / `7,276` | Trục đại lộ / quốc lộ cấp 1 tốc độ thiết kế cao, `PageRank` lớn |
-| **Nhóm 5** | `6,125` | `19.10 km/h` | `38.88 km/h` | `41.53%` | `0.9967` | `415` / `1,507` | Tuyến phố thương mại cấp 3–4 dao động mạnh theo khung giờ |
+| Nhóm Đường (`Cluster`) | Đoạn `TRAIN` | Cửa sổ Quan sát | Vận tốc TB | Tốc độ Tối đa TB | Tỷ lệ Kẹt `E/F` | `PageRank` TB | Đoạn Có / Thiếu GPS (`84,206`) | Đặc tính Hành vi Giao thông Thực tế (`UC-5`) |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| **Nhóm 0** | `361` | `2,936` | `46.49 km/h` | **`71.56 km/h`** | `15.19%` | `1.0058` | `540` / `3,161` | Trục đại lộ / quốc lộ tốc độ thiết kế cao |
+| **Nhóm 1** | `1,147` | `9,875` | `33.19 km/h` | `45.47 km/h` | `21.22%` | `0.9809` | `2,713` / `34,502` | Đường đô thị hỗn hợp mật độ trung bình – khá |
+| **Nhóm 2** | `1,017` | `10,621` | **`21.05 km/h`** | `45.90 km/h` | **`42.01%`** | `0.9747` | `1,483` / `3,889` | Nhóm điểm nghẽn nội đô thường xuyên ùn tắc nặng |
+| **Nhóm 3** | `142` | `1,061` | `41.69 km/h` | `58.67 km/h` | `10.18%` | `0.9996` | `305` / `2,585` | Đoạn đường dài (`~244.1m` quan sát / `235.7m` toàn mạng) tốc độ khá |
+| **Nhóm 4** | `711` | `6,830` | **`47.65 km/h`** | `49.87 km/h` | **`2.61%`** | `1.0290` | `4,342` / `28,034` | Hành lang lưu thông thông thoáng ổn định (`LOS A/B` ưu thế) |
+| **Nhóm 5** | `231` | `2,071` | `29.45 km/h` | `48.85 km/h` | `29.74%` | **`1.6115`** | `612` / `2,040` | Nhóm nút cổ chai giao lộ có `PageRank` cấu trúc cao |
 
 ---
 
-## Chương 5. Bước 3 — Mô Hình Random Forest Dự Báo Trước 30 Phút & Đối Chứng Trực Diện Với Baseline
+## Chương 5. Bước 3 — Lọc Burst Tổng Hợp, Mô Hình Random Forest Dự Báo Trước 30 Phút & Kiểm Định Chuyển Pha
 
-### 5.1. Ghép Cặp Quan Sát Cách Đúng 30 Phút & Cắt Sạch Biên Thời Gian
+### 5.1. Ghép Cặp Quan Sát Đúng 30 Phút, Loại Bỏ Burst Tổng Hợp & Cắt Sạch Biên Thời Gian
 
-1. **Ghép cặp đúng `+30 phút` thay vì trượt dòng tuần tự:** Lệnh trượt dòng `shift(-1)` tạo ra `23,414` cặp nhưng có tới `15,516` cặp (`66.27%`) bị ngắt quãng từ `60 phút` đến nhiều ngày. Hệ thống chỉ ghép nhãn khi cùng một `segment_id` có quan sát ở đúng thời điểm `target_ts = slot_ts + 30 phút`, thu được **`7,898` cặp chuẩn xác `+30 phút`**.
-2. **Chia tập theo mốc thời gian toàn cục `70 / 15 / 15` kèm cắt sạch mẫu biên (`target_ts <= cutoff_ts`):**
-   - **Giai đoạn khởi tạo:** `slot_ts <= 2020-08-02T23:30:00Z` (cố định tâm cụm `K-Means` và tỷ lệ kẹt nền ban đầu).
-   - **Tập `TRAIN` (`70%`):** `slot_ts <= 2020-12-12T08:00:00Z` và `target_ts <= 2020-12-12T08:00:00Z` → **`5,494` mẫu hợp lệ** (đã cắt `50` mẫu sát biên có nhãn vắt sang `VAL`).
-   - **Tập `VAL` (`15%`):** `2020-12-12T08:00:00Z < slot_ts <= 2020-12-25T03:30:00Z` và `target_ts <= 2020-12-25T03:30:00Z` → **`1,167` mẫu hợp lệ** (đã cắt `5` mẫu sát biên có nhãn vắt sang `TEST`).
-   - **Tập `TEST` độc lập (`15%`):** `slot_ts > 2020-12-25T03:30:00Z` → **`1,182` mẫu kiểm thử** (`185` mẫu kẹt cứng `LOS E/F`).
+1. **Ghép cặp đúng `+30 phút` thay vì trượt dòng tuần tự:** Hệ thống chỉ ghép nhãn khi cùng một `segment_id` có quan sát ở đúng `target_ts = slot_ts + 30 phút`, thu được **`7,885` cặp chuẩn xác `+30 phút`** trên mạng cơ giới sạch.
+2. **Phát hiện và loại bỏ `7,192` cửa sổ burst tổng hợp khi huấn luyện ML:** Hai khung giờ `2020-08-02 period_23_30` và `2020-08-03 period_0_00` (`3,609` đoạn thô / `3,596` đoạn cơ giới sạch mỗi khung) tạo thành `7,192` cửa sổ burst tổng hợp và sinh ra **`3,596` cặp burst** trong `TRAIN`. Hệ thống **loại hoàn toàn `3,596` cặp burst** này khỏi tập huấn luyện, giữ:
+   - **Giai đoạn khởi tạo:** `warmup_cutoff_utc = 2020-08-02T23:30:00Z`.
+   - **Tập `TRAIN` hữu cơ (`70%`):** `slot_ts <= 2020-12-12T08:00:00Z`, `target_ts <= 2020-12-12T08:00:00Z` & `is_synthetic_burst == 0` $\rightarrow$ **`1,885` mẫu hữu cơ** (đã cắt `50` mẫu sát biên có nhãn vắt sang `VAL` và loại `3,596` mẫu burst).
+   - **Tập `VAL` (`15%`):** `2020-12-12T08:00:00Z < slot_ts <= 2020-12-25T03:30:00Z` và `target_ts <= 2020-12-25T03:30:00Z` $\rightarrow$ **`1,167` mẫu hợp lệ** (đã cắt `5` mẫu sát biên).
+   - **Tập `TEST` độc lập (`15%`):** `slot_ts > 2020-12-25T03:30:00Z` $\rightarrow$ **`1,182` mẫu kiểm thử** (`959` `A`, `10` `B`, `15` `C`, `13` `D`, `20` `E`, `165` `F`; **`185` mẫu `LOS E/F`**).
+   - **Bảng Ablation có/không Burst (`metrics.json`):** Khi huấn luyện kèm `3,596` mẫu burst: `Test 6-Class Acc = 0.9391, Severe F1 = 0.9372`; khi loại burst huấn luyện thuần trên `1,885` mẫu hữu cơ: `Test 6-Class Acc = 0.9289, Severe F1 = 0.9301`.
 
 ### 5.2. Tỷ Lệ Kẹt Tích Lũy Quá Khứ & Tổ Hợp 23 Biến Đầu Vào Của Mô Hình
 
@@ -316,164 +318,148 @@ Tại mỗi thời điểm dự báo $t$, tỷ lệ kẹt lịch sử của đo�
 
 ![Công thức tỷ lệ kẹt tích lũy quá khứ](../../outputs/slide_charts/eq_prior.png)
 
-Kiểm thử tự động đảo trộn ngẫu nhiên toàn bộ dữ liệu tương lai $\tau > t$ xác nhận cả `23` biến đầu vào tại thời điểm $t$ giữ nguyên tuyệt đối (`max_abs_diff = 0.0`):
+Kiểm thử đảo trộn ngẫu nhiên toàn bộ dữ liệu tương lai $\tau > t$ xác nhận cả `23` biến đầu vào tại thời điểm $t$ giữ nguyên tuyệt đối (`max_abs_diff = 0.0`):
 
-| Nhóm Biến Đầu vào (`Tổng = 23 biến`) | Danh sách Biến & Mức Đóng góp | Tổng Trọng số |
+| Nhóm Biến Đầu vào (`Tổng = 23 biến`) | Danh sách Biến & Mức Đóng góp (`outputs/model.joblib`) | Tổng Trọng số |
 |---|---|---:|
-| **1. Trạng thái hiện tại & lịch sử gần (`7` biến)** | `current_los_ordinal` (`0.5051`), `mean_velocity` (`0.2236`), `trailing_severe_rate` (`0.0623`), `lag1_los_ordinal` (`0.0035`), `velocity_ratio` (`0.0033`), `lag2_los_ordinal` (`0.0004`), `obs_count` (`0.0000`) | **`79.82%`** |
-| **2. Chu kỳ giờ Việt Nam & hình học đường (`7` biến)** | `period_sin` (`0.1018`), `period_cos` (`0.0156`), `length_m` (`0.0035`), `weekday` (`0.0004`), `street_level` (`0.0003`), `max_velocity` (`0.0001`), `gap_minutes` (`0.0001`) | **`12.18%`** |
-| **3. Đặc trưng bản đồ từ Bước 2 & tỷ lệ quá khứ (`9` biến)** | `segment_train_severe_prior` (`0.0492`), `segment_train_prior_los` (`0.0197`), `pagerank_score` (`0.0033`), `street_causal_prior_los` (`0.0023`), `street_causal_prior_sev` (`0.0022`), `neighbor_los_ordinal` (`0.0016`), `in_degree` (`0.0005`), `out_degree` (`0.0005`), `cluster_id` (`0.0004`) | **`8.00%`** |
+| **1. Trạng thái hiện tại & lịch sử gần (`7` biến)** | `mean_velocity` (`0.4675`), `current_los_ordinal` (`0.1713`), `velocity_ratio` (`0.0690`), `obs_count` (`0.0256`), `lag1_los_ordinal` (`0.0145`), `lag2_los_ordinal` (`0.0094`), `trailing_severe_rate` (`0.0048`) | **`76.20%`** |
+| **2. Chu kỳ giờ Việt Nam & hình học đường (`7` biến)** | `period_sin` (`0.0362`), `period_cos` (`0.0266`), `length_m` (`0.0155`), `gap_minutes` (`0.0140`), `weekday` (`0.0107`), `max_velocity` (`0.0085`), `street_level` (`0.0008`) | **`11.23%`** |
+| **3. Đặc trưng bản đồ từ Bước 2 & tỷ lệ quá khứ (`9` biến)** | `pagerank_score` (`0.0482`), `neighbor_los_ordinal` (`0.0273`), `street_causal_prior_los` (`0.0142`), `segment_train_prior_los` (`0.0122`), `segment_train_severe_prior` (`0.0107`), `street_causal_prior_sev` (`0.0107`), `out_degree` (`0.0012`), `cluster_id` (`0.0009`), `in_degree` (`0.0003`) | **`12.57%`** |
 
-### 5.3. Lựa Chọn Mô Hình Duy Nhất Qua Tập Kiểm Định VAL, Bảng Thử Nghiệm 7 Cấu Hình & Ma Trận 6 Mức
+### 5.3. Huấn Luyện Sạch, Cổng Chọn `VAL`, Bảng 7 Cấu Hình & Ma Trận 6 Mức (`outputs/ablation_results.csv`)
 
-Trên tập kiểm định `VAL` (`1,167` mẫu), hệ thống đối chiếu 7 cấu hình ứng viên và chọn ra **một mô hình đa lớp duy nhất để triển khai xuyên suốt hệ thống**: cấu hình **`#5 Random Forest (+PageRank, Tỷ lệ quá khứ & K-Means, 23 biến)`** đạt kết quả tốt nhất trên tập `VAL` (**`VAL ROC-AUC = 0.9593`**, **`VAL PR-AUC = 0.8704`**, độ chính xác 6 mức `= 0.9529`) và được khóa cố định. Bảng dưới đây trình bày kết quả chấm một lần trên `1,182` mẫu `TEST` độc lập (`outputs/ablation_results.csv`):
+- **Huấn luyện sạch trung thực:** Loại bỏ hoàn toàn `sample_weight` nhân tạo và fallback bypass; chỉ dùng `class_weight` lũy thừa `0.65`: $w_c = (N / (6 \cdot n_c))^{0.65}$.
+- **Lựa chọn mô hình qua cổng `VAL` (`0.5 * val_accuracy_6class + 0.5 * val_pr_auc`):** **`Random Forest 23D`** thắng áp đảo với **`val_composite_score = 0.8990`** (`VAL Acc = 0.9023`, `VAL PR-AUC = 0.8957`, `VAL ROC-AUC = 0.9611`, `VAL Severe F1 = 0.8912`, `th = 0.25`) so với **`0.5343`** của `RF Local Only 14D` (`VAL Acc = 0.1482`, `VAL PR-AUC = 0.9204`) và `0.8618` của `DT 23D`. Bảng kết quả một lần trên `1,182` mẫu `TEST`:
 
-| Cấu hình Thử nghiệm (Mô hình vận hành chính: `#5 Random Forest 23 biến`) | Số biến | Đúng 6 mức | `Macro-F1` | `Prec Kẹt` | `Rec Kẹt` | `F1 Kẹt` | `ROC-AUC` | `PR-AUC` |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| **1. Baseline (`Đoán LOS(t+30p) = LOS(t) hiện tại`)** | `1 biến` | `0.9484` | `0.5654` | `0.9365` | `0.9568` | `0.9465` | `0.9867` | `0.9367` |
-| **2. Cây quyết định `Decision Tree` (`Chỉ biến cục bộ`)** | `14 biến` | `0.9425` | `0.3794` | `0.9362` | `0.9514` | `0.9437` | `0.9856` | `0.9482` |
-| **3. Cây quyết định `Decision Tree` (`+PageRank & K-Means`)** | `23 biến` | `0.9425` | `0.3772` | `0.9362` | `0.9514` | `0.9437` | `0.9844` | `0.9327` |
-| **4. `Random Forest` (`Chỉ biến cục bộ & giờ Việt Nam`)** | `14 biến` | `0.9425` | `0.5455` | `0.9409` | `0.9459` | `0.9434` | `0.9866` | `0.9630` |
-| **5. `Random Forest` (`+PageRank, Tỷ lệ quá khứ & K-Means`) [Mô hình chính]** | **`23 biến`** | **`0.9450`** | **`0.5543`** | **`0.9358`** | **`0.9459`** | **`0.9409`** | **`0.9882`** | **`0.9471`** |
-| **6. `GBT` Nhị phân (`Chỉ báo kẹt cứng E/F, biến cục bộ`)** | `14 biến` | `N/A` | `N/A` | `0.6667` | `0.9514` | `0.7840` | `0.9812` | `0.9328` |
-| **7. `GBT` Nhị phân (`+PageRank, Tỷ lệ quá khứ & K-Means`)** | `23 biến` | `N/A` | `N/A` | `0.9365` | `0.9568` | `0.9465` | `0.9843` | `0.9419` |
+| Cấu hình Thử nghiệm (Mô hình vận hành chính: `#5 Random Forest 23D`) | Số biến | Đúng 6 mức | `Macro-F1` | `Weighted-F1` | `Prec Kẹt` | `Rec Kẹt` | `F1 Kẹt` | `ROC-AUC` | `PR-AUC` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **1. `Persistence Baseline (t -> t+30m)`** | `Lag-0` | `0.9484` | `0.5654` | `0.9461` | `0.9365` | `0.9568` | `0.9465` | `0.9867` | `0.9367` |
+| **2. `Decision Tree (Local Only)`** | `14D` | `0.8832` | `0.3767` | `0.9058` | `0.9467` | `0.8649` | `0.9040` | `0.9833` | `0.9296` |
+| **3. `Decision Tree (+Graph, Causal Priors & K-Means)`** | `23D` | `0.8748` | `0.3817` | `0.9006` | `0.9459` | `0.7568` | `0.8408` | `0.9799` | `0.9263` |
+| **4. `Random Forest (Local Only)`** | `14D` | `0.9239` | `0.4372` | `0.9290` | `0.9429` | `0.8919` | `0.9167` | `0.9898` | `0.9557` |
+| **5. `Random Forest (+Graph, Causal Priors & K-Means)` [Đã chọn]** | **`23D`** | **`0.9289`** | **`0.4475`** | **`0.9304`** | **`0.9251`** | **`0.9351`** | **`0.9301`** | **`0.9900`** | **`0.9595`** |
+| **6. `GBT Binary Alerting (Local Only)`** | `14D` | `N/A` | `N/A` | `N/A` | `0.9362` | `0.9514` | `0.9437` | `0.9849` | `0.9534` |
+| **7. `GBT Binary Alerting (+Graph, Causal Priors & K-Means)`** | `23D` | `N/A` | `N/A` | `N/A` | `0.9259` | `0.9459` | `0.9358` | `0.9822` | `0.9454` |
 
-#### Bảng 5.4 — Ma trận phân loại 6 mức của mô hình chính `Random Forest (23 biến)` trên `1,182` mẫu `TEST`
+#### Bảng 5.4 — Ma trận nhầm lẫn 6 mức của `Random Forest (23D)` trên `1,182` mẫu `TEST`
 
 | Nhãn Thực tế \ Dự báo | Dự báo `LOS A` | Dự báo `LOS B` | Dự báo `LOS C` | Dự báo `LOS D` | Dự báo `LOS E` | Dự báo `LOS F` | Tổng Thực tế |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| **Thực tế `LOS A` (Thông thoáng)** | **`944`** | `9` | `2` | `0` | `0` | `4` | **`959`** (`81.13%`) |
-| **Thực tế `LOS B` (Tốc độ cao)** | `3` | **`4`** | `1` | `0` | `1` | `1` | **`10`** (`0.85%`) |
-| **Thực tế `LOS C` (Ổn định)** | `6` | `0` | **`3`** | `1` | `1` | `4` | **`15`** (`1.27%`) |
-| **Thực tế `LOS D` (Đông đúc)** | `2` | `1` | `2` | **`7`** | `1` | `0` | **`13`** (`1.10%`) |
-| **Thực tế `LOS E` (Ùn ứ nặng)** | `1` | `1` | `0` | `3` | **`6`** | `9` | **`20`** (`1.69%`) |
-| **Thực tế `LOS F` (Kẹt cứng)** | `1` | `1` | `1` | `2` | `7` | **`153`** | **`165`** (`13.96%`) |
+| **Thực tế `LOS A` (Thông thoáng)** | **`937`** | `14` | `0` | `4` | `0` | `4` | **`959`** (`81.13%`) |
+| **Thực tế `LOS B` (Tốc độ cao)** | `2` | **`4`** | `0` | `2` | `0` | `2` | **`10`** (`0.85%`) |
+| **Thực tế `LOS C` (Ổn định)** | `6` | `0` | **`1`** | `5` | `0` | `3` | **`15`** (`1.27%`) |
+| **Thực tế `LOS D` (Đông đúc)** | `2` | `1` | `2` | **`7`** | `0` | `1` | **`13`** (`1.10%`) |
+| **Thực tế `LOS E` (Ùn ứ nặng)** | `1` | `0` | `2` | `7` | **`2`** | `8` | **`20`** (`1.69%`) |
+| **Thực tế `LOS F` (Kẹt cứng)** | `1` | `2` | `1` | `4` | `10` | **`147`** | **`165`** (`13.96%`) |
+
+> *Hạn chế được báo cáo trung thực:* Đường chéo chính đạt **`[937, 4, 1, 7, 2, 147]`** (cả 6 lớp đều có dự báo đúng `> 0`), `Weighted-F1 = 0.9304`, nhưng **`Macro-F1 = 0.4475`** do mất cân bằng dữ liệu tự nhiên ở các lớp trung gian `B/C/D/E` (chỉ có `10–20` mẫu `TEST` mỗi lớp so với `959` mẫu `A` và `165` mẫu `F`).
 
 ![Hình 5.1. So sánh hiệu năng cảnh báo kẹt cứng LOS E/F và phân loại 6 mức LOS A–F](../../outputs/slide_charts/chart_ablation_t30m.png)
 
 *Hình 5.1. So sánh trực quan hiệu năng cảnh báo kẹt cứng (`ROC-AUC`, `PR-AUC`, `F1`) và phân loại 6 mức `LOS A–F` giữa các ứng viên trên tập `TEST`.*
 
-### 5.4. So Sánh Trực Diện Giữa Baseline Và Random Forest (23 Biến) Khi Giao Thông Thay Đổi Trạng Thái
+### 5.4. Kiểm Định Chuyển Pha, Paired Bootstrap 95% CI, McNemar & Masked-GPS Spatial Cold-Start Proxy
 
-Nhìn vào bảng tổng gộp `1,182` mẫu `TEST`, cách đoán đơn giản **`Baseline`** (hiện tại đường ở mức nào thì đoán `30 phút` nữa giữ nguyên mức đó) đạt độ chính xác 6 mức tới **`94.84%`** (nhỉnh hơn `94.50%` của `Random Forest` đúng `4` mẫu). Lý do rất tự nhiên: **`94.84%` thời gian (`1,121 / 1,182` mẫu) đoạn đường giữ nguyên mức `LOS` cũ sau 30 phút** (trong đó riêng đường thông thoáng `LOS A` đã chiếm `81.13%`, còn các mức trung gian `B, C, D, E` chỉ có `10–20` mẫu mỗi mức).
+Trên tổng thể `1,182` mẫu `TEST`, **`94.84%` (`1,121 / 1,182`)** giữ nguyên mức `LOS` cũ sau 30 phút nên `Baseline` đạt `0.9484`. Tuy nhiên ở các tình huống chuyển pha, kiểm định thống kê và vùng mù GPS (`outputs/transition_evaluation.csv`, `outputs/metrics.json`):
 
-Tuy nhiên, ở **`5.16%` thời điểm giao thông thực sự bắt đầu chuyển trạng thái** (`61` trường hợp từ thoáng sang đông/kẹt hoặc ngược lại), ở những đoạn gửi GPS ngắt quãng, và trên **`88.15%` đoạn đường thiếu GPS**, bảng đối chứng trực diện 1-đối-1 dưới đây (không pha trộn bất kỳ mô hình phụ nào khác) cho thấy trung thực cả điểm mạnh lẫn giới hạn thực nghiệm của **`Random Forest (23 biến)`** so với **`Baseline`**:
-
-#### Bảng 5.5 — Đối chứng trực diện 1-đối-1 giữa `Baseline` và mô hình chính `Random Forest (23 biến)`
-
-| Tình huống Kiểm định Thực tế | `Baseline` (Giữ nguyên trạng thái hiện tại) | Mô hình chính: `Random Forest (23 biến)` | Kết luận Thực tiễn & Ghi nhận Khoa học Trung thực |
+| Tình huống Kiểm định Thực tế | `Baseline` (Giữ nguyên hiện tại) | Mô hình chính: `Random Forest (23D)` | Kết luận & Kiểm định Thống kê (`Bootstrap` / `McNemar`) |
 |---|---|---|---|
-| **1. Nhóm giao thông đổi trạng thái** (`LOS(t) ≠ LOS(t+30p)`, **`61 / 1,182` mẫu TEST**) | **Đoán đúng mức mới: `0 / 61` (`0.00%`)** · Khả năng phát hiện biến động `ROC-AUC = 0.5000` · `PR-AUC` kẹt cứng `= 0.5408` · Sai số `Brier = 0.3279` | **Phát hiện biến động: `ROC-AUC = 0.7664`** · Đoán đúng mức mới: **`9 / 61` (`14.75%`** với ngưỡng xác suất `τ = 0.30` chọn trên `VAL`; mặc định thận trọng đạt `2 / 61 = 3.28%`) · Xếp đúng hướng mới ở vị trí `#1` đạt **`24 / 61` (`39.34%`)** · `PR-AUC = 0.5708` · `Brier = 0.2948` | `Baseline` mù hoàn toàn (đoán sai `100%`) mỗi khi giao thông đổi pha; `Random Forest` phát hiện sớm tín hiệu rủi ro (`ROC-AUC = 0.7664`) và giảm `10.1%` sai số xác suất. |
-| **2. Đường đang thoáng (`A–D`) đột ngột hóa kẹt cứng (`E–F`)** (chỉ có **`8 / 993` mẫu TEST**) | **Bắt trúng ở ngưỡng cứng: `0 / 8` (`0.00%`)** · Gán xác suất kẹt cứng `= 0%` như nhau cho mọi đoạn đường đang mức `A–D` | **Bắt trúng ở ngưỡng cứng mặc định: `0 / 8` (`0.00%`** do cỡ mẫu quá hiếm `0.81%`, xác suất cao nhất đạt `12.2%`) · Xét về xếp hạng xác suất: đạt **`ROC-AUC = 0.8136`** và đẩy xác suất rủi ro trung bình trên 8 ca sắp kẹt **cao gấp `9.35x`** đường thoáng ổn định (`3.46%` so với `0.37%`) | *Ghi nhận trung thực:* Với vỏn vẹn `8` ca chuyển đột ngột trong tập `TEST`, ngưỡng phân lớp cứng chưa bắt kịp, nhưng tín hiệu xác suất của `Random Forest` vẫn tăng gấp `9.35` lần để cảnh báo sớm. |
-| **3. Tín hiệu GPS ngắt quãng trên `30 phút`** (**`3,513` mẫu TEST**, `47.45%` đổi mức) | `PR-AUC` kẹt cứng `= 0.6369` · `ROC-AUC = 0.7850` (quán tính cũ sụp đổ khi mất tín hiệu lâu) | **`PR-AUC` kẹt cứng `= 0.7082` (`+7.13%`)** · **`ROC-AUC = 0.8427` (`+5.77%`)** (đối chiếu chuẩn lịch sử: `PR-AUC = 0.7628`) | Trên `66.27%` trường hợp xe gửi tín hiệu thưa, chu kỳ giờ Việt Nam + `PageRank` + `K-Means` giúp `Random Forest` vượt xa `Baseline`. |
-| **4. Mạng lưới đường thiếu cảm biến GPS** (`74,606 / 84,633` đoạn = **`88.15%`** TP.HCM) | **Độ phủ dự báo `= 0.0%`** (bất lực hoàn toàn vì không có mức `LOS` hiện tại trên đường) | **Độ phủ dự báo `= 100.0%` (`84,633 / 84,633` đoạn)** nhờ ghép trực tiếp kho đặc trưng bản đồ tĩnh từ Bước 2 | Chỉ duy nhất `Random Forest (23 biến)` mới chấm điểm rủi ro được cho `88.15%` mạng lưới đường nhánh chưa có xe gửi GPS. |
+| **1. Nhóm giao thông đổi trạng thái** (`61 / 1,182` mẫu TEST = `5.16%`) | Đúng mức mới: **`0 / 61` (`0.00%`)** · `Detect ROC-AUC = 0.5000` · `PR-AUC = 0.5408` · `Brier = 0.3279` | Đúng mặc định: **`7 / 61` (`11.48%`)** · Hiệu chỉnh `VAL` (`P >= 0.40`): **`12 / 61` (`19.67%`)** · Conditional top-1: **`31.15%`** · **`Detect ROC-AUC = 0.9146`** *(vs heuristic `0.7921`)* · `PR-AUC = 0.6223` · `Brier = 0.2872` | **McNemar chuyển pha: `7 vs 0`, `p = 0.015625`** (`< 0.05`); Paired Bootstrap `1,000` vòng: `ROC-AUC 95% CI [0.9836, 0.9953]`, `Severe F1 95% CI [0.9012, 0.9547]`. |
+| **2. Đường thoáng (`A–D`) đột ngột hóa kẹt (`E–F`)** (`8 / 993` mẫu TEST) | `Hard Recall = 0.00%` · `ROC-AUC = 0.8021` (không phân biệt độ rủi ro nội tại) | **`Onset ROC-AUC = 0.8539`** · **`Onset risk lift = 3.32x`** (`mean_prob = 0.0823` trên 8 ca sắp kẹt vs `0.0248` đường thoáng ổn định) | *Ghi nhận trung thực:* Cỡ mẫu khởi phát quá hiếm (`8` ca) nên ngưỡng cứng chưa bắt trọn, nhưng xác suất cảnh báo tăng `3.32x`. |
+| **3. Tín hiệu GPS ngắt quãng `> 30 phút`** (`3,605` mẫu TEST, `49.21%` đổi mức) | `6-Class Acc = 0.5079` · `Severe PR-AUC = 0.5732` | `6-Class Acc = 0.4890` · **`Severe PR-AUC = 0.6293`** (`+5.61%`, `GBT 23D = 0.6239`) | Trên tập ngắt quãng dài, `RF 23D` xếp hạng nguy cơ kẹt nặng chính xác hơn `Baseline`. *(Đối chiếu `legacy shift(-1)` `4,787` dòng: `F1=0.6178, PR-AUC=0.7441, ROC-AUC=0.8711`.)* |
+| **4. `Masked-GPS Spatial Cold-Start Proxy` & Độ phủ `84,206` đoạn** | Độ phủ mạng lưới: **`11.87%`** (**`0.0%`** trên `74,211` đoạn `Cold-Start`) | **`100.0%` độ phủ (`84,206` đoạn)**; khi che hoàn toàn GPS trên `1,182` TEST đạt `Acc = 0.5271, ROC-AUC = 0.6175, PR-AUC = 0.4282, Brier = 0.1168` | Chỉ `RF 23D` kết hợp Static Store `[C13b]` mới dự báo được cho `88.13%` đoạn đường mù GPS (`74,211` đoạn). |
 
 ![Hình 5.2. So sánh trực diện Baseline và Random Forest ở các tình huống khó nhất](../../outputs/slide_charts/chart_transition_analysis.png)
 
-*Hình 5.2. So sánh trực diện 1-đối-1 giữa `Baseline` và `Random Forest (23 biến)` ở các tình huống khó nhất (trên), đối chiếu với phân bố mẫu kiểm thử giải thích vì sao `94.84%` đường giữ nguyên trạng thái tĩnh (dưới).*
+*Hình 5.2. So sánh trực diện 1-đối-1 giữa `Baseline` và `Random Forest (23D)` ở các tình huống khó nhất.*
 
 ---
 
-## Chương 6. Bước 4 — Cảnh Báo Trực Tuyến Gọn Nhẹ (33.0 KiB), Tự Động Bù Dữ Liệu Trễ & Giao Diện Điều Hành
+## Chương 6. Bước 4 — Luồng `Kafka 4.1`, Bộ Đếm `33.0 KiB`, Lakehouse, Đối Soát & Dual Web UI (`:8000` / `:8501`)
 
-### 6.1. Tiếp Nhận Luồng Kafka 4.1.0 KRaft, Chia Hai Nhánh Không Mất Tin Trễ & Tự Hồi Phục Sự Cố
+### 6.1. Tiếp Nhận Luồng `Kafka 4.1.0 KRaft`, Lakehouse & Tự Hồi Phục Sự Cố (`WAL = 73.7 KB`)
 
-- **Tái hiện luồng sự kiện thực tế (`producer.py`, `seed = 42`):** Phát `33,775` sự kiện cửa sổ (`33,441` gốc + `334` bản trùng, gồm `1,170` tin trễ dưới `30 phút` và `501` tin trễ quá `30 phút` trải trên `219` khung giờ) cùng `91,847` sự kiện bản tin GPS thô qua `3` phân vùng của `apache/kafka:4.1.0` (đã kiểm chứng truyền nhận thực tế `3,000` bản tin JSON).
-- **Chia hai nhánh không mất dữ liệu:** Nhánh 1 ghi nguyên vẹn `100%` sự kiện từ `Kafka` vào hồ dữ liệu `Parquet` thô trước khi xét hạn trễ; Nhánh 2 áp dụng ngưỡng chờ `30 phút` để lọc trùng, chấm điểm tức thời và phát cảnh báo tạm thời (`v1`).
-- **Tự hồi phục sau sự cố (`WAL`):** Khi ngắt cưỡng bức tiến trình `starter_stream.py --kill-after-batch 1`, hệ thống đọc lại `offset_log.json` và `state_wal.json`, tự động bỏ qua lô `1` đã xử lý và chạy tiếp lô `2`, lô `3` đạt đúng `32,940` sự kiện trong hạn với **`0` bản ghi bị nhân đôi**.
+- **Tái hiện luồng sự kiện (`producer.py`, `seed = 42`):** Phát **`33,727` sự kiện cửa sổ** (`33,394` gốc + `333` trùng, `1,168` trễ trong watermark và **`500` trễ quá watermark tại `226` khung giờ**) cùng **`91,694` sự kiện ping GPS thô** (`90,787` hợp lệ) qua `3` phân vùng của `apache/kafka:4.1.0` (`3,000` tin broker check: `P0=1,017, P1=1,007, P2=976`).
+- **Hồ dữ liệu `Medallion Lakehouse` (`data/lakehouse/`):** Ghi đầy đủ `bronze_raw_events/events.parquet` (`90,787` pings × `4` cols), `stream_replay_windows/replay.parquet` (`33,727` × `45`), `silver_cleaned_windows/windows.parquet` (`33,394` × `86`) và `curated_gold/year_month=*` (`10` phân vùng tháng, `2020-08` có `7,268` dòng) — **đọc sạch bởi cả `PyArrow/Pandas` lẫn `Apache Spark 3.5.7`**.
+- **Spark Streaming & Tự hồi phục sự cố `WAL` (`outputs/query_progress.json`):** `spark_engine.py` xác nhận Spark Structured Streaming Sink 2 với **watermark thực `2020-12-01T12:30:00.000Z`** (`3` batches committed); `starter_stream.py --kill-after-batch 1` lưu **`WAL = 73,713 B (73.7 KB)`**, bỏ qua `batch 1` đã commit và xử lý tiếp đến `90,741` sự kiện trong watermark (`90,787` Bronze), **`0` bản ghi nhân đôi**.
 
-### 6.2. Vì Sao Cần Thêm Bộ Đếm Gọn 33.0 KiB & Điểm Nóng EWMA Bên Cạnh Random Forest?
+### 6.2. Bộ Đếm Gọn `33.0 KiB` (`RotatingBloom` + `64-bit HLL`) & Điểm Nóng `EWMA`
 
-Một câu hỏi rất thiết thực khi nối từ Chương 5 sang Chương 6 là: *Ở Chương 5 đã có mô hình `Random Forest` dự báo kẹt xe rồi, sao sang Chương 6 lại có thêm bộ lọc `Bloom`, `HyperLogLog++` và `Điểm nóng EWMA` để bắt đường Lý Thường Kiệt? Hai công cụ này khác gì nhau?*
-- **`Random Forest` (Chương 5 — Dự báo tương lai `t + 30 phút`):** Trả lời câu hỏi *"30 phút nữa đoạn đường nào SẮP chuyển sang kẹt cứng?"* giúp kỹ sư tín hiệu đèn chủ động kéo dài đèn xanh phòng ngừa từ trước.
-- **`Điểm nóng EWMA` ($\alpha = 0.15$ — Giám sát độ lì hiện tại):** Trả lời câu hỏi *"Ngay lúc này, đoạn đường nào ĐANG kẹt cứng dai dẳng suốt nhiều khung 30 phút liên tiếp chưa giải tỏa được?"* (ví dụ đoạn `47407` Lý Thường Kiệt bị kẹt lặp đi lặp lại nhiều giờ khiến điểm tích lũy vọt lên `6.6652`, phân biệt rõ với một đoạn chỉ thoáng chậm lại 1 khung rồi thông ngay).
-- **`BitPackedBloomFilter` (`32.0 KiB`) & `HyperLogLog++` (`1.0 KiB`):** Bảo vệ luồng trực tuyến khỏi bản tin gửi trùng và đếm nhanh số đoạn đường đang có xe chạy chỉ trong **`33.0 KiB` bộ nhớ cố định**, không làm phình RAM khi hệ thống chạy liên tục nhiều tháng:
+- **`Random Forest` (Chương 5)** dự báo tương lai `t + 30p`, trong khi **`Điểm nóng EWMA` ($\alpha = 0.15$)** đo độ lì ùn tắc hiện tại, đi kèm **`32.0 KiB RotatingBloomFilter` (`2 × 16.0 KiB`)** + **`1.0 KiB 64-bit HyperLogLog` (`p=10`, `uint8[1024]`)**:
 
 ![Công thức ba cấu trúc luồng gọn nhẹ 33.0 KiB](../../outputs/slide_charts/eq_sketches.png)
 
-| Công cụ Luồng Trực tuyến | Cấp phát Bộ nhớ Vật lý Gọn nhẹ | Kết quả Kiểm chứng Thực tế (`metrics.json` & `hotspot_alerts.csv`) |
+| Công cụ Luồng Trực tuyến | Cấp phát Bộ nhớ Vật lý | Kết quả Kiểm chứng Thực tế (`metrics.json`, `query_progress.json` & `hotspot_alerts.csv`) |
 |---|---|---|
-| **1. Bộ lọc trùng `BitPackedBloomFilter`** | $m = 262{,}144$ bit đóng gói trong mảng **`uint8[32768]` = đúng `32,768 Bytes (32.0 KiB)`**, $k = 4$ hàm băm | Chặn chính xác **`334 / 334` (`100.0%`)** bản tin trùng; tỷ lệ báo trùng nhầm thực tế chỉ **`0.616%`** (`< 2.55%` lý thuyết). |
-| **2. Bộ đếm đường `HyperLogLogPlusPlus`** | $p = 10 \Rightarrow 1{,}024$ thanh ghi trong mảng **`uint8[1024]` = đúng `1,024 Bytes (1.0 KiB)`**, sai số chuẩn `3.25%` | Ước lượng **`9,627.9` đoạn đường hoạt động** so với `10,027` đoạn thực tế, đạt **sai số tương đối `3.98% < 5.0%`**. |
-| **3. Bộ theo dõi điểm nóng `EWMA`** | Hệ số suy giảm $\alpha = 0.15$ mỗi khung `30 phút`, tự xóa khóa khi điểm $< \varepsilon = 10^{-4}$ (`4,556` khóa đang mở) | Phát hiện chính xác các điểm kẹt dai dẳng nhất TP.HCM: **#1 Đoạn `47407` Lý Thường Kiệt (`6.6652`)**, **#2 Đoạn `21263` Trương Định (`6.6635`)**, **#3 Đoạn `22684` Nguyễn Đình Chiểu (`6.6300`)**. |
+| **1. Lọc trùng `Bloom` / `RotatingBloom`** | `32,768 Bytes (32.0 KiB)` (`262,144` bits, $k=4$; luồng live dùng `RotatingBloom 2 × 16 KiB`) | Chặn chính xác **`333 / 333` (`100.0%`)** tin trùng; **`FPR = 0.6109%`** (`< 2.54%` lý thuyết). |
+| **2. Đếm đường `64-bit HyperLogLog`** | $p = 10 \Rightarrow 1{,}024$ thanh ghi **`uint8[1024]` = `1,024 Bytes (1.0 KiB)`** | Ước lượng **`9,620.2` đoạn** so với `9,995` đoạn thực tế (**sai số `3.75%`**; WAL = `9,620.23`). |
+| **3. Điểm nóng `EWMA`** | $\alpha = 0.15$, tự xóa khóa `< 10^{-4}` (`77` khóa hoạt động cuối luồng WAL) | Bắt **#1 `47407` Lý Thường Kiệt (`6.6652`)**, **#2 `21263` Trương Định (`6.6635`)**, **#3 `22684` Nguyễn Đình Chiểu (`6.6300`)**. |
 
-### 6.3. Đối Soát Hai Tầng Cuối Ngày, Tự Động Bù Tin Trễ & Khóa Phiên Bản Chống Ghi Đè
+### 6.3. Đối Soát Hai Tầng & Khóa Phiên Bản Chống Ghi Đè (`[C12]`)
 
-1. **Tầng 1 (Đối chiếu dữ liệu đúng hạn `≤ 30 phút`):** Phép trừ tập hợp hai chiều `exceptAll` giữa luồng nhanh và xử lý lô trên toàn bộ **`32,940 / 32,940` cửa sổ đúng hạn** đạt **`0` dòng sai lệch (`100.0%` khớp tuyệt đối)**.
-2. **Tầng 2 (Khôi phục tin trễ & cập nhật chuỗi lịch sử):** Cuối ngày, hệ thống quét lại hồ dữ liệu thô bù đủ **`501` cửa sổ đến trễ quá `30 phút`** trải trên **`219` khung giờ**, nâng độ đầy đủ từ **`98.50%` lên `100.00%`**; đồng thời cập nhật lại các biến lịch sử (`lag1_los_ordinal`, `lag2_los_ordinal`, `trailing_severe_rate`) cho **`3,953` cửa sổ kế tiếp** và **chấm điểm lại `377` cửa sổ dự báo** (điều chỉnh xác suất của `100` cửa sổ chính xác hơn).
-3. **Khóa phiên bản tăng dần (`status_version`):** Kho phục vụ duy trì rõ **`488` bản tạm thời (`v1`)**, **`501` bản đã bù tin trễ (`v2`)** và **`32,452` bản đã xác thực (`v2`)**; cơ chế khóa phiên bản đã chặn đứng **`25 / 25` bản tin luồng cũ đến muộn** không cho ghi đè lùi lên kết quả chuẩn `v2`.
+1. **Tầng 1 (Trong `Watermark ≤ 30 phút`):** **`tier1_exceptAll_diff_count = 0`** (**`100.0%`** khớp tuyệt đối giữa luồng và xử lý lô).
+2. **Tầng 2 (Bù tin trễ & Hàn gắn biến trễ):** Bù đủ **`500` cửa sổ đoạn đường trễ** trải trên **`226` khung giờ**, nâng độ đầy đủ **`98.50% → 100.00%`**; hàn gắn **`609` cửa sổ hạ lưu (`healed_downstream_lag_windows`)**, **chấm điểm lại `384` cửa sổ** và **cập nhật xác suất `185` cửa sổ**.
+3. **Khóa phiên bản (`status_version`):** Kho `33,394` tài liệu duy trì **`489` bản tạm thời (`STREAM_PROVISIONAL v1`)**, **`500` bản đã bù tin trễ (`BATCH_RECONCILED v2`)** và **`32,405` bản đã xác thực (`BATCH_VERIFIED v2`)**; cơ chế **atomic `$status_version` pipeline guard** chặn đứng **`25 / 25` bản tin `v1` cũ** ghi đè `v2`.
 
-### 6.4. Kho Phục Vụ MongoDB 8.0.34 (< 1 ms) & Ảnh Cận Cảnh Giao Diện Điều Hành (:8501)
+### 6.4. Kho Phục Vụ MongoDB 8.0.34 (`IXSCAN 0.389 / 0.692 ms`) & Bộ Đôi Giao Diện Web (`:8000` & `:8501`)
 
-- **Truy vấn cảnh báo dưới `1 ms` trên `MongoDB 8.0.34` (`outputs/mongo_verify.json`):** Toàn bộ `33,441` bản ghi được ghi cập nhật an toàn qua `4` phân vùng (`69` lô × `500` lệnh `UpdateOne(upsert=True)`). Truy vấn `UC-2` lọc các trục chính cấp `1–2` có xác suất kẹt cứng `≥ 70%` khai thác chỉ mục kết hợp **`level_prob_segment_idx` (`{street_level: 1, severe_prob: -1, segment_id: 1}`)**, khớp `1,669` cửa sổ trục chính và trả `25` đoạn đầu qua `winning_stages = ["LIMIT", "PROJECTION_SIMPLE", "FETCH", "SORT_MERGE", "IXSCAN", "IXSCAN"]` mà không cần sắp xếp trong RAM, đạt độ trễ **`warm_median = 0.530 ms`** và **`warm_p95 = 0.636 ms`**.
+- **`MongoDB 8.0.34` (`outputs/mongo_verify.json`):** Toàn bộ **`33,394` bản ghi** được ghi cập nhật qua `4` phân vùng (`69` lô × `500` docs) với atomic `$status_version` pipeline guard. Truy vấn `UC-2` (`street_level IN [1,2]`, `severe_prob >= 0.70`, `limit 25`, khớp `1,202` cửa sổ trục chính) chạy **`IXSCAN` trên `level_prob_segment_idx`** (`in_memory_sort = false`, `totalKeysExamined = 26`, `totalDocsExamined = 25`), đạt **`warm_median = 0.389 ms`**, **`warm_p95 = 0.692 ms`** (`cold = 0.964 ms`, `min = 0.252 ms`, `max = 1.100 ms`) — nhanh gấp **`23.55x`** so với **`COLLSCAN` (`median = 9.161 ms`, `p95 = 9.906 ms`)**.
 
 ![Hình 6.1. Vòng đời đối soát cuối ngày và độ trễ truy vấn MongoDB 8.0.34](../../outputs/slide_charts/chart_streaming_serving.png)
 
-*Hình 6.1. Phân bố `33,441` cửa sổ theo vòng đời đối soát cuối ngày (trên) và độ trễ phản hồi dưới `1 ms` trên `MongoDB 8.0.34` (dưới).*
+*Hình 6.1. Phân bố `33,394` cửa sổ theo vòng đời đối soát cuối ngày và độ trễ truy vấn `MongoDB 8.0.34`.*
 
-- **Ảnh chụp cận cảnh Giao diện Điều hành `Streamlit` 5 tab (`app.py`, chạy trực tiếp tại `http://localhost:8501`):** Thay vì thu nhỏ toàn trang làm mờ chữ, các hình dưới đây phóng to trực tiếp vào từng khung nghiệp vụ quan trọng nhất trên màn hình thực tế:
-
-![Hình 6.2. Ảnh chụp cận cảnh Tab 1 trên giao diện điều hành: Bản đồ TP.HCM và bảng điểm nóng kẹt dai dẳng](../../outputs/slide_charts/ui_tab1_overview_hotspots.png)
-
-*Hình 6.2. Ảnh chụp cận cảnh **Tab 1** của giao diện điều hành (`:8501`): hiển thị bản đồ giao thông TP.HCM có sông Sài Gòn và tên quận cạnh bảng xếp hạng các đoạn đường đang kẹt dai dẳng nhất (dẫn đầu là Lý Thường Kiệt).*
-
-![Hình 6.3. Ảnh chụp cận cảnh Tab 2 kết nối trực tiếp MongoDB 8.0: Dự báo đúng pha chuyển E sang F tại Công Trường Quốc Tế](../../outputs/slide_charts/ui_tab2_live_forecast_mongo.png)
-
-*Hình 6.3. Ảnh chụp cận cảnh khung dự báo trên **Tab 2** kết nối trực tiếp **`MongoDB 8.0` (`33,441` bản ghi)**: tại đoạn đường `21064 — Công Trường Quốc Tế` lúc `11:30` trưa đang ở mức `E`, cách đoán theo hiện tại giữ nguyên mức `E` (sai), trong khi `Random Forest (23 biến)` dự báo chính xác sau `30 phút` chuyển sang kẹt cứng **mức `F` (xác suất kẹt cứng `59.6%`, xác suất đổi trạng thái `73.0%`)** khớp hoàn toàn thực tế.*
-
-![Hình 6.4. Ảnh chụp cận cảnh Tab 4: Tra cứu đoạn đường tương đồng cho vùng thiếu GPS](../../outputs/slide_charts/ui_tab4_kmeans_coldstart.png)
-
-*Hình 6.4. Ảnh chụp cận cảnh công cụ tra cứu vùng thiếu GPS trên **Tab 4**: khi chọn đoạn `61781 — Phú Định` (chưa từng có dữ liệu GPS), hệ thống tìm ngay các đoạn có cảm biến mang hành vi tương đồng nhất (`Châu Văn Liêm`, `Nguyễn Kiệm`...). *
+- **Hai giao diện Web vận hành song song:**
+  1. **Web TOC Thế Hệ Mới (`ReactJS + TypeScript + FastAPI + Leaflet` tại <http://localhost:8000>, dịch vụ `toc-web`):** 5 tab điều hành, 4 kịch bản rush-hour thực tế trên thanh Đồng hồ TOC, phóng nét đứt dự báo `[t, t+30p)` và phát `🎬 Phát Story qua Kafka` / `⚡ Stress-Test 200 tin`.
+  2. **Dashboard `Streamlit 5-Tab` (`app.py` tại <http://localhost:8501>, dịch vụ `app`):** Phục vụ tra cứu sâu, kiểm chứng phân tích & đối chứng trực tiếp `MongoDB` / `Spark` / `WAL`.
 
 ---
 
-## Chương 7. Phân Công Đóng Góp Nhóm, Kiểm Thử Tự Động, Ngân Sách Tài Nguyên & Hướng Dẫn Chạy Lại
+## Chương 7. Phân Công Đóng Góp Nhóm, Ngân Sách Tài Nguyên & Hướng Dẫn Chạy Lại
 
-### 7.1. Phân Công Chuyên Trách & Kết Quả Bàn Giao Của Ba Thành Viên (`100% Hoàn thành`)
+### 7.1. Phân Công Chuyên Trách & Kết Quả Bàn Giao Của Ba Thành Viên (GVHD: Đặng Trần Khánh)
 
-| Thành viên Thực hiện | Mảng Chuyên trách | Tệp Mã nguồn Chính | Kết quả Thực nghiệm Bàn giao |
+| Thành viên Thực hiện | Mảng Chuyên trách | Tệp Mã nguồn Chính | Kết quả Thực nghiệm Bàn giao (Wave 2) |
 |---|---|---|---|
-| **1. Nguyễn Tạ Minh Quyền** (`MSSV: 25MS23280`) | **Bước 1: Làm sạch dữ liệu & Xử lý phân tán Spark** | `spark_batch.py`, `traffic_data/spark_etl.py`, `baseline.py`, `compose.quyen.yml`, `tests/test_quyen_spark.py` | Phễu kiểm định 5 bước với `ANSI try_cast`, chuẩn hóa dấu `Unicode NFC` & giờ Việt Nam (`UTC+7`), ước lượng tốc độ tối đa từ `TRAIN`, bộ gộp 5 đại lượng khớp `100%` `baseline.py`, chia `8` giỏ khóa (`687.43x → 1.023x`), `BroadcastHashJoin` (`0 SortMergeJoin`) và `10` phân vùng tháng `Parquet`. |
-| **2. Nguyễn Thành Đạt** (`MSSV: 25MS23306`) | **Bước 2 & Bước 3: Đồ thị, Phân cụm & Dự báo `+30 phút`** | `pipeline.py`, `spark_engine.py`, bộ kiểm thử tự động `tests/` | Lọc `90.93%` điểm uốn cong trung gian, tính `PageRank` `84,633` đoạn đường, khai phá `Spark FPGrowth` (`335` luật) & `2-Pass SON`, phân `6` nhóm `K-Means` ($k=6$, `Silhouette = 0.2853`) phủ `74,606` đoạn thiếu GPS, ghép đúng `t+30p` (`7,898` cặp) + cắt mẫu biên, huấn luyện `Random Forest` (`ROC-AUC = 0.9882`), đối chứng trực diện `Baseline` – `Random Forest` và khóa chữ ký `SHA-256`. |
-| **3. Phạm Công Minh** (`MSSV: 25MS23310`) | **Bước 4: Luồng trực tuyến, Đối soát tin trễ, MongoDB & Giao diện** | `producer.py`, `starter_stream.py`, `app.py`, `docker-compose.yml`, `scripts/*` | Cụm hạ tầng `Docker` gói gọn trong `10.5 / 16.0 GB RAM`, trình phát sự kiện `Kafka 4.1.0 KRaft` (`3` phân vùng), bộ chia hai nhánh chờ `30 phút`, lọc trùng `Bloom` `32.0 KiB` & `HLL++` `1.0 KiB`, hồi phục sự cố `WAL` (`0` bản nhân đôi), bù `501` cửa sổ trễ / cập nhật `3,953` cửa sổ kế tiếp / chấm lại `377` cửa sổ, `MongoDB 8.0.34` (`0.636 ms`) & giao diện `Streamlit` 5 tab. |
+| **1. Nguyễn Tạ Minh Quyền** (`MSSV: 25MS23280`) | **Bước 1: Làm sạch dữ liệu & Xử lý phân tán Spark** | `spark_batch.py`, `traffic_data/spark_etl.py`, `baseline.py`, `compose.quyen.yml`, `tests/test_quyen_spark.py` | Phễu `R1–R6` với `ANSI try_cast`, chuẩn hóa `Unicode NFC` & `ICT`, loại `427` phi đường bộ (`33,394` cửa sổ), Pure 5-Tuple Monoid khớp `100%` `baseline.py` (`0` lệch), chia `8` giỏ khóa (`684.95x → 1.0197x`), `BroadcastHashJoin` & `10` phân vùng `Parquet`. |
+| **2. Nguyễn Thành Đạt** (`MSSV: 25MS23306`) | **Bước 2 & Bước 3: Đồ thị, Phân cụm, Lọc Burst & Dự báo `+30 phút`** | `pipeline.py`, `spark_engine.py`, `tests/` | Tỉa `90.97%` nút phụ, `PageRank` không U-turn (`84,206` đoạn, `92,453` cạnh, `#1 21969 Nguyễn Kiệm`), luật trên `TRAIN` hữu cơ (`12+14`), `K-Means` (`3,609` hữu cơ), lọc `7,192` burst (`1,885` `TRAIN` hữu cơ), `RF 23D` sạch (`ROC-AUC=0.9900`, `PR-AUC=0.9595`, McNemar `p=0.015625`). |
+| **3. Phạm Công Minh** (`MSSV: 25MS23310`) | **Bước 4: Kafka, Sketches `33 KiB`, Recon, MongoDB & Dual Web UI** | `producer.py`, `starter_stream.py`, `live_kafka_stream.py`, `toc_backend/`, `toc_frontend/`, `app.py`, `docker-compose.yml` | Cụm `6` dịch vụ Docker (`12.0 / 16.0 GB RAM`), `Kafka 4.1`, `32 KiB RotatingBloom` + `1 KiB 64-bit HLL`, `WAL 73.7 KB`, bù `500` cửa sổ trễ / hàn gắn `609`, `MongoDB 8.0` (`0.389/0.692 ms`), **Web TOC `:8000`** & **Streamlit `:8501`**. |
 
-### 7.2. Hệ Thống Kiểm Thử Tự Động Toàn Diện & Tiêu Chuẩn Chất Lượng Mã Nguồn
+### 7.2. Kiểm Soát Chất Lượng Mã Nguồn & Trạng Thái Kiểm Thử (`tests/`)
 
-Toàn bộ các bất biến toán học, điều kiện chống rò rỉ dữ liệu tương lai và giao thức vận hành đều được kiểm chứng tự động qua bộ kiểm thử **`pytest`** và **`Spark unittest`**:
-1. Kiểm thử bảo toàn quân số phễu kiểm định chất lượng, ranh giới 6 mức `derive_los`, đổi ngày qua nửa đêm sang giờ Việt Nam và tính bất biến của `vmax_lookup.json` khi thay đổi tập `TEST`.
-2. Kiểm thử tính kết hợp của bộ gộp 5 đại lượng trên các phân vùng lệch, tiêm lỗi vận tốc và xác thực kế hoạch thực thi `BroadcastHashJoin` + cắt tỉa phân vùng `Parquet`.
-3. Kiểm thử bảo toàn tổng điểm `PageRank` có đoạn cụt (`84,633.0`), chuẩn hóa dấu `Unicode NFC`, giữ nguyên giỏ tuyến đường `SON` không cắt ngọn và tìm đoạn tương đồng cho vùng thiếu GPS trong cùng nhóm `K-Means`.
-4. Kiểm thử từ chối bước nhảy `60 phút / 9 giờ` khi ghép cặp `t + 30 phút`, cắt mẫu biên `target_ts <= cutoff_ts`, bất biến biến đầu vào khi đảo trộn tương lai (`max_abs_diff = 0.0`), đối chứng `evaluate_transition_regimes` và chữ ký `SHA-256` của 3 tệp khóa cố định.
-5. Kiểm thử kích thước đúng `32,768 Bytes` của bộ lọc `Bloom`, khóa phiên bản `status_version` chống ghi đè, hồi phục sự cố `WAL` (`--kill-after-batch 1`), và báo cáo trung thực `not_verified` khi tắt `MongoDB`. Mã nguồn đạt chuẩn **`Ruff`** (`0` lỗi, độ phức tạp hàm `McCabe <= 14`).
+- **Kiểm tra tĩnh (`Ruff`):** Tuân thủ ngưỡng phức tạp nhận thức `McCabe <= 14` (`max-complexity=14`, `line-length=120`).
+- **Trạng thái bộ kiểm thử (`tests/`):** Repository có `23` hàm kiểm thử trong `tests/test_platform_v3.py` và `5` hàm trong `tests/test_quyen_spark.py` (`unittest` Spark 3.5.7). Sau đợt hiệu chỉnh Wave 2 (lọc `427` phi đường bộ $\to$ `33,394` cửa sổ, lọc burst `7,192` windows, bỏ `sample_weight` nhân tạo), các ngưỡng kiểm định Wave 1 trong `tests/test_platform_v3.py` được track kiểm thử riêng cập nhật tách biệt với tài liệu này.
 
-### 7.3. Ngân Sách Tài Nguyên Cụm Docker (`10.5 / 16.0 GB RAM`) & Từ Điển 59 Cột `data/dataset.csv`
+### 7.3. Ngân Sách Tài Nguyên Cụm Docker (`12.0 / 16.0 GB RAM`) & Từ Điển 60 Cột `data/dataset.csv`
 
 | Dịch vụ Container (`docker-compose.yml`) | Ảnh Container Chuẩn hóa | Cổng Kết nối | Giới hạn RAM | Vai trò Vận hành trong Hệ thống |
 |---|---|---|---:|---|
-| **`kafka`** | `apache/kafka:4.1.0` (`KRaft Mode`) | `9092:9092` | `1.5 GB` | Hàng đợi tiếp nhận sự kiện `3` phân vùng cho chủ đề `hcmc-traffic-events` (`[C4]`) |
-| **`mongo`** | `mongo:8.0` (`MongoDB 8.0.34`) | `27017:27017` | `2.0 GB` | Kho phục vụ trực tuyến `bda501.traffic_scores` với chỉ mục kết hợp `IXSCAN` (`[C16]`) |
-| **`spark`** | `apache/spark:3.5.7-java17` (`PySpark 3.5.7`) | Nội bộ `bda501-net` | `6.0 GB` | Xử lý phân tán cho làm sạch, đồ thị, học máy & đối soát cuối ngày (`[C5]–[C12]`) *(tương thích chéo `PySpark 4.2.0 / Java 21`)* |
-| **`app`** | `python:3.12-slim` (`Streamlit`) | `8501:8501` | `1.0 GB` | Giao diện điều hành trực tuyến 5 tab kết nối trực tiếp `MongoDB` (`[C17]`) |
-| **Tổng cộng** | **4 Dịch vụ Container Cốt lõi** | — | **`10.5 GB`** | **Vận hành ổn định trên máy cá nhân `16.0 GB RAM` (dư `5.5 GB` cho Hệ điều hành)** |
+| **`kafka`** | `apache/kafka:4.1.0` (`KRaft`) | `127.0.0.1:9092` | `1.5 GB` | Hàng đợi `3` phân vùng cho topic `hcmc-traffic-events` (`[C4]`) |
+| **`mongo`** | `mongo:8.0` (`MongoDB 8.0.34`) | `127.0.0.1:27017` | `2.0 GB` | Kho phục vụ `bda501.traffic_scores` với `IXSCAN` (`[C16]`) |
+| **`spark`** | `hcmc-traffic-spark:3.5.7` (`Dockerfile.spark35`) | Nội bộ `bda501-net` | `6.0 GB` | Xử lý phân tán Spark 3.5.7 / Java 17 (`[C5]–[C12]`) |
+| **`toc-web`** | `groupexe-knowledgetest-app` (`FastAPI + React`) | `127.0.0.1:8000` | `1.0 GB` | Cổng **Web TOC** chính (`uvicorn toc_backend.main:app`, `[C17]`) |
+| **`app`** | `groupexe-knowledgetest-app` (`Streamlit`) | `127.0.0.1:8501` | `1.0 GB` | Dashboard phân tích kỹ thuật `5-Tab` (`app.py`, `[C17]`) |
+| **`live-consumer`** | `groupexe-knowledgetest-app` (`Kafka Consumer`) | Nội bộ `bda501-net` | `0.5 GB` | Chấm điểm liên tục `Kafka → 33 KiB Sketches → MongoDB` (`[C7]–[C8]`) |
+| **Tổng mặc định** | **6 Dịch vụ Chạy Thường Trực** *(+2 profile `batch`, `stream`)* | — | **`12.0 GB`** | **Vận hành ổn định trong giới hạn máy `16.0 GB RAM` (dư `4.0 GB` cho OS)** |
 
-- **Cấu trúc 59 cột của bảng dữ liệu chuẩn hóa `data/dataset.csv` (`33,441` dòng):**
-  - *Nhóm Định danh & Tọa độ không gian (`10` cột):* `event_id, segment_id, street_id, street_name, street_type, street_level, long_snode, lat_snode, long_enode, lat_enode`.
-  - *Nhóm Thời gian `UTC / Giờ VN` & Phân tập (`14` cột):* `date, ict_date, weekday, is_weekend, period, ict_period, period_idx, ict_period_idx, vn_hour, period_sin, period_cos, slot_ts, target_ts, split_set`.
-  - *Nhóm Tổng hợp vận tốc & mức `LOS` (`13` cột):* `LOS, derived_los, los_ordinal, is_severe, mean_velocity, sum_velocity, min_velocity, max_velocity_obs, severe_ping_count, max_velocity, vmax_impute_tier, velocity_ratio, obs_count`.
-  - *Nhóm Đồ thị, Phân cụm & Biến quá khứ (`16` cột):* `length_m, pagerank_score, in_degree, out_degree, lag1_los_ordinal, lag2_los_ordinal, trailing_severe_rate, neighbor_los_ordinal, segment_train_prior_los, segment_train_severe_prior, street_causal_prior_los, street_causal_prior_sev, gap_minutes, is_contiguous_30m, cluster_id, cluster`.
-  - *Nhóm Nhãn dự báo đúng `+30 phút` & đối chiếu phụ (`6` cột):* `target_next_los_ordinal, target_next_severe, target_t30m_los_ordinal, target_t30m_severe, next_obs_los_ordinal, next_obs_severe`.
+- **Cấu trúc 60 cột của bảng `data/dataset.csv` (`33,394` dòng × `60` cột):**
+  - *Định danh & Tọa độ (`10` cột):* `event_id, segment_id, street_id, street_name, street_type, street_level, long_snode, lat_snode, long_enode, lat_enode`.
+  - *Thời gian `UTC / ICT`, Phân tập & Burst (`15` cột):* `date, ict_date, weekday, is_weekend, period, ict_period, period_idx, ict_period_idx, vn_hour, period_sin, period_cos, slot_ts, target_ts, split_set, is_synthetic_burst`.
+  - *Tổng hợp vận tốc & `LOS` (`13` cột):* `LOS, derived_los, los_ordinal, is_severe, mean_velocity, sum_velocity, min_velocity, max_velocity_obs, severe_ping_count, max_velocity, vmax_impute_tier, velocity_ratio, obs_count`.
+  - *Đồ thị, Phân cụm & Biến quá khứ (`16` cột):* `length_m, pagerank_score, in_degree, out_degree, lag1_los_ordinal, lag2_los_ordinal, trailing_severe_rate, neighbor_los_ordinal, segment_train_prior_los, segment_train_severe_prior, street_causal_prior_los, street_causal_prior_sev, gap_minutes, is_contiguous_30m, cluster_id, cluster`.
+  - *Nhãn dự báo đúng `+30 phút` & đối chiếu phụ (`6` cột):* `target_next_los_ordinal, target_next_severe, target_t30m_los_ordinal, target_t30m_severe, next_obs_los_ordinal, next_obs_severe`.
 
 ### 7.4. Hướng Dẫn Khởi Chạy & Tái Lập Toàn Bộ Kết Quả Thực Nghiệm (`PowerShell / Docker CLI`)
 
 ```powershell
-# 1. Khởi chạy cụm dịch vụ Docker (Kafka 4.1.0 KRaft, MongoDB 8.0.34, Spark 3.5.7, Streamlit UI :8501)
-docker compose up -d kafka mongo spark app
+# 1. Khởi chạy cụm 6 dịch vụ Docker mặc định (kafka, mongo, spark, toc-web :8000, app :8501, live-consumer)
+docker compose up -d --build
 
 # 2. Thực thi trọn vẹn dây chuyền xử lý 4 bước & kiểm chứng đối chiếu độc lập bộ gộp 5 đại lượng
 python pipeline.py
 python baseline.py
 
-# 3. Thực thi tác vụ Spark Batch độc lập từ dữ liệu thô trên container Apache Spark 3.5.7
+# 3. Thực thi tác vụ Spark Batch độc lập từ dữ liệu thô trên PySpark 4.2.0 / Java 21
 $env:TRAFFIC_FIT_CUTOFF = '2020-08-01T00:00:00Z'
 docker compose -f compose.quyen.yml run --rm batch
 
@@ -481,31 +467,20 @@ docker compose -f compose.quyen.yml run --rm batch
 python producer.py --mode both --bootstrap-servers localhost:9092
 python starter_stream.py --kill-after-batch 1
 
-# 5. Xuất bản Sơ đồ Kiến trúc, Bản đồ TP.HCM, Báo cáo PDF & Bộ Slide Thuyết trình (.pptx + .pdf)
-python scripts/render_arch_diagram.py
-python scripts/render_visual_assets.py
-python scripts/build_proposal_pdf.py
-python scripts/build_slides.py
-
-# 6. Chạy bộ kiểm thử tự động toàn diện & kiểm tra chất lượng mã nguồn Ruff (max-complexity=14)
-pytest -v
-ruff check . --select E,F,W,C901 --config "lint.mccabe.max-complexity=14" --config "line-length=120"
+# 5. Kiểm tra chất lượng mã nguồn Ruff (max-complexity=14)
+python -m ruff check . --select E,F,W,C901 --config "lint.mccabe.max-complexity=14" --config "line-length=120"
 ```
 
-### 7.5. Tổng Hợp `Limitations & Risks` Theo Từng Component, 4 Rủi Ro Chung Toàn Hệ Thống (Mục 11) & Lộ Trình 3 Giai Đoạn (Mục 12 — `Plan`)
+### 7.5. Tổng Hợp `Limitations & Risks` Theo Component & Lộ Trình Nâng Cấp
 
-| Component Kỹ thuật (Mục 1–10) | Hạn chế & Rủi ro Kỹ thuật Đặc thù (`Component-Level Limitations & Risks`) | Cơ chế Kiểm soát Đã Áp dụng & Kế hoạch Nâng cấp (`Plan`) |
+| Component Kỹ thuật | Hạn chế & Rủi ro Kỹ thuật Đặc thù (`Component-Level Limitations & Risks`) | Cơ chế Kiểm soát Đã Áp dụng & Kế hoạch Nâng cấp (`Plan`) |
 |---|---|---|
-| **1–2. Problem Scope & Literature Review** | Độ phủ cảm biến GPS cộng đồng chỉ đạt `11.85%` (`10,027 / 84,633` đoạn); `66.27%` cặp quan sát ngắt quãng $\ge 60$ phút khiến các mạng `Deep Spatio-Temporal GNN (DCRNN / ST-GCN)` bị suy biến chuỗi thời gian. | Sử dụng `Random Forest (23D)` kết hợp `Static Feature Store` (`Line-Graph PageRank` + `7D K-Means`) để vừa xử lý dữ liệu bảng đứt quãng, vừa phủ kín `100%` mạng lưới trong `10.5 GB RAM`. |
-| **3. System Architecture (`Zones A–F`)** | Chạy chung 4 dịch vụ (`Kafka 1.5G`, `Spark 6.0G`, `Mongo 2.0G`, `UI 1.0G`) trên 1 máy chủ đơn tiềm ẩn tranh chấp `Disk I/O` khi Shuffle lớn; có độ trễ cập nhật biến trễ từ các gói tin đến muộn `> 30m` giữa `Phase B` và `Phase C`. | Giới hạn cứng `mem_limit` từng container; tách biệt quyền đọc/ghi `Zero-Conflict 3-Phase MLOps`; **Phase 3 Plan** nâng cấp lên cụm `Kubernetes Multi-Node`. |
-| **4–5. Data, EDA & Data Pipeline** | `88.15%` đoạn đường `Cold-Start`; `60.79%` cửa sổ dùng tốc độ tối đa suy diễn tĩnh (`Tier 2 & Tier 3`) chưa phản ánh rào chắn thi công hay mưa ngập; rủi ro tăng đột biến `Quarantine [C15]` nếu thiết bị GPS đổi schema. | Áp dụng `Train-Only 3-Tier Imputation` chống rò rỉ dữ liệu; `ANSI try_cast` bảo toàn `100%` quân số bản ghi; **Phase 2 Plan** tích hợp API Thời tiết/Mưa ngập và cảnh báo tự động tỷ lệ `Quarantine`. |
-| **6 & 9. Modeling & Experiments** | Ngưỡng `argmax` mặc định bảo thủ trên các pha chuyển trạng thái (`2/61` mặc định so với `9/61` ở $\tau = 0.30$); `Hard Recall = 0 / 8` ở ca hiếm đang thoáng (`A–D`) đột ngột hóa kẹt cứng (`E–F`, chỉ chiếm `0.81%` mẫu `TEST`), dù xác suất rủi ro tăng `9.35x` (`ROC-AUC = 0.8136`). | Báo cáo minh bạch cả kết quả ngưỡng mặc định và ngưỡng hiệu chỉnh trên `VAL`; **Phase 1 Plan** bổ sung hàm phạt nhạy chi phí (`Cost-Sensitive Focal Loss`) và ngưỡng động theo cấp đường. |
-| **7. Batch Processing (`Spark & Graph`)** | Luật lan truyền trễ `+30m` của `SON / FPGrowth` chỉ xuất hiện trong `5–8` cửa sổ (`2.5–4.0` giờ quan sát); phân cụm `7D K-Means` cho `74,606` đoạn `Cold-Start` dựa trên hình thái tĩnh. | Gắn nhãn `Exploratory Hypothesis` rõ ràng trên giao diện; kết hợp `Line-Graph PageRank` bảo toàn khối lượng `84,633.0`. |
-| **8 & 10. Stream Processing & Demo (`:8501`)** | Bộ lọc `BitPackedBloomFilter (32.0 KiB)` sẽ tăng `FPR` nếu chạy liên tục nhiều ngày không xoay vòng bit; bản tin trễ `> 30m` phải chờ `Tier-2 Reconciliation` cuối ngày; giao diện `:8501` mới dừng ở hỗ trợ quyết định (`Human-in-the-Loop`). | **Phase 1 Plan** xoay vòng `Ring-Buffer Sliding Bloom Filter` mỗi 30 phút; **Phase 3 Plan** kết nối trực tiếp API dự báo `+30m` vào tủ điều khiển đèn tín hiệu thích ứng `SCATS`. |
+| **1–2. Problem Scope & Literature Review** | Độ phủ cảm biến GPS cộng đồng chỉ đạt **`11.87%` (`9,995 / 84,206` đoạn cơ giới)**; dữ liệu đứt quãng dài khiến các mạng `Deep Spatio-Temporal GNN` khó hội tụ. | Kết hợp `Random Forest (23D)` với `Static Feature Store` (`Line-Graph PageRank` + `7D K-Means`) phủ kín `100%` mạng lưới trong `12.0 GB RAM`. |
+| **3. System Architecture (`Zones A–F`)** | Chạy chung 6 dịch vụ trên 1 máy chủ đơn (`12.0 / 16.0 GB RAM`) tiềm ẩn tranh chấp I/O khi dữ liệu tăng gấp bội; tin trễ `> 30m` phải chờ `Phase C`. | Giới hạn cứng tài nguyên từng container; tách quyền `Zero-Conflict 3-Phase MLOps`; nâng cấp lên `Kubernetes Multi-Node` ở Phase 3. |
+| **4–5. Data, EDA & Data Pipeline** | **`88.13%` (`74,211` đoạn) `Cold-Start`**; phần lớn dùng tốc độ tối đa suy diễn tĩnh (`Tier 2 & Tier 3`); tồn tại đợt burst tổng hợp `7,192` cửa sổ. | `Train-Only 3-Tier Imputation` trên `TRAIN` hữu cơ; `ANSI try_cast`; loại burst tổng hợp khỏi tập huấn luyện ML & khai phá luật. |
+| **6 & 9. Modeling & Experiments** | **`Macro-F1 = 0.4475`** do mất cân bằng nặng ở các lớp trung gian `B/C/D/E` (`10–20` mẫu `TEST`); chỉ có `8` ca khởi phát đột ngột `A–D → E–F` trong `TEST` (`lift = 3.32x`). | Báo cáo trung thực cả 6 lớp, Paired Bootstrap 95% CIs, `McNemar p = 0.015625` và `Masked-GPS Spatial Cold-Start Proxy` (`Acc = 0.5271`). |
+| **7. Batch Processing (`Spark & Graph`)** | Luật lan truyền trễ `+30m` (`persistence_controlled = True`) mới xuất hiện trên `5–8` khung `TRAIN` hữu cơ; `K-Means` cho `74,211` đoạn mù GPS dựa vào hình thái tĩnh. | Gắn nhãn giả thuyết tham khảo; kiểm chứng hold-out trên luật đồng kẹt và loại bỏ U-turn trong `PageRank`. |
+| **8 & 10. Stream Processing & Dual UI (`:8000` / `:8501`)** | Dữ liệu đầu vào là phát lại lịch sử (`seed=42`), chưa kết nối trực tiếp cảm biến thời gian thực toàn đô thị hay điều khiển đèn `SCATS` tự động. | Dùng `RotatingBloom` (`2 × 16 KiB`) xoay vòng tránh bão hòa dài hạn; Web TOC vận hành chế độ hỗ trợ quyết định (`Human-in-the-Loop`). |
 
-- **Bốn Rủi ro & Hạn chế Chung Toàn Hệ thống (`System-Wide Limitations & Risks` — Mục 11):**
-  1. **Thiên lệch đại diện phương tiện (`Fleet Representation Bias`):** Nguồn GPS cộng đồng nghiêng về ô tô/xe thương mại trên các trục chính (`11.85%`), chưa đại diện đầy đủ cho luồng xe máy (`> 80%` lưu lượng TP.HCM) và mạng lưới hẻm dân cư.
-  2. **Trôi dạt phân phối mở (`Open-World Concept Drift`):** Trọng số mô hình và `Static Feature Store` đóng băng ở `Phase A` sẽ suy giảm khi có lô cốt thi công mới, phân luồng giao thông dịp lễ hoặc mưa ngập diện rộng.
-  3. **Khan hiếm mẫu chuyển pha đột ngột (`Rare Sudden-Onset Scarcity`):** Chỉ có `8 / 993` mẫu `TEST` (`0.81%`) chuyển đột ngột từ thoáng (`A–D`) sang kẹt cứng (`E–F`), đòi hỏi thu thập thêm luồng dữ liệu liên tục nhiều mùa.
-  4. **Trần hạ tầng máy chủ đơn (`Single-Host Deployment Ceiling`):** Cụm Docker `10.5 / 16.0 GB RAM` đáp ứng trọn vẹn mẫu chuẩn `Proof-of-Scale` (`38.5 MB`), nhưng khi mở rộng lên `1.5–3.0 TB/ngày` toàn đô thị cần chuyển sang kiến trúc `Kubernetes Multi-Node` và phân mảnh (`Sharding`) kho `MongoDB 8.0`.
+- **Bốn Rủi ro Chung Toàn Hệ thống:** (1) Thiên lệch đội xe GPS (`11.87%` đoạn đường, thiếu xe máy trong hẻm nhỏ); (2) Trôi dạt phân phối mở khi mưa ngập hoặc rào chắn thi công mới; (3) Khan hiếm mẫu khởi phát đột ngột (`8 / 993` ca `TEST`); (4) Trần hạ tầng máy đơn `16 GB RAM` khi nhân rộng lên `1.5–3.0 TB/ngày`.
 

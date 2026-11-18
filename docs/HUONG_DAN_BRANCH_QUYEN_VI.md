@@ -2,9 +2,9 @@
 
 **Branch:** `feat/quyen-spark-data-engineering`
 
-**Ngày đối chiếu:** 08/11/2026
+**Ngày đối chiếu Wave 2:** 18/11/2026
 
-**Checklist gốc:** [PROPOSAL_V3_AUDIT_CHECKLIST.md](../PROPOSAL_V3_AUDIT_CHECKLIST.md)
+**Tài liệu đối chiếu gốc:** [TECHNICAL_NOTE.md](../TECHNICAL_NOTE.md) · [product/00-proposal/project-proposal.md](../product/00-proposal/project-proposal.md)
 
 ## 1. Branch này làm gì?
 
@@ -23,10 +23,7 @@ nodes.csv + streets.csv + segments.csv + segment_status.csv
 Entrypoint là [`spark_batch.py`](../spark_batch.py). Các hàm dùng chung nằm tại
 [`traffic_data/spark_etl.py`](../traffic_data/spark_etl.py).
 
-`train.csv` không phải input sản xuất của đường xử lý mới. `pipeline.py`, `app.py`
-và những artifact cũ vẫn thuộc prototype trước đó; chạy batch mới **không tự đổi
-dashboard sang đọc dữ liệu mới**. Kafka, streaming, dự báo ML và MongoDB live vẫn
-là phần tích hợp tiếp theo của Đạt/Minh.
+`train.csv` không phải input sản xuất của đường xử lý `spark_batch.py`. Trên workspace hợp nhất hiện tại (`Wave 2`), pipeline batch/ML/streaming (`pipeline.py`, `spark_engine.py`, `live_kafka_stream.py`) đã tích hợp đầy đủ Kafka, MongoDB 8.0 và Dual UI (`Web TOC :8000` + `Streamlit :8501`) — chi tiết xem Mục 7–10 bên dưới.
 
 ## 2. Chuẩn bị trên Windows / PowerShell
 
@@ -35,7 +32,7 @@ là phần tích hợp tiếp theo của Đạt/Minh.
 Mở Docker Desktop ở chế độ Linux containers, sau đó mở PowerShell tại thư mục repo:
 
 ```powershell
-Set-Location 'C:\Users\Lap2nd\Documents\final-g03'
+Set-Location 'd:\Dat\FSB\big_data\groupexe-knowledgetest'
 git branch --show-current
 git status --short
 docker version
@@ -222,7 +219,7 @@ trên cả **Apache Spark 3.5.7 (Java 17)** và **Apache Spark 4.2.0 (Java 21)**
 | GPS quarantine | 151, đều `E4_UNKNOWN_SEGMENT` (thuộc `427` đoạn `S3_NON_ROAD_TYPE`) |
 | Retry bị loại trong raw dataset này | 0 |
 | Cửa sổ hợp lệ (sau lọc `S3_NON_ROAD_TYPE`) | 33.394 (chênh đúng `47` cửa sổ so với `33.441` toàn mạng) |
-| Node sau lọc GIS và pruning | 52.181 (`52.425` trên toàn bộ `84.633` segments) |
+| Node sau lọc GIS và pruning | 52.181 (loại bỏ `525.786` / `90,97%` từ `577.967` nút thô) |
 | Bản ghi GIS quarantine theo first failing rule | 580 (`154` `S2_NONPOSITIVE_LENGTH` + `426` `S3_NON_ROAD_TYPE`, giao nhau `1` segment vừa `length <= 0` vừa `non-road`) |
 | Sai lệch 5 thành phần Monoid + mean với baseline | 0 |
 | Missing / extra / duplicate window keys | 0 / 0 / 0 |
@@ -231,9 +228,9 @@ trên cả **Apache Spark 3.5.7 (Java 17)** và **Apache Spark 4.2.0 (Java 21)**
 | BroadcastHashJoin trong optimized plan | 3 (`0` `SortMergeJoin`, cả 3 phép nối `segments ⋈ lookup`, `windows ⋈ dim`, `result ⋈ streets`) |
 | Exchange nodes baseline → optimized | 5 shuffle `Exchange` → 3 `BroadcastExchange` (`0` shuffle `Exchange`) |
 
-**Đối chiếu định lượng `33.441` vs `33.394` cửa sổ (`47` cửa sổ) và `date_utc` vs `date` ICT (`4.320` cửa sổ):**
+**Đối chiếu định lượng `33.441` vs `33.394` cửa sổ (`47` cửa sổ) và `date_utc` vs `date` ICT (`4.305` cửa sổ trên tập cơ giới):**
 1. Trong `segments.csv` (`84.633` dòng), có `427` đoạn thuộc các loại phi giao thông cơ giới (`S3_NON_ROAD_TYPE`: đường đi bộ nội khu/hẻm cụt phi chuẩn). Trên `90.938` bản tin `segment_status.csv`, có đúng **`151` bản tin GPS** rơi vào các đoạn `S3_NON_ROAD_TYPE` này, tương ứng với đúng **`47` cửa sổ 30 phút** (`33.441 - 33.394 = 47`). Trong khi đó, `154` đoạn có `length <= 0` (`S2_NONPOSITIVE_LENGTH`) nhưng thuộc `ROAD_TYPES` hợp lệ được ghi nhận vào sổ cái kiểm toán `quarantine/segments` và đồng thời được sửa `length_m` bằng trung vị (`length_imputed = True`) nên giữ lại toàn bộ `103` bản tin GPS (`51` cửa sổ).
-2. Về mốc ngày: có đúng **`4.320` cửa sổ** rơi vào khung `17:00–23:30 UTC` (`00:00–06:30 ICT` sáng hôm sau). `enrich_windows` trong [`traffic_data/spark_etl.py`](../traffic_data/spark_etl.py) lưu đồng thời cả hai cột: `date_utc` (`yyyy-MM-dd` theo UTC, khớp 100% với cột `date` của `train.csv` tham chiếu) và `date` (`yyyy-MM-dd` theo giờ địa phương `Asia/Ho_Chi_Minh`, phục vụ phân tích chu kỳ giao thông đô thị ICT).
+2. Về mốc ngày: trên `33.394` cửa sổ đường cơ giới sạch có **`4.305` cửa sổ** rơi vào khung `17:00–23:30 UTC` (`00:00–06:30 ICT` sáng hôm sau; `4.320` trên tập chưa lọc 47 cửa sổ phi đường bộ). `enrich_windows` trong [`traffic_data/spark_etl.py`](../traffic_data/spark_etl.py) lưu đồng thời cả hai cột: `date_utc` (`yyyy-MM-dd` theo UTC, khớp 100% với cột `date` của `train.csv` tham chiếu) và `date` (`yyyy-MM-dd` theo giờ địa phương `Asia/Ho_Chi_Minh`, phục vụ phân tích chu kỳ giao thông đô thị ICT).
 
 ## 6. Checklist Q01–Q11: trạng thái sau khi tích hợp và khắc phục 6 điểm kỹ thuật
 
@@ -255,74 +252,70 @@ trên cả **Apache Spark 3.5.7 (Java 17)** và **Apache Spark 4.2.0 (Java 21)**
 - [x] **Q10 — Lakehouse và tái lập:** Bronze/Silver/Gold Parquet, month partition `year_month`, `window_metrics/batch_id=0`, input SHA-256, pruning nodes thực và `pruning_plan.txt`.
 - [x] **Q11 — Handoff:** module dùng chung [`traffic_data/spark_etl.py`](../traffic_data/spark_etl.py), fixtures trong `tests/test_quyen_spark.py` & `tests/test_platform_v3.py`, và hợp đồng dữ liệu đã được Đạt và Minh xác nhận đầy đủ bên dưới.
 
-## 7. Liên hệ với 28 nhóm yêu cầu trong audit tổng
+## 7. Liên hệ với các yêu cầu kiểm toán & Wave 2
 
-Tất cả 28 nhóm yêu cầu trong [`PROPOSAL_V3_AUDIT_CHECKLIST.md`](../PROPOSAL_V3_AUDIT_CHECKLIST.md) hiện đã có hiện thực code và kiểm thử tự động tương ứng trong workspace hợp nhất (`pipeline.py`, `spark_engine.py`, `spark_batch.py`, `traffic_data/spark_etl.py`, `producer.py`, `starter_stream.py`, `baseline.py`, `app.py`, `tests/test_platform_v3.py`, `tests/test_quyen_spark.py`).
+Các yêu cầu kỹ thuật cốt lõi hiện đã được thống nhất xuyên suốt các module trong workspace hợp nhất (`pipeline.py`, `spark_engine.py`, `spark_batch.py`, `traffic_data/spark_etl.py`, `producer.py`, `starter_stream.py`, `live_kafka_stream.py`, `baseline.py`, `toc_backend/`, `toc_frontend/`, `app.py`).
 
-## 8. Xác nhận chính thức của Nguyễn Thành Đạt (`D-C01` – `D-C08`)
+## 8. Xác nhận chính thức của Nguyễn Thành Đạt (`D-C01` – `D-C08`, Wave 2 Verified)
 
-- [x] **D-C01 — Cutoff và dữ liệu huấn luyện (Đã chốt):**
+- [x] **D-C01 — Cutoff, lọc burst và dữ liệu huấn luyện (Đã chốt):**
   - Đối với snapshot kiểm thử độc lập của `spark_batch.py`: giữ `--train-end 2020-08-01T00:00:00Z` (exclusive UTC warmup cutoff).
-  - Đối với tập mẫu có nhãn liên tiếp đúng `+30m` (`7.898` mẫu hợp lệ trong `pipeline.py`): chia theo mốc thời gian toàn cục `70 / 15 / 15` kèm **Boundary Purge** (`target_ts <= cutoff_ts`, `warmup_cutoff_utc = 2020-08-02T23:30:00+00:00`):
-    - `TRAIN`: `slot_ts <= 2020-12-12 08:00:00+00:00` (`5.494` mẫu, purged `50` mẫu vượt biên).
-    - `VAL`: `2020-12-12 08:00:00+00:00 < slot_ts <= 2020-12-25 03:30:00+00:00` (`1.167` mẫu, purged `5` mẫu vượt biên).
-    - `TEST`: `slot_ts > 2020-12-25 03:30:00+00:00` (`1.182` mẫu, trong đó `185` mẫu `LOS E/F`).
-  - Để ngăn chặn rò rỉ nội tập (`intra-TRAIN leakage`), các đặc trưng thống kê lịch sử sử dụng **Causal Expanding Empirical-Bayes Priors** gom theo `slot_ts` ($\tau < t$) và phân cụm `7D K-Means (k=6)` dùng tâm cụm cố định từ `warmup` kèm hồ sơ nhân quả mở rộng đến $t$. Bằng chứng kiểm thử: `test_d01_d02_d03_d04_exact_t30m_horizon_purge_and_zero_leakage` trong [`tests/test_platform_v3.py`](../tests/test_platform_v3.py).
-- [x] **D-C02 — Ground truth (Đã chốt):**
-  - Lưu song song cả `LOS` suy dẫn từ `derive_los(mean_velocity / max_velocity)` theo ngưỡng `0.80 / 0.65 / 0.50 / 0.35 / 0.20` và `reference_los` từ `train.csv`, báo cáo tỷ lệ khớp thực tế `52,37%` trong `outputs/metrics.json` (`derived_vs_reference_los_exact_match_pct`).
-  - Huấn luyện và báo cáo hoàn toàn trung thực trên nhãn mục tiêu đúng chân trời `t + 30m` (`target_t30m_los_ordinal`: `RF 23D 6-Class Accuracy = 0.9450`, `Macro-F1 = 0.5543`, `Weighted-F1 = 0.9439`, `Severe F1 = 0.9409`, `ROC-AUC = 0.9882`, `PR-AUC = 0.9471`; `GBT Binary 14D Severe F1 = 0.7840`, `ROC-AUC = 0.9812`, `PR-AUC = 0.9328`; `GBT Binary 23D Severe F1 = 0.9465`, `ROC-AUC = 0.9843`, `PR-AUC = 0.9419`), kèm đối chiếu riêng cho `legacy_next_observed_comparison` (`23.414` cặp, `3.513` mẫu test: `Severe F1 = 0.6447`, `ROC-AUC = 0.8484`, `PR-AUC = 0.7628`) trong `outputs/ablation_results.csv` và `outputs/metrics.json`.
-- [x] **D-C03 — Phạm vi graph (Đã chốt):**
-  - Tách bạch rõ 2 phạm vi:
-    1. **Static Feature Store & Line-Graph PageRank (`data/lakehouse/segment_static_features.parquet`):** giữ đầy đủ **`84.633` segments** và **`52.425` active nodes** (`151.929` directed transitions, `48` dangling segments) để phục vụ tra cứu `UC-3 Cold-Start` trên toàn mạng (`10.027` đoạn có GPS + `74.606` đoạn mù GPS).
-    2. **Filtered Vehicular Road Batch (`spark_batch.py`):** lọc nghiêm ngặt `S3_NON_ROAD_TYPE` (`427` đoạn phi cơ giới) còn `84.206` đoạn và `52.181` active nodes (`33.394` cửa sổ).
+  - Đối với tập mẫu có nhãn liên tiếp đúng `+30m` (`7.885` cặp hợp lệ trong `pipeline.py`): phát hiện `7.192` cửa sổ burst tổng hợp tại `2020-08-02 23:30` và `2020-08-03 00:00` (`3.609` đoạn thô / `3.596` đoạn cơ giới sạch mỗi slot), loại bỏ `3.596` cặp burst khi huấn luyện ML (`TRAIN`: `slot_ts <= 2020-12-12T08:00:00Z`, giữ **`1.885` cặp `TRAIN` hữu cơ**, purged `50` mẫu vượt biên; **`1.167` `VAL`**, purged `5` mẫu vượt biên; **`1.182` `TEST`**, trong đó `185` mẫu `LOS E/F`).
+  - Các đặc trưng thống kê lịch sử sử dụng **Causal Expanding Empirical-Bayes Priors** gom theo `slot_ts` ($\tau < t$) và phân cụm `7D K-Means (k=6)` học trên `3.609` đoạn `TRAIN` hữu cơ (`Silhouette = 0.2197, DBI = 1.3592`).
+- [x] **D-C02 — Ground truth & ML sạch (Đã chốt):**
+  - Dùng `derive_urban_los` theo chuẩn **BkTraffic Urban 5 km/h** đạt **`89.19%`** khớp chính xác với `reference_los` của `train.csv` trên `33.394` cửa sổ cơ giới (tách bạch rõ với hàm tiện ích tỷ lệ `derive_los` dùng ngưỡng `0.80 / 0.65 / 0.50 / 0.35 / 0.20`).
+  - Huấn luyện sạch không dùng `sample_weight` nhân tạo hay fallback bypass (`class_weight` lũy thừa `0.65`): `RF 23D` thắng cổng `VAL` (`0.8990` vs `0.5343` `14D`; `VAL acc = 0.9023`). Trên `TEST` (`1.182` mẫu): **`ROC-AUC = 0.9900`**, **`PR-AUC = 0.9595`**, **`6-Class Accuracy = 0.9289`**, **`Macro-F1 = 0.4475`** *(do mất cân bằng lớp trung gian `B/C/D/E`)*, **`Severe F1 = 0.9301`** (`Prec = 0.9251, Rec = 0.9351`), đường chéo `[937, 4, 1, 7, 2, 147]`; vượt `Persistence` khi chuyển pha (`McNemar p = 0.015625`, `7 vs 0`, `Detect ROC-AUC = 0.9146`). Đối chiếu `legacy_next_observed_comparison` (`4.787` mẫu test): `Severe F1 = 0.6178`, `PR-AUC = 0.7441`, `ROC-AUC = 0.8711`.
+- [x] **D-C03 — Phạm vi graph thống nhất (Đã chốt):**
+  - Hợp nhất cả `pipeline.py`, `spark_batch.py` và `segment_static_features.parquet` về cùng phạm vi **mạng lưới cơ giới sạch `84.206` đoạn đường** và **`52.181` active nodes** (loại bỏ `427` đoạn `S3_NON_ROAD_TYPE` và `525.786` nút uốn cong/mồ côi = `90,97%`).
+  - Đồ thị nối đoạn đường **đã loại cung U-turn trên đoạn hai chiều**: **`92.453` cạnh chuyển tiếp**, **`314` đoạn cụt (`dangling nodes`)**, nút cổ chai `#1` là **`21969 — Nguyễn Kiệm (level=2, PR=2.7799)`**. Phủ kín **`100%`** `84.206` đoạn (`9.995` có GPS + `74.211` Cold-Start = `88.13%`).
 - [x] **D-C04 — Lookup semantics (Đã chốt):**
-  - `fit_velocity_lookup` trong [`traffic_data/spark_etl.py`](../traffic_data/spark_etl.py) mặc định dùng `SEGMENT_P85 (p85 > 0) → LEVEL_TYPE_MEDIAN → LEVEL_PRIOR {1: 80, 2: 60, 3: 50, 4: 40}` và hỗ trợ cờ `use_observed_gis_vmax: bool = False` (giới hạn chặt trong miền hợp lệ `(0, 200]` km/h) để giữ `observed_max_velocity` làm metadata hoặc bật tầng `SEGMENT_OBSERVED_VMAX` khi đối chiếu với `outputs/vmax_lookup.json`. Các đoạn có `segment_p85 == 0` được lọc bởi `segment_p85 > 0` và chuyển xuống `LEVEL_TYPE_MEDIAN`.
+  - `fit_velocity_lookup` trong [`traffic_data/spark_etl.py`](../traffic_data/spark_etl.py) mặc định dùng `SEGMENT_P85 (p85 > 0) → LEVEL_TYPE_MEDIAN → LEVEL_PRIOR {1: 80, 2: 60, 3: 50, 4: 40}` và hỗ trợ cờ `use_observed_gis_vmax: bool = False`; `fit_train_vmax_lookup` trong `pipeline.py` học chỉ trên `TRAIN` hữu cơ (phân bổ cửa sổ: `4.946` Observed + `9.376` P85 + `17.693` Tier 2 + `1.379` Tier 3 = `33.394`).
 - [x] **D-C05 — Feature schema (Đã chốt):**
   - Khóa chuẩn của cửa sổ là `(segment_id, window_start)` theo UTC; `enrich_windows` xuất đồng thời `date_utc` (UTC) và `date`, `period_idx`, `weekday`, `period_sin`, `period_cos` (ICT `UTC+7`).
-  - Vector đặc trưng `23D` (`FULL_ML_FEATURES` trong `pipeline.py` & `FULL_ML_FEATURES_23D` trong `spark_engine.py`, gồm 23 cột số `current_los_ordinal`, `lag1_los_ordinal`, `lag2_los_ordinal`, `trailing_severe_rate`, `mean_velocity`, `velocity_ratio`, `obs_count`, `length_m`, `max_velocity`, `street_level`, `weekday`, `period_sin`, `period_cos`, `gap_minutes`, `pagerank_score`, `in_degree`, `out_degree`, `neighbor_los_ordinal`, `cluster_id`, `segment_train_prior_los`, `segment_train_severe_prior`, `street_causal_prior_los`, `street_causal_prior_sev`, cùng 2 cột phân loại `street_type`, `period` được mã hóa One-Hot trong `SparkRF`) được cố định thứ tự cột trong `outputs/model_registry_manifest.json`.
+  - Vector đặc trưng `23D` cố định thứ tự cột trong `outputs/model_registry_manifest.json` (`data/dataset.csv` gồm `33.394` dòng × `60` cột có `is_synthetic_burst`).
 - [x] **D-C06 — Target+30m (Đã chốt):**
-  - Hàm `add_temporal_and_neighbor_lags` (`pipeline.py`) và `prepare_ml_dataset` (`spark_batch.py`) ghép nhãn bằng exact self-join trên `(segment_id, slot_ts + 30m)`. Các khoảng trống `60m`, `9h`, `3 ngày` có `has_exact_t30m_target = 0` và tuyệt đối không đưa vào tập huấn luyện/đánh giá `+30m`. Kiểm thử tự động: `test_d01_d02_d03_d04_exact_t30m_horizon_purge_and_zero_leakage` trong [`tests/test_platform_v3.py`](../tests/test_platform_v3.py).
-- [x] **D-C07 — Mining hygiene (Đã chốt):**
-  - Chuẩn hóa tên đường Unicode `NFC` + `Ð→Đ` + gộp khoảng trắng (`_normalize_street_name` & `normalize_name`), cắt bỏ hậu tố hành chính (`, Phường ...`, `, Quận ...`), lọc danh xưng hành chính, thực thi cả **2-Pass Distributed SON** và **Spark MLlib `FPGrowth`** (`outputs/spark_runtime_evidence.json`) sinh luật có hướng hai chiều (`A => B` và `B => A` trong `outputs/co_congestion_rules.csv`) cùng luật lan truyền trễ 30 phút (`Street_A(t) => Street_B(t+30m)` trong `outputs/lagged_congestion_rules.csv`).
+  - Hàm `add_temporal_and_neighbor_lags` (`pipeline.py`) và `prepare_ml_dataset` (`spark_batch.py`) ghép nhãn bằng exact self-join trên `(segment_id, slot_ts + 30m)` (`7.885` cặp hợp lệ).
+- [x] **D-C07 — Mining hygiene trên TRAIN hữu cơ (Đã chốt):**
+  - Chuẩn hóa tên đường `Unicode NFC` (`695 → 641` tên chuẩn, gộp `54` biến thể trên `2.247` cửa sổ), loại danh xưng hành chính (`631` cửa sổ `R3`) và khai phá **chặt trên `TRAIN` hữu cơ + kiểm chứng hold-out**: `12` luật đồng kẹt (`Nguyễn Thị Minh Khai ↔ Cống Quỳnh`, `Lift = 15.2308`) và `14` luật trễ `persistence_controlled = True` (`Lê Quang Định → Trần Quang Khải`, `Lift = 24.0`).
 - [x] **D-C08 — Golden data & Scorer Parity (Đã chốt):**
-  - Đóng băng `outputs/model.joblib`, `data/lakehouse/segment_static_features.parquet`, `outputs/vmax_lookup.json` kèm SHA-256 trong `outputs/model_registry_manifest.json` và xuất tập dự báo chuẩn `outputs/golden_predictions.parquet`. Hàm `score_feature_snapshot` đảm bảo cùng đầu vào sinh dự báo khớp `100%` giữa Batch, Stream (`STREAM_PROVISIONAL`) và Recon (`BATCH_RECONCILED`).
+  - Đóng băng `outputs/model.joblib`, `data/lakehouse/segment_static_features.parquet`, `outputs/vmax_lookup.json` kèm SHA-256 trong `outputs/model_registry_manifest.json` (`rf_full_23d_v3`) và xuất `outputs/golden_predictions.parquet`.
 
-## 9. Xác nhận chính thức của Phạm Công Minh (`M-C01` – `M-C11`)
+## 9. Xác nhận chính thức của Phạm Công Minh (`M-C01` – `M-C11`, Wave 2 Verified)
 
 - [x] **M-C01 — Runtime (Đã chốt):**
-  - Codebase (`traffic_data/spark_etl.py`, `spark_batch.py`, `spark_engine.py`) đã được chuẩn hóa để chạy tương thích **100% trên cả hai môi trường**:
-    1. Container **Apache Spark 3.5.7 / Java 17** (`song-recommender-spark:3.5.7` theo đúng cấu hình Proposal V3, đã bổ sung shim Catalyst SQL `try_cast` an toàn dưới cả chế độ `spark.sql.ansi.enabled=true` và hỗ trợ đọc event log `local-*`).
-    2. Container **PySpark 4.2.0 / Java 21 / Python 3.11** (`Dockerfile.spark` & `compose.quyen.yml`, đọc event log `events_*` theo thứ tự số tự nhiên).
+  - Codebase (`traffic_data/spark_etl.py`, `spark_batch.py`, `spark_engine.py`) tương thích trên cả hai môi trường:
+    1. Container **Apache Spark 3.5.7 / Java 17** (`hcmc-traffic-spark:3.5.7` trong `Dockerfile.spark35` & `docker-compose.yml`, hỗ trợ event log `local-*` và `ANSI try_cast`).
+    2. Container **PySpark 4.2.0 / Java 21 / Python 3.11** (`Dockerfile.spark` & `compose.quyen.yml`).
 - [x] **M-C02 — Event ID (Đã chốt):**
-  - Phân biệt chặt chẽ `raw_event_id` (định danh từng bản tin GPS / retry ở tầng ping) và `window_id` / `event_id` (định danh cửa sổ 30 phút của đoạn đường). Hai bản tin hợp lệ khác `raw_event_id` trong cùng một cửa sổ 30 phút được giữ nguyên để gộp vào Monoid `obs_count`.
+  - Phân biệt chặt chẽ `raw_event_id` (tầng ping) và `window_id` / `event_id` (cửa sổ 30 phút).
 - [x] **M-C03 — Timestamp/schema producer (Đã chốt):**
-  - [`producer.py`](../producer.py) hỗ trợ cả `--mode raw` (`90.938` pings) và `--mode window` (`33.441` windows), gửi `updated_at` chuẩn ISO-8601 UTC (`Z`), `event_ts`, `ingest_ts = event_ts + arrival_delay_sec`, `velocity` (km/h) và `segment_id` vào Kafka topic `hcmc-traffic-events` (3 partitions).
+  - [`producer.py`](../producer.py) hỗ trợ `--mode raw`, `--mode window` và `--mode story` gửi sự kiện ISO-8601 UTC vào Kafka topic `hcmc-traffic-events` (`3` partitions).
 - [x] **M-C04 — Quality policy (Đã chốt):**
-  - Thống nhất quy tắc kiểm định có thứ tự `E1_INVALID_ID → E2_INVALID_TIMESTAMP → E3_INVALID_VELOCITY → E4_UNKNOWN_SEGMENT → E5_CONFLICTING_EVENT_ID` dùng chung cho cả batch (`spark_batch.py`) và micro-batch streaming (`starter_stream.py`).
+  - Quy tắc kiểm định có thứ tự `E1..E5` / `R1..R6` thống nhất cho cả batch và micro-batch streaming.
 - [x] **M-C05 — Dedup liên microbatch (Đã chốt):**
-  - Kết hợp `deduplicate_events` trong từng micro-batch với **Bit-Packed Bloom Filter (`32,0 KiB = uint8[32768]`, `262.144` bits, `k = 4`)** và state store có watermark 30 phút trong [`starter_stream.py`](../starter_stream.py) để khử trùng liên micro-batch với bộ nhớ hằng số.
-- [x] **M-C06 — Bronze và checkpoint (Đã chốt):**
-  - Sink 1 (`raw_bronze_sink`) ghi 100% sự kiện vào `data/lakehouse/bronze_raw_events` (và `outputs/spark_bronze_stream_sink` trong `spark_engine.py`, không ghi đè `window_metrics/batch_id=0`) trước khi lọc watermark; Sink 2 (`agg_serving_sink`) áp dụng watermark 30 phút và lưu WAL checkpoints riêng tại `outputs/checkpoints/spark_raw_wal`, `outputs/checkpoints/spark_agg_wal`, `outputs/checkpoints/raw/offset_log.json`, `outputs/checkpoints/agg/state_wal.json`.
+  - Kết hợp `deduplicate_events` trong micro-batch với **`32.0 KiB` `RotatingBloomFilter` (`2 × 16.0 KiB`)** và **`1.0 KiB` `64-bit HyperLogLog` (`p=10`, `uint8[1024]`)** trong [`starter_stream.py`](../starter_stream.py) & [`live_kafka_stream.py`](../live_kafka_stream.py).
+- [x] **M-C06 — Bronze, Lakehouse và checkpoint (Đã chốt):**
+  - `data/lakehouse/bronze_raw_events/events.parquet` (`90.787` raw pings), `stream_replay_windows/replay.parquet` (`33.727`), `silver_cleaned_windows/windows.parquet` (`33.394`), `curated_gold/year_month=*` (`10` phân vùng đọc sạch bởi cả PyArrow/Pandas và Spark 3.5.7); Spark Streaming Sink 1 (`outputs/spark_bronze_stream_sink`) & Sink 2 watermark thực **`2020-12-01T12:30:00.000Z`**; WAL checkpoint tại `outputs/checkpoints/` (`73.7 KB`).
 - [x] **M-C07 — Lookup cùng version (Đã chốt):**
-  - Stream processor (`starter_stream.py`) và Recon (`pipeline.py`) gọi trực tiếp hàm `verify_frozen_registry_integrity` kiểm tra mã băm SHA-256 của cả 3 artifact (`model.joblib`, `segment_static_features.parquet`, `vmax_lookup.json`) trước và sau khi chấm điểm chỉ đọc (`.predict_proba()`); tuyệt đối không `.fit()` lại trong micro-batch.
+  - `verify_frozen_registry_integrity` kiểm tra SHA-256 của cả 3 artifact trước và sau mỗi lần chấm điểm chỉ đọc.
 - [x] **M-C08 — Serving key (Đã chốt):**
-  - Collection `traffic_scores` trên MongoDB 8.0 (`bda501.traffic_scores`) dùng khóa cửa sổ duy nhất (`event_id_unique` trên `event_id` / `window_id`) và compound index `level_prob_segment_idx` (`{street_level: 1, severe_prob: -1, segment_id: 1}`), ghi bằng `repartition(4)` $\to$ `foreachPartition` (1 `MongoClient`/partition, lô `500` lệnh `UpdateOne(upsert=True)`).
+  - `bda501.traffic_scores` trên MongoDB 8.0.34 dùng khóa duy nhất `event_id_unique`, compound index `level_prob_segment_idx`, ghi qua 4 phân vùng (`69` lô × `500` `UpdateOne(upsert=True)`) kèm atomic `$status_version` pipeline guard.
 - [x] **M-C09 — Recon (Đã chốt):**
-  - Two-Tier Reconciliation (`[C12]`) thực hiện Tier 1 `exceptAll` hai chiều trên các cửa sổ trong watermark (`0` lệch, `32.940 / 32.940`) và Tier 2 đọc lại từ Bronze raw events để bù `501` bản tin cửa sổ đoạn đường trễ trên `219` khung giờ `(date, period)`, đồng thời chữa lành và chấm điểm lại `3.953` cửa sổ trễ bậc xuôi dòng (`healed_downstream_lag_windows = 3953`, `healed_downstream_rescored_windows = 377`).
+  - Tier 1 `exceptAll = 0` (`100.0%` trong watermark); Tier 2 bù **`500`** cửa sổ đoạn đường trễ trên **`226`** khung giờ (`98.5% → 100.0%`), chữa lành **`609`** cửa sổ hạ lưu (`healed_downstream_lag_windows`), chấm điểm lại **`384`** cửa sổ (`185` đổi xác suất).
 - [x] **M-C10 — UI/read paths (Đã chốt):**
-  - [`app.py`](../app.py) đã bổ sung kết nối trực tiếp tới MongoDB 8.0 (`_fetch_live_mongo_status = query_operational_serving_store`), trỏ `SPARK_VERIFY_PATH` tới `outputs/spark_runtime_evidence.json`, hiển thị trạng thái kết nối thực tế, phân bố `STREAM_PROVISIONAL (v1)` (`488` cửa sổ in-flight) vs `BATCH_RECONCILED (v2)` (`501` cửa sổ) vs `BATCH_VERIFIED (v2)` (`32.452` cửa sổ) và cho phép bật tự động làm mới 5 giây (`5s auto-refresh`).
+  - Đồng bộ bộ đôi giao diện: **Web TOC (`ReactJS + FastAPI` tại `:8000`, dịch vụ `toc-web`)** + **Dashboard `Streamlit 5-Tab` tại `:8501` (`app.py`, dịch vụ `app`)**, đọc dữ liệu thực Wave 2 (`32.405` `BATCH_VERIFIED v2` + `500` `BATCH_RECONCILED v2` + `489` `STREAM_PROVISIONAL v1` = `33.394` docs).
 - [x] **M-C11 — Integration proof (Đã chốt):**
-  - Đã kiểm chứng kill/restart recovery giữa micro-batch (`starter_stream.py --kill-after-batch 1` $\to$ resume), `Version Guard` trên `status_version` chống `stale overwrite` (`BATCH_RECONCILED v2` không bị ghi đè bởi `STREAM_PROVISIONAL v1`), và kiểm chứng `explain("executionStats")` thực tế trên `mongo:8.0.34` (`IXSCAN`, `0` SORT, `warm_p95_ms = 0.636 ms < 10 ms` trong `outputs/mongo_verify.json`).
+  - Kill/restart WAL recovery (`--kill-after-batch 1`, `0` duplicates, `90.741` in-WM), atomic `$status_version` guard chặn `25/25` stale `v1`, và `mongo:8.0.34` `explain("executionStats")` xác nhận `IXSCAN` (`warm median = 0.389 ms / p95 = 0.692 ms` vs `COLLSCAN median = 9.161 ms`, nhanh hơn **`23.55x`**).
 
-## 10. Quyết định chung đã chốt và ghi vào ADR / Governance (`product/`)
+## 10. Quyết định chung đã chốt (`product/` & Tài liệu Kỹ thuật)
 
-| Chủ đề | Người chốt | Quyết định đã thống nhất |
+| Chủ đề | Người chốt | Quyết định đã thống nhất (Wave 2) |
 |---|---|---|
-| Chênh `33.441 → 33.394` windows và `52.425 → 52.181` nodes | Quyền + Đạt + Minh | Giữ cả hai chế độ rõ ràng: `84.633` segments / `52.425` nodes (`33.441` windows) cho toàn mạng & `UC-3 Cold-Start`; `84.206` segments / `52.181` nodes (`33.394` windows, loại `427` đoạn `S3_NON_ROAD_TYPE` với `151` GPS pings = `47` windows) cho `spark_batch.py` |
-| Warmup/cutoffs và LOS ground truth | Đạt, Quyền review | Giữ song song `LOS` suy dẫn (`derive_los`) và `reference_los` (`52,37%` khớp); cắt tập theo timestamp toàn cục có purge biên (`5.494 / 1.167 / 1.182`); dùng causal expanding priors + warmup-frozen 7D K-Means |
-| Raw event và serving identities | Minh, Quyền review | `raw_event_id` định danh từng ping GPS; `window_id` / `event_id` định danh cửa sổ 30 phút và làm unique key tại MongoDB (`event_id_unique`) |
-| Runtime Java 17 (Spark 3.5.7) & Java 21 (Spark 4.2.0) | Minh, cả nhóm review | `traffic_data/spark_etl.py` và `spark_batch.py` tương thích cả Spark 3.5.7 (Java 17) và Spark 4.2.0 (Java 21); cả hai bộ test `pytest` và `unittest` đều pass 100% |
-| Handoff parity | Đạt + Minh + Quyền | Dự báo chuẩn `outputs/golden_predictions.parquet` và `outputs/quyen_validation/manifest.json` khớp 100% (`diff = 0`) |
+| Phạm vi đường cơ giới sạch `84.206` & `33.394` windows | Quyền + Đạt + Minh | Toàn bộ `pipeline.py`, `spark_batch.py` và `segment_static_features.parquet` thống nhất trên `84.206` đoạn đường cơ giới (`52.181` active nodes, `90.787` accepted pings, `33.394` windows), loại `427` đoạn `S3_NON_ROAD_TYPE` (`151` pings = `47` windows) |
+| `derive_urban_los` vs `derive_los` & Lọc Burst | Đạt, Quyền review | Dùng `derive_urban_los` (`BkTraffic 5 km/h`) khớp **`89.19%`** reference `train.csv` (tách rõ với `derive_los` tỷ lệ); loại `7.192` cửa sổ burst (`3.596` TRAIN pairs) để huấn luyện sạch trên `1.885` `TRAIN` hữu cơ |
+| Raw event, `RotatingBloom` & Serving guard | Minh, Quyền review | `raw_event_id` định danh ping, `event_id` định danh cửa sổ; `32 KiB RotatingBloom` + `1 KiB 64-bit HLL`; atomic `$status_version` pipeline guard trên MongoDB 8.0 |
+| Runtime Spark 3.5.7 & Spark 4.2.0 | Minh + Quyền | `hcmc-traffic-spark:3.5.7` (Java 17) cho cụm chính `docker-compose.yml`; `Dockerfile.spark` (PySpark 4.2.0 / Java 21) cho `compose.quyen.yml` |
+| Dual Web UI (`:8000` & `:8501`) | Minh, cả nhóm review | Web TOC `ReactJS + FastAPI` (`toc-web :8000`) chạy song song `Streamlit 5-Tab` (`app :8501`) và `live-consumer` |
 
 ## 11. Lỗi thường gặp
 

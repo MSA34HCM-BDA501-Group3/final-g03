@@ -17,4 +17,5 @@ services:
       - --output-root
       - data/quyen_spark_run
       - --train-end
-      - ${TRAFFIC_FIT_CUTOFF:?Set TRAFFIC_FIT_CUTOFF to the exclusive UTC warmup cutoff}
+      - ${TRAFFIC_FIT_CUTOFF:-2020-12-12T07:30:00Z}
+      - --overwrite

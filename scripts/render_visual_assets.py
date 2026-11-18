@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import matplotlib
@@ -341,12 +342,19 @@ def render_hcmc_problem_context_map(geom: pd.DataFrame, out_path: Path) -> Path:
 
 
 def render_hcmc_hotspots_map(geom: pd.DataFrame, out_path: Path) -> Path:
+    m_json = json.loads((OUTPUTS_DIR / "metrics.json").read_text(encoding="utf-8"))
+    st_df = pd.read_parquet(
+        DATA_DIR / "lakehouse" / "segment_static_features.parquet",
+        columns=["segment_id", "pagerank_score", "is_cold_start"],
+    )
     ds = pd.read_csv(DATA_DIR / "dataset.csv", usecols=["segment_id", "is_severe", "los_ordinal"])
     seg_obs = ds.groupby("segment_id", as_index=False).agg(
         severe_rate=("is_severe", "mean"),
         mean_los=("los_ordinal", "mean"),
     )
-    m = geom.merge(seg_obs, on="segment_id", how="left")
+    m = geom.merge(st_df[["segment_id", "pagerank_score"]], on="segment_id", how="inner").merge(
+        seg_obs, on="segment_id", how="left"
+    )
     cold = m[m["severe_rate"].isna()]
     free_obs = m[m["severe_rate"].notna() & (m["severe_rate"] < 0.15)]
     mod_obs = m[(m["severe_rate"] >= 0.15) & (m["severe_rate"] < 0.50)]
@@ -366,13 +374,31 @@ def render_hcmc_hotspots_map(geom: pd.DataFrame, out_path: Path) -> Path:
         LineCollection(_segments_to_lines(sev_obs), colors="#DC2626", linewidths=1.35, alpha=0.96, zorder=5)
     )
 
+    hot_df = pd.read_csv(OUTPUTS_DIR / "hotspot_alerts.csv").set_index("segment_id")
+    top_ewma = float(hot_df.loc[47407, "decaying_hotspot_score"]) if 47407 in hot_df.index else 6.67
+    pr_map = st_df.set_index("segment_id")["pagerank_score"].to_dict()
     landmarks = [
-        (47407, "Lý Thường Kiệt (Q.10)\nĐiểm nóng #1: 6.67", (106.554, 10.787), "#DC2626"),
-        (50017, "Lê Lai – Bến Thành (Q.1)\nNút cổ chai #2: PR 3.47", (106.732, 10.756), "#B91C1C"),
-        (61781, "Phú Định (Q.8)\nNút cổ chai #1: PR 3.75", (106.556, 10.718), "#7C3AED"),
-        (21969, "Nguyễn Kiệm – Phú Nhuận\nCửa ngõ sân bay: PR 2.73", (106.558, 10.828), "#D97706"),
-        (34723, "Quốc lộ 1 (Q.12)\nVành đai tải nặng: PR 2.64", (106.572, 10.873), "#0F766E"),
-        (77224, "Kha Vạn Cân – Thủ Đức\nHành lang Đông Bắc: PR 2.56", (106.726, 10.869), "#1D4ED8"),
+        (47407, f"Lý Thường Kiệt (Q.10)\nĐiểm nóng #1: {top_ewma:.2f}", (106.554, 10.787), "#DC2626"),
+        (
+            15011,
+            f"Phan Đăng Lưu (Bình Thạnh)\nNút cổ chai #7: PR {pr_map.get(15011, 2.62):.2f}",
+            (106.726, 10.765),
+            "#B91C1C",
+        ),
+        (61781, f"Phú Định (Q.8)\nVùng mù Cold-Start: PR {pr_map.get(61781, 2.21):.2f}", (106.556, 10.718), "#7C3AED"),
+        (
+            21969,
+            f"Nguyễn Kiệm – Phú Nhuận\nNút cổ chai #1: PR {pr_map.get(21969, 2.78):.2f}",
+            (106.558, 10.828),
+            "#D97706",
+        ),
+        (34723, f"Quốc lộ 1 (Q.12)\nNút cổ chai #3: PR {pr_map.get(34723, 2.69):.2f}", (106.572, 10.873), "#0F766E"),
+        (
+            81815,
+            f"Song Hành XLHN (Thủ Đức)\nNút cổ chai #5: PR {pr_map.get(81815, 2.65):.2f}",
+            (106.726, 10.869),
+            "#1D4ED8",
+        ),
     ]
     _annotate_landmarks(ax, geom.set_index("segment_id"), landmarks)
 
@@ -381,16 +407,19 @@ def render_hcmc_hotspots_map(geom: pd.DataFrame, out_path: Path) -> Path:
     ax.set_aspect(1.0 / np.cos(np.deg2rad(10.78)))
     _draw_north_arrow_and_scalebar(ax)
 
+    total_segs = m_json["dataset"]["segments_count"]
+    cold_cnt = m_json["dataset"]["cold_start_segments_count"]
+    cold_pct = m_json["static_feature_store_c13b"]["cold_start_ratio_pct"]
     ax.set_title(
-        "Bản đồ Giao thông TP.HCM (84,633 Đoạn đường): Vùng Thiếu GPS (88.15%) & Điểm Nóng Kẹt Xe",
-        fontsize=10.3,
+        f"Bản đồ Giao thông TP.HCM ({total_segs:,} Đoạn cơ giới): Vùng Thiếu GPS ({cold_pct:.2f}%) & Điểm Nóng Kẹt Xe",
+        fontsize=10.0,
         fontweight="bold",
         color="#0F172A",
         pad=8,
     )
 
     legend_handles = [
-        Line2D([0], [0], color="#CBD5E1", lw=2.3, label="Đoạn đường thiếu GPS (74,606 đoạn · 88.15%)"),
+        Line2D([0], [0], color="#CBD5E1", lw=2.3, label=f"Đoạn đường thiếu GPS ({cold_cnt:,} đoạn · {cold_pct:.2f}%)"),
         Line2D([0], [0], color="#0284C7", lw=2.3, label="Đường thông thoáng ổn định (LOS A–B)"),
         Line2D([0], [0], color="#F59E0B", lw=2.5, label="Đường đông đúc giờ cao điểm (LOS C–D)"),
         Line2D([0], [0], color="#DC2626", lw=2.9, label="Điểm nóng thường xuyên kẹt cứng (LOS E–F)"),
@@ -410,20 +439,21 @@ def render_hcmc_clusters_map(geom: pd.DataFrame, out_path: Path) -> Path:
         columns=["segment_id", "cluster_id", "is_cold_start"],
     )
     m = geom.merge(static_df, on="segment_id", how="inner")
+    counts = static_df["cluster_id"].value_counts().to_dict()
 
     palette = {
-        0: ("#94A3B8", 0.30, "Nhóm 0: Đường nhánh & hẻm dân cư (59,649 đoạn)"),
-        1: ("#DC2626", 0.88, "Nhóm 1: Giao lộ nội đô kẹt mãn tính (2,352 đoạn)"),
-        2: ("#10B981", 0.68, "Nhóm 2: Hành lang thông thoáng ổn định (3,797 đoạn)"),
-        3: ("#F59E0B", 0.62, "Nhóm 3: Đoạn dài dồn ứ giờ cao điểm (6,795 đoạn)"),
-        4: ("#2563EB", 0.92, "Nhóm 4: Đại lộ / Quốc lộ cấp 1 tốc độ cao (10,118 đoạn)"),
-        5: ("#8B5CF6", 0.74, "Nhóm 5: Phố thương mại dao động theo giờ (1,922 đoạn)"),
+        0: ("#2563EB", 0.90, f"Nhóm 0: Đại lộ / Quốc lộ Vmax cao ({counts.get(0, 0):,} đoạn)"),
+        1: ("#94A3B8", 0.30, f"Nhóm 1: Đường nhánh & hẻm dân cư ({counts.get(1, 0):,} đoạn)"),
+        2: ("#DC2626", 0.88, f"Nhóm 2: Giao lộ nội đô hay kẹt ({counts.get(2, 0):,} đoạn)"),
+        3: ("#F59E0B", 0.68, f"Nhóm 3: Đoạn liên kết dài ~236m ({counts.get(3, 0):,} đoạn)"),
+        4: ("#10B981", 0.62, f"Nhóm 4: Hành lang thông thoáng ({counts.get(4, 0):,} đoạn)"),
+        5: ("#8B5CF6", 0.80, f"Nhóm 5: Nút cổ chai PageRank cao ({counts.get(5, 0):,} đoạn)"),
     }
 
     fig, ax = plt.subplots(figsize=(8.3, 6.5), dpi=240, facecolor="white")
     _draw_hcmc_cartographic_base(ax)
 
-    for z_idx, cid in enumerate([0, 3, 2, 5, 4, 1], start=1):
+    for z_idx, cid in enumerate([1, 4, 3, 5, 0, 2], start=1):
         color, lw, _ = palette[cid]
         sub = m[m["cluster_id"] == cid]
         coll = LineCollection(_segments_to_lines(sub), colors=color, linewidths=lw, alpha=0.86, zorder=z_idx)
@@ -436,8 +466,8 @@ def render_hcmc_clusters_map(geom: pd.DataFrame, out_path: Path) -> Path:
     _draw_north_arrow_and_scalebar(ax)
 
     ax.set_title(
-        "Bản đồ 6 Nhóm Hành Vi Đường Phố (K-Means, k = 6) Phủ Kín 84,633 Đoạn Đường TP.HCM",
-        fontsize=10.2,
+        f"Bản đồ 6 Nhóm Hành Vi Đường Phố (K-Means, k = 6) Phủ Kín {len(static_df):,} Đoạn Cơ Giới TP.HCM",
+        fontsize=10.0,
         fontweight="bold",
         color="#0F172A",
         pad=8,
@@ -453,16 +483,34 @@ def render_hcmc_clusters_map(geom: pd.DataFrame, out_path: Path) -> Path:
 
 def render_transition_analysis_chart(out_path: Path) -> Path:
     """Direct 1-on-1 comparison: Baseline (copy current LOS) vs. Random Forest (23 features)."""
+    m_json = json.loads((OUTPUTS_DIR / "metrics.json").read_text(encoding="utf-8"))
+    ev = m_json["evaluation"]
+    tr = ev["transition_analysis"]
+    gap = tr["next_observed_gap_regime"]
+    cov = tr["cold_start_coverage"]
+    dist = tr["test_class_distribution"]
+    pers_acc = m_json["evaluation"]["ablation_table"][0]["accuracy_6class"] * 100.0
+
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(6.9, 6.2), dpi=220)
 
     cats = [
-        "Phát hiện đổi trạng thái\nROC-AUC (n = 61 ca)",
-        "Đoán trúng mức mới\nNgưỡng VAL (n = 61 ca)",
+        f"Phát hiện đổi trạng thái\nROC-AUC (n = {tr['transition_samples']} ca)",
+        f"Đoán trúng mức mới\nNgưỡng VAL τ={tr['val_selected_change_threshold']:.2f}",
         "Cảnh báo khi GPS thưa\nPR-AUC (> 30 phút)",
-        "Độ phủ đường thiếu GPS\n(74,606 đoạn nhánh)",
+        f"Độ phủ đường thiếu GPS\n({cov['cold_start_segments']:,} đoạn)",
     ]
-    pers_vals = [50.00, 0.00, 63.69, 0.00]
-    rf_vals = [76.64, 14.75, 70.82, 100.00]
+    pers_vals = [
+        tr["persistence_transition_detect_roc_auc"] * 100.0,
+        tr["persistence_transition_6class_acc"] * 100.0,
+        gap["persistence_severe_pr_auc"] * 100.0,
+        cov["persistence_cold_start_coverage_pct"],
+    ]
+    rf_vals = [
+        tr["rf_23d_transition_detect_roc_auc"] * 100.0,
+        tr["rf_23d_val_calibrated_transition_6class_acc"] * 100.0,
+        gap["rf_23d_severe_pr_auc"] * 100.0,
+        cov["rf_23d_network_coverage_pct"],
+    ]
 
     x = np.arange(len(cats))
     w = 0.32
@@ -495,16 +543,18 @@ def render_transition_analysis_chart(out_path: Path) -> Path:
             )
 
     los_labels = ["LOS A\n(Thông thoáng)", "LOS B", "LOS C", "LOS D", "LOS E\n(Ùn ứ)", "LOS F\n(Kẹt cứng)"]
-    los_counts = [959, 10, 15, 13, 20, 165]
+    los_counts = [int(dist[k]) for k in ("A", "B", "C", "D", "E", "F")]
     bar_cols = ["#0EA5E9", "#38BDF8", "#FBBF24", "#F59E0B", "#EF4444", "#B91C1C"]
     xb = np.arange(len(los_labels))
     bars_b = ax2.bar(xb, los_counts, width=0.52, color=bar_cols)
     ax2.set_xticks(xb, los_labels, fontsize=8.0, fontweight="bold", color="#0F172A")
     ax2.set_ylim(0, 1120)
     ax2.set_ylabel("Số mẫu kiểm thử", fontsize=8.5, fontweight="bold")
+    a_pct = los_counts[0] / max(sum(los_counts), 1) * 100.0
     ax2.set_title(
-        "Vì sao Baseline đạt 94.84% tổng thể? 81.1% mẫu là LOS A & 94.8% giữ nguyên trạng thái",
-        fontsize=9.1,
+        f"Vì sao Baseline đạt {pers_acc:.2f}% tổng thể? {a_pct:.1f}% mẫu là LOS A & "
+        f"{tr['steady_state_ratio_pct']:.1f}% đứng yên",
+        fontsize=9.0,
         fontweight="bold",
         color="#0F172A",
     )
@@ -512,7 +562,7 @@ def render_transition_analysis_chart(out_path: Path) -> Path:
     ax2.spines["top"].set_visible(False)
     ax2.spines["right"].set_visible(False)
     for bar, cnt in zip(bars_b, los_counts):
-        pct = cnt / 1182.0 * 100.0
+        pct = cnt / max(sum(los_counts), 1) * 100.0
         ax2.text(
             bar.get_x() + bar.get_width() / 2,
             cnt + 22,
@@ -577,7 +627,7 @@ def render_pdf_equations() -> dict[str, Path]:
                 r"$r_s^{(k+1)} = \frac{1 - \beta}{N} + \beta \left("
                 r"\sum_{u \in \mathrm{In}(s)} \frac{r_u^{(k)}}{d_{\mathrm{out}}(u)} + "
                 r"\frac{1}{N} \sum_{d \in \mathcal{D}} r_d^{(k)} \right),"
-                r"\qquad \sum_{s=1}^{84,633} r_s^{(25)} = 84,633.0 \quad (\beta = 0.85)$",
+                r"\qquad \sum_{s=1}^{84,206} r_s^{(25)} = 84,206.0 \quad (\beta = 0.85)$",
             ],
             0.78,
         ),
@@ -607,12 +657,20 @@ def render_pdf_equations() -> dict[str, Path]:
 
 
 def render_ablation_t30m_chart(out_path: Path) -> Path:
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(7.0, 6.2), dpi=220)
-    models_top = ["DT (14 biến)", "RF (14 biến)", "GBT (14 biến)", "GBT (23 biến)", "RF (23 biến) [Chọn]"]
-    sev_f1 = [0.9437, 0.9434, 0.7840, 0.9465, 0.9409]
-    sev_pr = [0.9482, 0.9630, 0.9328, 0.9419, 0.9471]
-    sev_roc = [0.9856, 0.9866, 0.9812, 0.9843, 0.9882]
+    ab_df = pd.read_csv(OUTPUTS_DIR / "ablation_results.csv").set_index("model")
+    order_top = [
+        ("Decision Tree (Local Only)", "DT (14 biến)"),
+        ("Random Forest (Local Only)", "RF (14 biến)"),
+        ("GBT Binary Alerting (Local Only)", "GBT (14 biến)"),
+        ("GBT Binary Alerting (+Graph PageRank, Causal Priors & K-Means)", "GBT (23 biến)"),
+        ("Random Forest (+Graph PageRank, Causal Priors & K-Means)", "RF (23 biến) [Chọn]"),
+    ]
+    models_top = [lbl for _, lbl in order_top]
+    sev_f1 = [float(ab_df.loc[k, "severe_ef_f1"]) for k, _ in order_top]
+    sev_pr = [float(ab_df.loc[k, "severe_pr_auc"]) for k, _ in order_top]
+    sev_roc = [float(ab_df.loc[k, "severe_roc_auc"]) for k, _ in order_top]
 
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(7.0, 6.2), dpi=220)
     x1 = np.arange(len(models_top))
     w1 = 0.25
     ax1.bar(x1 - w1, sev_f1, w1, label="F1 kẹt cứng", color="#38BDF8")
@@ -642,9 +700,15 @@ def render_ablation_t30m_chart(out_path: Path) -> Path:
             color="#0F172A",
         )
 
-    models_bot = ["DT (14 biến)", "DT (23 biến)", "RF (14 biến)", "RF (23 biến) [Chọn]"]
-    macro_f1 = [0.3794, 0.3772, 0.5455, 0.5543]
-    acc_6 = [0.9425, 0.9425, 0.9425, 0.9450]
+    order_bot = [
+        ("Decision Tree (Local Only)", "DT (14 biến)"),
+        ("Decision Tree (+Graph PageRank, Causal Priors & K-Means)", "DT (23 biến)"),
+        ("Random Forest (Local Only)", "RF (14 biến)"),
+        ("Random Forest (+Graph PageRank, Causal Priors & K-Means)", "RF (23 biến) [Chọn]"),
+    ]
+    models_bot = [lbl for _, lbl in order_bot]
+    macro_f1 = [float(ab_df.loc[k, "macro_f1_6class"]) for k, _ in order_bot]
+    acc_6 = [float(ab_df.loc[k, "accuracy_6class"]) for k, _ in order_bot]
     x2 = np.arange(len(models_bot))
     w2 = 0.30
     b_mf1 = ax2.bar(x2 - w2 / 2, macro_f1, w2, label="Macro-F1 (6 mức)", color="#0D9488")
@@ -652,9 +716,10 @@ def render_ablation_t30m_chart(out_path: Path) -> Path:
     ax2.set_xticks(x2, models_bot, fontsize=8.2, fontweight="bold", color="#0F172A")
     ax2.set_ylim(0.25, 1.08)
     ax2.set_ylabel("Điểm 6 mức (LOS A–F)", fontsize=8.4, fontweight="bold")
+    gain_pct = (macro_f1[-1] - macro_f1[1]) * 100.0
     ax2.set_title(
-        "Phân loại Đầy đủ 6 Mức LOS A–F (+17.49% Macro-F1 so với Cây quyết định)",
-        fontsize=9.6,
+        f"Phân loại 6 Mức LOS A–F (+{gain_pct:.2f}% Macro-F1 so với DT 23D; Weighted-F1 0.9304)",
+        fontsize=9.3,
         fontweight="bold",
         color="#0F172A",
     )

@@ -1,9 +1,9 @@
 {
   "pillar": "BDA501 Pillar I1 — 5-Tuple Commutative Monoid Combiner vs. Independent Reference Baseline",
   "monoid_tuple": "(cnt, sum_v, min_v, max_v, severe_cnt)",
-  "identity_element": "(0, 0.0, +inf, 0.0, 0)",
-  "raw_distinct_utc_windows": 33441,
-  "medallion_matched_windows": 33441,
+  "identity_element": "(0, 0.0, +inf, -inf, 0)",
+  "raw_distinct_utc_windows": 33394,
+  "medallion_matched_windows": 33394,
   "missing_keys_in_dataset": 0,
   "extra_keys_in_dataset": 0,
   "duplicate_window_keys": 0,
@@ -16,8 +16,8 @@
   "mean_velocity_discrepancies": 0,
   "max_abs_velocity_diff": 0.0,
   "monoid_associativity_verified": true,
-  "total_severe_pings_accumulated": 42170,
-  "rejected_malformed_pings": 0,
+  "total_severe_pings_accumulated": 42124,
+  "rejected_malformed_or_nonroad_pings": 151,
   "dedup_dropped_raw_pings": 0,
   "unequal_partition_associativity_check": {
     "partition_sizes": [

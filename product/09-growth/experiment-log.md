@@ -1,36 +1,34 @@
-# Nhật Ký Thực Nghiệm & Đối Chứng Học Thuật (Experiment Log & Ablation Record)
+# Nhật Ký Thử Nghiệm Kỹ Thuật (Experiment Log — Wave 2 Verified Results)
 
-## 1. Thí Nghiệm 1: Kết Nối Đúng Chân Trời `t+30m`, Khử Rò Rỉ Nhãn & Chống Sụp Đổ Lớp Trung Gian (`LOS C, D, E`)
+## Experiment 1: Cô lập Synthetic Burst & Huấn luyện Sạch (`class_weight^0.65`, Không `sample_weight` Nhân tạo)
+- **Giả thuyết:** Giữ `3,596` cặp synthetic burst (`2020-08-02 23:30` & `2020-08-03 00:00`, tổng `7,192` cửa sổ sạch) trong `TRAIN` hoặc dùng `sample_weight` nhân tạo sẽ thổi phồng giả tạo hiệu năng trên mô hình.
+- **Thiết kế:** Loại bỏ toàn bộ `3,596` cặp burst khỏi `TRAIN`, giữ `1,885` cặp `TRAIN` hữu cơ (`50` purge) / `1,167` `VAL` (`5` purge) / `1,182` `TEST` (`185` severe E/F; `A=959, B=10, C=15, D=13, E=20, F=165`). Dùng `class_weight` sạch với exponent `0.65`.
+- **Kết quả Ablation Burst:** Có burst (`TEST Acc = 0.9391, Severe F1 = 0.9372`) vs Hữu cơ sạch (`TEST Acc = 0.9289, Severe F1 = 0.9301`).
+- **Kết quả `VAL` Gate (`0.5*Acc + 0.5*PR-AUC`):** `RF 23D` thắng (`0.8990` so với `0.5343` của `RF 14D`; `VAL Acc = 0.9023, VAL PR-AUC = 0.8957, VAL ROC-AUC = 0.9611, th = 0.25`).
+- **Bảng đối chứng trên `TEST` (`1,182` cặp hữu cơ — `outputs/ablation_results.csv`):**
 
-- **Giả thuyết (`Hypothesis`):** (1) Phép dịch dòng `shift(-1)` gán nhãn qua khoảng trống thời gian tùy ý (`66.27%` cặp cách nhau $>30$ phút) làm sai lệch bài toán dự báo `t+30m`; (2) tính trung bình tĩnh trên tập `TRAIN` gây `Intra-Train Target Leakage`; (3) dữ liệu thưa ở các lớp trung gian `LOS C, D, E` dễ gây sụp đổ lớp (`Recall = 0`) nếu không cân bằng trọng số mẫu theo trạng thái chuyển tiếp ổn định trên tập `TRAIN`.
-- **Kết quả Thực nghiệm trên `7,898` Cặp Đúng `+30m` (`5,494 TRAIN / 1,167 VAL / 1,182 TEST`):**
-  - Cổng `Validation Gate` (`D09`) tự động chọn **`Random Forest (+Graph PageRank, Causal Priors & K-Means, 23D)`** với **`VAL PR-AUC = 0.8704`** và **`VAL ROC-AUC = 0.9593`** (`VAL 6-Class Accuracy = 0.9529`, vượt qua `Random Forest Local Only` với `VAL PR-AUC = 0.8574, VAL ROC-AUC = 0.9448`).
-  - Trên tập `TEST` (`1,182` cửa sổ), `Random Forest (+Graph PageRank, Causal Priors & K-Means, 23D)` đạt **`ROC-AUC = 0.9882`**, **`PR-AUC = 0.9471`**, **`Severe F1 = 0.9409`**, **`6-Class Accuracy = 0.9450`**, và **`Macro-F1 = 0.5543`** với đường chéo 6-Class Confusion Matrix đạt `[944, 4, 3, 7, 6, 153]` (toàn bộ 6 lớp `LOS A..F` đều có `Recall > 0`).
-  - Đối với mô hình nhị phân chuyên biệt `GBT Binary Alerting (+Graph PageRank, Causal Priors & K-Means, 23D)` (`task_type = BINARY_SEVERE_EF_ONLY`), bổ sung đặc trưng đồ thị và cụm giúp nâng `Severe F1` từ `0.7840` (`GBT Local Only`) lên **`0.9465`** (`ROC-AUC = 0.9843, PR-AUC = 0.9419`).
-  - *(Đối chứng giao thức cũ `shift(-1)` trên `3,513` dòng test kế tiếp bất kỳ: `legacy_severe_f1 = 0.6447, legacy_pr_auc = 0.7628, legacy_roc_auc = 0.8484`).*
+| Mô hình | 6-Class Acc | Macro-F1 | Weighted-F1 | Severe Prec | Severe Rec | Severe F1 | ROC-AUC | PR-AUC |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `Persistence (t -> t+30m)` | `0.9484` | `0.5654` | `0.9461` | `0.9365` | `0.9568` | `0.9465` | `0.9867` | `0.9367` |
+| `DT 14D` | `0.8832` | `0.3767` | `0.9058` | `0.9467` | `0.8649` | `0.9040` | `0.9833` | `0.9296` |
+| `DT 23D` | `0.8748` | `0.3817` | `0.9006` | `0.9459` | `0.7568` | `0.8408` | `0.9799` | `0.9263` |
+| `RF 14D` | `0.9239` | `0.4372` | `0.9290` | `0.9429` | `0.8919` | `0.9167` | `0.9898` | `0.9557` |
+| **`RF 23D (Winner)`** | **`0.9289`** | **`0.4475`** | **`0.9304`** | **`0.9251`** | **`0.9351`** | **`0.9301`** | **`0.9900`** | **`0.9595`** |
+| `GBT 14D` (Binary Severe) | `—` | `—` | `—` | `0.9362` | `0.9514` | `0.9437` | `0.9849` | `0.9534` |
+| `GBT 23D` (Binary Severe) | `—` | `—` | `—` | `0.9259` | `0.9459` | `0.9358` | `0.9822` | `0.9454` |
 
----
+- **Chi tiết `RF 23D`:** Đường chéo ma trận nhầm lẫn `[937, 4, 1, 7, 2, 147]` (đủ 6 lớp); Paired Bootstrap 95% CI: `ROC-AUC [0.9836, 0.9953]`, `Severe F1 [0.9012, 0.9547]`. `Macro-F1 = 0.4475` phản ánh trung thực độ hiếm của các lớp trung gian `B/C/D/E` (`10/15/13/20`).
 
-## 2. Thí Nghiệm 2: Chuẩn Hóa `Unicode NFC` Trong Khai Phá Luật Đồng Kẹt Xe (`2-Pass SON / FP-Growth`)
+## Experiment 2: Đánh giá Chuyển Pha (`61` Transitions) & Masked-GPS Spatial Cold-Start Proxy
+- **Chuyển pha trên `TEST` (`61 / 1,182 = 5.16%`):** `Persistence` bắt `0/61`; `RF 23D` bắt `7/61` (`11.48%`, `McNemar p = 0.015625`, `7 vs 0`), tại ngưỡng `P >= 0.40` đạt `19.67%` (`12/61`, overall `0.8849`), Conditional top-1 `31.15%`; **`Transition Detect ROC-AUC = 0.9146`** (so với heuristic `0.7921`, DT `0.7996`), `Onset ROC-AUC = 0.8539`, **`Onset risk lift = 3.32x`** (`0.0823 vs 0.0248`).
+- **Gap Regime (`3,605` dòng, `49.21%` transitions):** `RF PR-AUC = 0.6293` vs `Persistence = 0.5732`.
+- **Masked-GPS Spatial Cold-Start Proxy (`74,211 / 84,206 = 88.13%` cold-start):** Khi che lịch sử GPS trực tiếp, proxy đạt `Acc = 0.5271, ROC-AUC = 0.6175, PR-AUC = 0.4282, Brier = 0.1168`.
 
-- **Giả thuyết (`Hypothesis`):** Dữ liệu OSM thô chứa các tên đường trùng nhau nhưng khác bảng mã Unicode (`NFD` vs. `NFC`), ký tự `Ð` vs. `Đ`, tiền tố `Đường ` hoặc hậu tố hành chính (`, Phường ...`, `, Quận ...`), làm phát sinh các luật tự suy diễn giả tạo.
-- **Kết quả Thực nghiệm:**
-  - Trước khi chuẩn hóa (`Raw Street Names`): Xuất hiện `695` tên đường thô với các biến thể lỗi và nhãn hành chính `Phường Hiệp Bình Chánh`.
-  - Sau khi áp dụng `[C5]` `Canonical Unicode NFC & Regex Street Hygiene` (`R4_UNICODE_NFD_AND_PREFIX_DRIFT` chuẩn hóa `2,071` cửa sổ): Gộp sạch `46` thực thể trùng về **`649` tuyến đường chuẩn**; `30 / 30` luật đồng kẹt xe hai chiều và `20 / 20` luật lan truyền trễ `t -> t+30m` đạt `0%` tự suy diễn (`Lift` cao nhất đạt **`28.5833x`** cho `Lý Chính Thắng <=> Nguyễn Thông`).
+## Experiment 3: Chuẩn hóa Unicode NFC & Kiểm định BkTraffic Urban `5 km/h` LOS
+- **Unicode NFC:** Chuẩn hóa `2,247` cửa sổ (`695` tên đường thô -> `641` tên chuẩn hóa, gộp `54` biến thể; `640` tên phân biệt trong `data/dataset.csv`).
+- **BkTraffic Urban LOS (`derive_urban_los`):** Đạt **`89.19%` exact match** đối chiếu trực tiếp với `train.csv` (phân biệt rõ với hàm tiện ích tỷ lệ `derive_los`).
 
----
-
-## 3. Thí Nghiệm 3: Tối Ưu Hóa Kế Hoạch Kết Nối & Chỉ Mục Phục Vụ (`BroadcastHashJoin` & `MongoDB IXSCAN`)
-
-- **Kết quả `Catalyst Join Plan` (`Pillar I2` trên `PySpark 3.5.7`):** Ép `BroadcastHashJoin` cho các bảng chiều tĩnh (`segments`, `streets`) giúp giảm số bước trao đổi mạng (`Exchange` stages) từ **`10` xuống `2`**, loại bỏ hoàn toàn `4` phép `SortMergeJoin` nặng và chứng minh `exceptAll == 0` giữa DataFrame API và Spark SQL.
-- **Kết quả `MongoDB 8.0.34 Explain Plan` (`Pillar I3` trên `33,441` bản ghi):** Chỉ mục ghép `{street_level: 1, severe_prob: -1, segment_id: 1}` (`level_prob_segment_idx`) phục vụ trực tiếp cả phép lọc `{"street_level": {"$in": [1, 2]}, "severe_prob": {"$gte": 0.7}}` lẫn phép sắp xếp `severe_prob DESC, segment_id ASC` qua `winning_stages = ["LIMIT", "PROJECTION_SIMPLE", "FETCH", "SORT_MERGE", "IXSCAN", "IXSCAN"]` với `in_memory_sort = False` (`0` bước `SORT` chặn trong RAM, `warm_median_ms = 0.530 ms`, `warm_p95_ms = 0.636 ms`).
-
----
-
-## 4. Thí Nghiệm 4: Giải Mã Nghịch Lý Quán Tính Của `Baseline (Giữ Nguyên Hiện Tại)` Khi Giao Thông Đổi Trạng Thái (`LOS(t) ≠ LOS(t+30m)`)
-
-- **Giả thuyết (`Hypothesis`):** Trên toàn bộ `1,182` mẫu `TEST`, `959` mẫu (`81.13%`) thuộc `LOS A` và `1,121` cặp (`94.84%`) giữ nguyên trạng thái cũ khiến `Baseline (Giữ nguyên hiện tại)` đạt `0.9484` `6-Class Accuracy` nhưng sẽ thất bại hoàn toàn khi giao thông chuyển trạng thái, khi tín hiệu GPS ngắt quãng hoặc trên các đoạn đường thiếu GPS.
-- **Kết quả Thực nghiệm (`outputs/transition_evaluation.csv`):**
-  - Trên **`61` ca thực sự đổi trạng thái (`LOS(t) ≠ LOS(t+30m)`)**: `Baseline` đoán sai `100%` (`0/61`, `Acc = 0.00%`, `ROC-AUC = 0.5000`, `Severe PR-AUC = 0.5408`, `Brier = 0.3279`); mô hình triển khai `Random Forest (23 biến)` đạt **`ROC-AUC phát hiện đổi trạng thái = 0.7664`**, đoán đúng `2/61` (`3.28%`) ở ngưỡng mặc định `argmax` và nâng lên **`9/61` (`14.75%`)** nhờ ngưỡng xác suất `P(đổi trạng thái) ≥ 0.30` chọn trên tập `VAL` (`VAL F1 = 0.5060`), xếp đúng lớp mới cao nhất tới **`24/61` (`39.34%`)**, nâng `Severe PR-AUC` lên **`0.5708` (`+3.00%`)** và giảm `10.1%` sai số `Brier` (`0.2948`).
-  - Trên **`993` mẫu đang thoáng (`8` ca bất ngờ chuyển sang kẹt cứng `LOS E/F` sau 30 phút)**: Dù quy tắc cắt ngưỡng cứng đạt `0/8` do dữ liệu tập huấn luyện mất cân bằng mạnh, xác suất cảnh báo của `Random Forest (23 biến)` đạt **`ROC-AUC = 0.8136`** và nâng điểm rủi ro trung bình trên 8 ca sắp kẹt **cao gấp `9.35` lần** ca thông thoáng ổn định (`3.46%` so với `0.37%`).
-  - Trên **`3,513` cặp tín hiệu GPS ngắt quãng `> 30 phút`** và **`74,606` đoạn đường thiếu GPS**: `Random Forest (23 biến)` đạt `PR-AUC = 0.7082` (so với `0.6369` của `Baseline`) và độ phủ `100.0%` (so với `0.0%` của `Baseline`).
+## Experiment 4: Spark `3.5.7` Catalyst Join, Monoid Salting & MongoDB `8.0.34` Latency
+- **Catalyst Join (`hcmc-traffic-spark:3.5.7`):** `SortMergeJoin (5 Exchange, 145.24 ms, IQR 12.83)` -> **`BroadcastHashJoin (1 Exchange, 120.45 ms, IQR 4.59)`**, nhanh hơn **`17.07%`**, `exceptAll_diff = 0`.
+- **Pure 5-Tuple Monoid & Salting:** Pure Monoid khớp `100.0%` (`0` sai lệch, `0.0 km/h` diff), Spark Monoid `147.11 ms` (IQR `31.29`) vs 8-bucket salted `222.60 ms` (IQR `11.27`, `59,714` nhóm Stage-1, `0 exceptAll diff`); giảm độ lệch khóa từ `684.95x` xuống `1.0197x` (khung giờ đỉnh) và `salted_partition_skew_ratio = 1.0123` (`CV = 0.0059`).
+- **MongoDB `8.0.34` (`33,394` docs):** `IXSCAN` ấm đạt **`0.389 ms` median / `0.692 ms` p95** so với `COLLSCAN 9.161 ms / 9.906 ms` (**`23.55x`**); atomic `$status_version` pipeline guard chặn `25/25` bản tin `v1` cũ.

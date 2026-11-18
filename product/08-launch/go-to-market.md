@@ -1,9 +1,15 @@
-# Kế Hoạch Triển Khai & Đưa Sản Phẩm Vào Sử Dụng (Go-To-Market & Adoption Plan)
+# Chiến Lược Triển Khai & Go-To-Market (Wave 2 Platform)
 
-## 1. Lộ Trình Triển Khai Theo 3 Giai Đoạn (`Phased Rollout Plan`)
+## 1. Giá trị Cốt lõi (Value Proposition) cho Sở Giao thông Vận tải & Trung tâm Điều hành (TOC)
+1. **Giám sát Toàn mạng Lưới (`84,206` Đoạn Đường Cơ Giới Sạch):** Kết hợp trực tiếp `9,995` đoạn đường có GPS (`11.87%`) với chỉ số cấu trúc PageRank (`#1: 21969 Nguyễn Kiệm, PR = 2.7799`) và không gian hành vi `K-Means 7D` để lập chỉ mục cho toàn bộ `74,211` đoạn đường Cold-Start (`88.13%`), đồng thời công khai trung thực giới hạn vật lý của proxy không gian (`Masked-GPS Cold-Start Proxy Acc = 0.5271, ROC-AUC = 0.6175`).
+2. **Dự báo Đáng tin Cậy & Sạch Rò rỉ (`RF 23D`):** Loại bỏ hoàn toàn `3,596` cặp synthetic burst khỏi huấn luyện, không dùng `sample_weight` nhân tạo; đạt `TEST ROC-AUC = 0.9900`, `PR-AUC = 0.9595`, `Severe F1 = 0.9301`, `Onset risk lift = 3.32x` và bắt chuyển pha tắc nghẽn vượt trội Persistence (`McNemar p = 0.015625`, `Detect ROC-AUC = 0.9146` vs heuristic `0.7921`).
+3. **Khai phá Lan truyền Tắc nghẽn Thực chứng:** Cung cấp `12` luật đồng tắc nghẽn (`Nguyễn Thị Minh Khai <-> Cống Quỳnh`, Lift `15.2308`) và `14` luật lan truyền có kiểm soát tính tự duy trì (`persistence_controlled = True`, tiêu biểu `Lê Quang Định -> Trần Quang Khải`, Lift `24.0`).
+4. **Hiệu năng Truy vấn & Giao diện Điều hành Kép:**
+   - **Web TOC Command Center (`FastAPI + React/Vite :8000`):** Bản đồ điều hành trực quan và kịch bản câu chuyện vận hành theo thời gian thực.
+   - **Streamlit Operations Console (`:8501`):** Phân tích chi tiết 5 tab cho kỹ sư dữ liệu & kiểm toán viên.
+   - **MongoDB 8.0.34 Sub-millisecond Serving:** Độ trễ `IXSCAN` ấm đạt `0.389 ms` median / `0.692 ms` p95 (`23.55x` so với `COLLSCAN`) cho `33,394` tài liệu.
 
-| Giai đoạn | Đối tượng Áp dụng | Hạng mục Triển khai Chính | Chỉ số Nghiệm thu |
-| :--- | :--- | :--- | :--- |
-| **Phase 1: `TOC Shadow Mode`** | Trung tâm Quản lý Điều hành Giao thông Đô thị TP.HCM (`TOC`) | Triển khai `Streamlit 5-Tab UI (:8501)` và bảng cảnh báo `Top-25 Decaying Hotspots` (`UC-1`) chạy song song với màn hình camera giám sát hiện hữu. | Thời gian cập nhật `< 5s`, `0` cảnh báo giả từ nhịp đèn đỏ đơn lẻ. |
-| **Phase 2: `Corridor Signal Integration`** | Các trục giao thông trọng điểm (Cộng Hòa – Trường Chinh, Lý Thường Kiệt, Quốc lộ 1A, Xa Lộ Hà Nội) | Kết nối API truy vấn `MongoDB 8.0 IXSCAN` (`UC-2`) và bảng `30` luật đồng kẹt xe `SON/FPGrowth` (`UC-4`) vào hệ thống điều khiển pha đèn liên quận. | Độ trễ truy vấn `< 10ms` (`IXSCAN`), cảnh báo sớm trước `30 phút` với `PR-AUC >= 0.75`. |
-| **Phase 3: `City-Wide Urban Planning`** | Sở GTVT TP.HCM & Viện Nghiên cứu Phát triển | Cung cấp `Static Feature Store` `84,633` đoạn đường (`segment_static_features.parquet`) kèm điểm `Line-Graph PageRank` và `7D Behavioral Clusters` (`UC-3`, `UC-5`). | Độ phủ `100%` mạng lưới đường bộ thành phố (bao gồm `88.15%` vùng mù `Cold-Start`). |
+## 2. Lộ trình Triển khai Thí điểm (Phased Adoption)
+- **Giai đoạn 1 — Shadow Operation:** Đấu nối nguồn GPS trực tiếp qua Kafka KRaft + `live-consumer`, kiểm tra `tier1_exceptAll_diff = 0` và `atomic $status_version` guard.
+- **Giai đoạn 2 — Corridor Dispatch:** Kích hoạt cảnh báo sớm theo `1,202` cảnh báo trục chính và `14` luật lan truyền trễ trên `Web TOC (:8000)` cho đội điều tiết giao thông.
+- **Giai đoạn 3 — Full City Lakehouse Integration:** Nối mở rộng nguồn camera/cảm biến vòng từ bổ sung vào lớp `curated_gold/year_month=*` để thu hẹp tỷ lệ `88.13%` đoạn đường Cold-Start.

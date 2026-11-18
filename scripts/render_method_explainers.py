@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import matplotlib
@@ -14,7 +15,41 @@ plt.rcParams["font.sans-serif"] = ["Segoe UI", "DejaVu Sans", "Arial"]
 plt.rcParams["axes.unicode_minus"] = False
 
 REPO_DIR = Path(__file__).resolve().parent.parent
-CHART_DIR = REPO_DIR / "outputs" / "slide_charts"
+OUTPUTS_DIR = REPO_DIR / "outputs"
+CHART_DIR = OUTPUTS_DIR / "slide_charts"
+
+
+def _load_method_stats() -> dict[str, str]:
+    m = json.loads((OUTPUTS_DIR / "metrics.json").read_text(encoding="utf-8"))
+    ds = m["dataset"]
+    qf = m["quality_funnel_c5"]
+    vt = qf["vmax_imputation_tiers_windows"]
+    total_w = max(ds["labeled_windows_count"], 1)
+    p1 = m["monoid_and_catalyst_c9"]["pillar_i1_monoid_and_salting"]
+    hll = m["streaming_mmds"]["hyperloglog"]
+    gp = m["graph_and_patterns"]
+    pruned_pct = ds["pruned_orphan_nodes_count"] / ds["nodes_count"] * 100.0
+    t0 = vt["TIER_1_SEGMENT_OBSERVED"]
+    t1 = vt["TIER_1_SEGMENT_TRAIN_P85"]
+    t2 = vt["TIER_2_LEVEL_ROADTYPE_MEDIAN"]
+    t3 = vt["TIER_3_HIERARCHICAL_LEVEL_PRIOR"]
+    return {
+        "miss_pct": f"{qf['missing_max_velocity_train_pct']:.2f}%",
+        "t0": f"{t0 / total_w * 100:.1f}% · {t0:,}",
+        "t1": f"{t1 / total_w * 100:.1f}% · {t1:,}",
+        "t2": f"{t2 / total_w * 100:.1f}% · {t2:,}",
+        "t3": f"{t3 / total_w * 100:.1f}% · {t3:,}",
+        "skew_raw": f"{p1['temporal_slot_peak_to_median_ratio']:.2f}x",
+        "skew_salt": f"{p1['peak_slot_salted_bucket_skew_ratio']:.3f}x",
+        "pruned_pct": f"{pruned_pct:.2f}%",
+        "top_pr": f"{gp['top_bottleneck_pagerank']:.2f}",
+        "top_street": str(gp["top_bottleneck_street"]),
+        "segs": f"{ds['segments_count']:,}",
+        "cold_segs": f"{ds['cold_start_segments_count']:,}",
+        "cold_pct": f"{m['static_feature_store_c13b']['cold_start_ratio_pct']:.2f}%",
+        "active_segs": f"{ds['distinct_active_segments']:,}",
+        "hll_err": f"{hll['relative_error_pct']:.2f}%",
+    }
 
 
 def _rbox(
@@ -96,6 +131,7 @@ def _arrow(
 
 
 def _draw_imputation_panel(ax: plt.Axes) -> None:
+    ms = _load_method_stats()
     _panel_header(
         ax,
         0.18,
@@ -103,7 +139,7 @@ def _draw_imputation_panel(ax: plt.Axes) -> None:
         8.65,
         5.10,
         "1. Nội Suy Tốc Độ Tối Đa 3 Tầng (Train-Only 3-Tier Vmax)",
-        "Giải EC-1 (85.21% thiếu Vmax)",
+        f"Giải EC-1 ({ms['miss_pct']} thiếu Vmax)",
         "#0284C7",
     )
     # Train-only lock banner
@@ -126,7 +162,7 @@ def _draw_imputation_panel(ax: plt.Axes) -> None:
             8.17,
             "#DCFCE7",
             "#15803D",
-            "Gốc hợp lệ (14.8% · 4,946 cửa sổ)",
+            f"Gốc hợp lệ ({ms['t0']} cửa sổ)",
             "Đường có sẵn biển tốc độ hợp lệ → Giữ nguyên (vd: Điện Biên Phủ = 60 km/h)",
         ),
         (
@@ -134,7 +170,7 @@ def _draw_imputation_panel(ax: plt.Axes) -> None:
             7.65,
             "#E0F2FE",
             "#0284C7",
-            "Tầng 1 — P85 Lịch sử Đoạn (24.4% · 8,164)",
+            f"Tầng 1 — P85 Lịch sử Đoạn ({ms['t1']})",
             "Lấy phân vị 85% vận tốc lúc đường thoáng của chính đoạn đó (Lý Thường Kiệt → 40 km/h)",
         ),
         (
@@ -142,7 +178,7 @@ def _draw_imputation_panel(ax: plt.Axes) -> None:
             7.13,
             "#FEF3C7",
             "#D97706",
-            "Tầng 2 — Trung vị Cấp × Loại (60.2% · 20,124)",
+            f"Tầng 2 — Trung vị Cấp × Loại ({ms['t2']})",
             "Đoạn ít lịch sử → Mượn tốc độ trung vị các đường cùng cấp & loại đường trên TRAIN",
         ),
         (
@@ -150,7 +186,7 @@ def _draw_imputation_panel(ax: plt.Axes) -> None:
             6.61,
             "#F3E8FF",
             "#7C3AED",
-            "Tầng 3 — Quy chuẩn Đô thị (0.6% · 207)",
+            f"Tầng 3 — Quy chuẩn Đô thị ({ms['t3']})",
             "Dự phòng cuối theo cấp đường 1..4: gán chuẩn đô thị 80 / 60 / 50 / 40 km/h",
         ),
     ]
@@ -286,12 +322,13 @@ def _draw_monoid_panel(ax: plt.Axes) -> None:
         zorder=4,
     )
 
+    ms = _load_method_stats()
     _rbox(ax, 9.34, 0.30, 8.36, 0.64, "#0F172A", "#0F172A", lw=1.2, radius=0.10, zorder=3)
     ax.text(
         13.52,
         0.62,
         "2-STAGE KEY SALTING: Gắn đuôi ngẫu nhiên 0..7 chia đều giờ cao điểm ra 8 giỏ "
-        "(giảm lệch tải 687.43x → 1.023x),\n"
+        f"(giảm lệch tải {ms['skew_raw']} → {ms['skew_salt']}),\n"
         "sau đó cộng gộp các bộ 5-Tuple Monoid để vừa chống treo máy vừa giữ kết quả chính xác tuyệt đối!",
         fontsize=8.0,
         fontweight="bold",
@@ -318,6 +355,7 @@ def render_methods_imputation_monoid(out_path: Path) -> Path:
 
 
 def _draw_pagerank_col(ax: plt.Axes) -> None:
+    ms = _load_method_stats()
     _panel_header(
         ax,
         0.16,
@@ -333,7 +371,7 @@ def _draw_pagerank_col(ax: plt.Axes) -> None:
     ax.text(
         0.50,
         4.28,
-        "Bước A — Cắt tỉa 90.93% điểm uốn cong bản đồ OSM:",
+        f"Bước A — Cắt tỉa {ms['pruned_pct']} điểm uốn cong bản đồ OSM:",
         fontsize=8.3,
         fontweight="bold",
         color="#0F172A",
@@ -374,7 +412,7 @@ def _draw_pagerank_col(ax: plt.Axes) -> None:
     ax.text(
         3.47,
         2.03,
-        "Đoạn Cổ Chai D\nPageRank = 3.75\n(Dòng xe dồn tụ!)",
+        f"Đoạn Cổ Chai D\nPageRank = {ms['top_pr']}\n(Dòng xe dồn tụ!)",
         fontsize=8.0,
         fontweight="bold",
         color="#991B1B",
@@ -390,9 +428,9 @@ def _draw_pagerank_col(ax: plt.Axes) -> None:
     ax.text(
         3.06,
         0.61,
-        "Ý NGHĨA: Mỗi đoạn đường là 1 nút. Nhiều đường lớn đổ vào 1 lối hẹp\n"
-        "→ PageRank cao vọt (Phú Định, Lê Lai) kể cả khi chưa lắp GPS!",
-        fontsize=7.8,
+        "Ý NGHĨA: Mỗi đoạn đường là 1 nút (loại U-turn). Nhiều đường đổ vào\n"
+        f"1 lối hẹp → PageRank cao vọt ({ms['top_street']}, Gò Dưa) dù thiếu GPS!",
+        fontsize=7.7,
         fontweight="bold",
         color="#5EEAD4",
         ha="center",
@@ -402,6 +440,7 @@ def _draw_pagerank_col(ax: plt.Axes) -> None:
 
 
 def _draw_coldstart_col(ax: plt.Axes) -> None:
+    ms = _load_method_stats()
     _panel_header(
         ax,
         6.14,
@@ -409,14 +448,14 @@ def _draw_coldstart_col(ax: plt.Axes) -> None:
         5.82,
         5.10,
         "4. Phân Cụm 7D K-Means Cho Vùng Mù",
-        "88.15% Cold-Start",
+        f"{ms['cold_pct']} Cold-Start",
         "#2563EB",
     )
     _rbox(ax, 6.32, 3.38, 5.46, 1.12, "white", "#CBD5E1", lw=1.2, radius=0.10, zorder=2)
     ax.text(
         6.48,
         4.28,
-        "Thách thức: 74,606 / 84,633 đoạn đường có 0 bản tin GPS",
+        f"Thách thức: {ms['cold_segs']} / {ms['segs']} đoạn cơ giới có 0 bản tin GPS",
         fontsize=8.3,
         fontweight="bold",
         color="#0F172A",
@@ -452,7 +491,7 @@ def _draw_coldstart_col(ax: plt.Axes) -> None:
     ax.text(
         6.48,
         3.00,
-        "Gom 84,633 đoạn thành 6 nhóm hành vi đường phố (k = 6):",
+        f"Gom {ms['segs']} đoạn thành 6 nhóm hành vi đường phố (k = 6):",
         fontsize=8.3,
         fontweight="bold",
         color="#0F172A",
@@ -471,9 +510,9 @@ def _draw_coldstart_col(ax: plt.Axes) -> None:
     )
     # Cluster circles
     clusters = [
-        (7.42, 1.96, "#FEE2E2", "#DC2626", "Cụm 1: Ngã tư\nnội đô hay kẹt"),
-        (9.12, 1.96, "#DBEAFE", "#2563EB", "Cụm 4: Đại lộ\ntốc độ cao"),
-        (10.80, 1.96, "#F1F5F9", "#64748B", "Cụm 0: Đường\nnhánh dân cư"),
+        (7.42, 1.96, "#FEE2E2", "#DC2626", "Cụm 2: Giao lộ\nnội đô hay kẹt"),
+        (9.12, 1.96, "#DBEAFE", "#2563EB", "Cụm 4: Hành lang\nthông thoáng"),
+        (10.80, 1.96, "#F1F5F9", "#64748B", "Cụm 1: Đường\nnhánh dân cư"),
     ]
     for cx, cy, fc, ec, lbl in clusters:
         ax.add_patch(Circle((cx, cy + 0.08), 0.45, facecolor=fc, edgecolor=ec, lw=1.5, zorder=3))
@@ -486,7 +525,7 @@ def _draw_coldstart_col(ax: plt.Axes) -> None:
         9.05,
         0.61,
         "Ý NGHĨA: Đường thiếu GPS mượn đặc trưng nhóm đường tương đồng\n"
-        "→ Giúp Random Forest dự báo phủ kín 100% mạng lưới (84,633 đoạn)!",
+        f"→ Giúp Random Forest dự báo phủ kín 100% mạng lưới ({ms['segs']} đoạn)!",
         fontsize=7.8,
         fontweight="bold",
         color="#93C5FD",
@@ -497,6 +536,7 @@ def _draw_coldstart_col(ax: plt.Axes) -> None:
 
 
 def _draw_sketches_col(ax: plt.Axes) -> None:
+    ms = _load_method_stats()
     _panel_header(
         ax,
         12.14,
@@ -553,7 +593,7 @@ def _draw_sketches_col(ax: plt.Axes) -> None:
         12.48,
         2.60,
         "Quan sát chuỗi số 0 đầu mã băm (0001... hiếm = nhiều phần tử)\n"
-        "→ Đếm ~10,027 đoạn đường độc lập chỉ với 1 KiB RAM (sai số 3.98%).",
+        f"→ Đếm ~{ms['active_segs']} đoạn đường độc lập chỉ với 1 KiB RAM (sai số {ms['hll_err']}).",
         fontsize=7.7,
         color="#334155",
         va="center",

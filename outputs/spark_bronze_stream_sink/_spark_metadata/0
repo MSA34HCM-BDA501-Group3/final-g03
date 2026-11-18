@@ -1,2 +1,0 @@
-v1
-{"path":"file:///workspace/outputs/spark_bronze_stream_sink/part-00000-b92b9b80-f11b-4c80-9027-45efc0f0e5fa-c000.snappy.parquet","size":8271,"isDir":false,"modificationTime":1794230711545,"blockReplication":1,"blockSize":33554432,"action":"add"}

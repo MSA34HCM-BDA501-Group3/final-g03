@@ -1,15 +1,18 @@
 {
   "pillar_i1_monoid_and_salting": {
     "monoid_tuple": "(cnt, sum_v, min_v, max_v, severe_cnt)",
-    "identity_element": "(0, 0.0, +inf, 0.0, 0)",
-    "raw_input_pings": 90938,
-    "stage1_partial_salted_groups": 59895,
-    "stage2_reduced_windows": 33441,
+    "identity_element": "(0, 0.0, +inf, -inf, 0)",
+    "raw_input_pings": 90787,
+    "stage1_partial_salted_groups": 59655,
+    "stage2_reduced_windows": 33394,
     "salt_buckets": 8,
-    "unsalted_peak_to_median_skew_ratio": 687.43,
-    "peak_slot_salted_bucket_skew_ratio": 1.023,
-    "salted_partition_skew_ratio": 1.0117,
-    "salt_bucket_cv": 0.0057,
+    "unsalted_8partition_max_to_median_skew": 1.0846,
+    "salted_8partition_max_to_median_skew": 1.0167,
+    "temporal_slot_peak_to_median_ratio": 684.95,
+    "unsalted_peak_to_median_skew_ratio": 684.95,
+    "peak_slot_salted_bucket_skew_ratio": 1.0197,
+    "salted_partition_skew_ratio": 1.0123,
+    "salt_bucket_cv": 0.0059,
     "stage2_vs_unsalted_max_abs_diff": 0.0,
     "cnt_and_severe_discrepancies": 0,
     "exact_monoid_equivalence": true
@@ -19,13 +22,13 @@
     "verified_by_spark_runtime": true,
     "spark_version": "3.5.7",
     "baseline_strategy": "SortMergeJoin (spark.sql.autoBroadcastJoinThreshold = -1)",
-    "baseline_exchange_stages": 10,
+    "baseline_exchange_stages": 5,
     "optimized_strategy": "BroadcastHashJoin (F.broadcast(segments), F.broadcast(streets))",
-    "optimized_exchange_stages": 2,
+    "optimized_exchange_stages": 1,
     "broadcast_hash_join_present": true,
     "dataframe_vs_sql_exceptAll_diff": 0,
-    "baseline_plan_excerpt": "== Physical Plan ==\nAdaptiveSparkPlan isFinalPlan=false\n+- Project [street_id#461, segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_level#462, street_type#52, length#463, raw_street_name#471]\n   +- SortMergeJoin [street_id#461], [street_id#470], LeftOuter\n      :- Sort [street_id#461 ASC NULLS FIRST], false, 0\n      :  +- Exchange hashpartitioning(street_id#461, 8), ENSURE_REQUIREMENTS, [plan_id=1437]\n      :     +- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_id#461, street_level#462, street_type#52, length#463]\n      :        +- SortMergeJoin [segment_id#91], [segment_id#460], Inner\n      :           :- Sort [segment_id#91 ASC NULLS FIRST], false, 0\n      :           :  +- Exchange hashpartitioning(segment_id#91, 8), ENSURE_REQUIREMENTS, [plan_id=1429]\n      :           :     +- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, (sum_velocity#143 / cast(ob",
-    "optimized_plan_excerpt": "== Physical Plan ==\nAdaptiveSparkPlan isFinalPlan=false\n+- Project [street_id#461, segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_level#462, street_type#52, length#463, raw_street_name#471]\n   +- BroadcastHashJoin [street_id#461], [street_id#470], LeftOuter, BuildRight, false\n      :- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_id#461, street_level#462, street_type#52, length#463]\n      :  +- BroadcastHashJoin [segment_id#91], [segment_id#460], Inner, BuildRight, false\n      :     :- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, (sum_velocity#143 / cast(obs_count#141L as double)) AS mean_velocity#158]\n      :     :  +- HashAggregate(keys=[segment_id#91, date#108, period#115], functions=[count(velocity#97), sum(velocity#97), min(velocity#97), max(velocity#97), sum(is_low_speed#123)])\n      :     :     +- Exchange hashpartitioning(segment_id#91, date#1",
+    "baseline_plan_excerpt": "*(10) Project [street_id#92, segment_id#141, date#164, period#171, obs_count#4866L, sum_velocity#4868, min_velocity#4870, max_velocity_obs#4872, severe_ping_count#4874L, mean_velocity#4883, street_level#93, street_type#13043, length#94, raw_street_name#127]\n+- *(10) SortMergeJoin [street_id#92], [street_id#126], LeftOuter\n   :- *(7) Sort [street_id#92 ASC NULLS FIRST], false, 0\n   :  +- Exchange hashpartitioning(street_id#92, 8), ENSURE_REQUIREMENTS, [plan_id=3382]\n   :     +- *(6) Project [segment_id#141, date#164, period#171, obs_count#4866L, sum_velocity#4868, min_velocity#4870, max_velocity_obs#4872, severe_ping_count#4874L, mean_velocity#4883, street_id#92, street_level#93, street_type#13043, length#94]\n   :        +- *(6) SortMergeJoin [segment_id#141], [segment_id#91], Inner\n   :           :- *(3) Sort [segment_id#141 ASC NULLS FIRST], false, 0\n   :           :  +- Exchange hashpartitioning(segment_id#141, 8), ENSURE_REQUIREMENTS, [plan_id=3366]\n   :           :     +- *(2) Project [segment_id#141, date#164, period#171, obs_count#4866L, sum_velocity#4868, min_velocity#4870, max_velocity_obs#4872, severe_ping_count#4874L, (sum_velocity#4868 / cast(obs_count#4866L as double)) ",
+    "optimized_plan_excerpt": "*(4) Project [street_id#92, segment_id#141, date#164, period#171, obs_count#4866L, sum_velocity#4868, min_velocity#4870, max_velocity_obs#4872, severe_ping_count#4874L, mean_velocity#4883, street_level#93, street_type#13397, length#94, raw_street_name#127]\n+- *(4) BroadcastHashJoin [street_id#92], [street_id#126], LeftOuter, BuildRight, false\n   :- *(4) Project [segment_id#141, date#164, period#171, obs_count#4866L, sum_velocity#4868, min_velocity#4870, max_velocity_obs#4872, severe_ping_count#4874L, mean_velocity#4883, street_id#92, street_level#93, street_type#13397, length#94]\n   :  +- *(4) BroadcastHashJoin [segment_id#141], [segment_id#91], Inner, BuildRight, false\n   :     :- *(4) Project [segment_id#141, date#164, period#171, obs_count#4866L, sum_velocity#4868, min_velocity#4870, max_velocity_obs#4872, severe_ping_count#4874L, (sum_velocity#4868 / cast(obs_count#4866L as double)) AS mean_velocity#4883]\n   :     :  +- *(4) HashAggregate(keys=[segment_id#141, date#164, period#171], functions=[count(velocity#147), sum(velocity#147), min(velocity#147), max(velocity#147), sum(is_low_speed#179)], output=[segment_id#141, date#164, period#171, obs_count#4866L, sum_velocity#4868, min",
     "partitioned_parquet_column": "year_month",
     "partition_count": 10,
     "parquet_pruning_verified": true
@@ -35,69 +38,85 @@
     "verified_by_spark_runtime": true,
     "spark_version": "3.5.7",
     "monoid_salting_spark": {
-      "unsalted_windows": 33441,
-      "stage1_salted_groups": 59828,
-      "stage2_reduced_windows": 33441,
-      "unsalted_runtime_ms": 1054.17,
-      "salted_runtime_ms": 1073.37,
+      "unsalted_windows": 33394,
+      "stage1_salted_groups": 59714,
+      "stage2_reduced_windows": 33394,
+      "unsalted_median_ms": 147.11,
+      "salted_median_ms": 222.6,
+      "unsalted_iqr_ms": 31.29,
+      "salted_iqr_ms": 11.27,
+      "unsalted_runtime_ms": 147.11,
+      "salted_runtime_ms": 222.6,
       "two_way_exceptAll_diff": 0
     },
     "catalyst_join_spark": {
-      "baseline_exchange_stages_measured": 10,
-      "baseline_shuffle_joins_measured": 4,
-      "optimized_exchange_stages_measured": 2,
-      "optimized_broadcast_joins_measured": 4,
+      "baseline_median_ms": 145.24,
+      "baseline_iqr_ms": 12.83,
+      "optimized_median_ms": 120.45,
+      "optimized_iqr_ms": 4.59,
+      "join_speedup_pct": 17.07,
+      "baseline_exchange_stages_measured": 5,
+      "baseline_shuffle_joins_measured": 2,
+      "optimized_exchange_stages_measured": 1,
+      "optimized_broadcast_joins_measured": 2,
       "broadcast_hash_join_present": true,
       "two_way_exceptAll_diff": 0,
-      "baseline_plan_excerpt": "== Physical Plan ==\nAdaptiveSparkPlan isFinalPlan=false\n+- Project [street_id#461, segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_level#462, street_type#52, length#463, raw_street_name#471]\n   +- SortMergeJoin [street_id#461], [street_id#470], LeftOuter\n      :- Sort [street_id#461 ASC NULLS FIRST], false, 0\n      :  +- Exchange hashpartitioning(street_id#461, 8), ENSURE_REQUIREMENTS, [plan_id=1437]\n      :     +- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_id#461, street_level#462, street_type#52, length#463]\n      :        +- SortMergeJoin [segment_id#91], [segment_id#460], Inner\n      :           :- Sort [segment_id#91 ASC NULLS FIRST], false, 0\n      :           :  +- Exchange hashpartitioning(segment_id#91, 8), ENSURE_REQUIREMENTS, [plan_id=1429]\n      :           :     +- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, (sum_velocity#143 / cast(ob",
-      "optimized_plan_excerpt": "== Physical Plan ==\nAdaptiveSparkPlan isFinalPlan=false\n+- Project [street_id#461, segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_level#462, street_type#52, length#463, raw_street_name#471]\n   +- BroadcastHashJoin [street_id#461], [street_id#470], LeftOuter, BuildRight, false\n      :- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, mean_velocity#158, street_id#461, street_level#462, street_type#52, length#463]\n      :  +- BroadcastHashJoin [segment_id#91], [segment_id#460], Inner, BuildRight, false\n      :     :- Project [segment_id#91, date#108, period#115, obs_count#141L, sum_velocity#143, min_velocity#145, max_velocity_obs#147, severe_ping_count#149L, (sum_velocity#143 / cast(obs_count#141L as double)) AS mean_velocity#158]\n      :     :  +- HashAggregate(keys=[segment_id#91, date#108, period#115], functions=[count(velocity#97), sum(velocity#97), min(velocity#97), max(velocity#97), sum(is_low_speed#123)])\n      :     :     +- Exchange hashpartitioning(segment_id#91, date#1"
+      "baseline_plan_excerpt": "*(10) Project [street_id#92, segment_id#141, date#164, period#171, obs_count#4866L, sum_velocity#4868, min_velocity#4870, max_velocity_obs#4872, severe_ping_count#4874L, mean_velocity#4883, street_level#93, street_type#13043, length#94, raw_street_name#127]\n+- *(10) SortMergeJoin [street_id#92], [street_id#126], LeftOuter\n   :- *(7) Sort [street_id#92 ASC NULLS FIRST], false, 0\n   :  +- Exchange hashpartitioning(street_id#92, 8), ENSURE_REQUIREMENTS, [plan_id=3382]\n   :     +- *(6) Project [segment_id#141, date#164, period#171, obs_count#4866L, sum_velocity#4868, min_velocity#4870, max_velocity_obs#4872, severe_ping_count#4874L, mean_velocity#4883, street_id#92, street_level#93, street_type#13043, length#94]\n   :        +- *(6) SortMergeJoin [segment_id#141], [segment_id#91], Inner\n   :           :- *(3) Sort [segment_id#141 ASC NULLS FIRST], false, 0\n   :           :  +- Exchange hashpartitioning(segment_id#141, 8), ENSURE_REQUIREMENTS, [plan_id=3366]\n   :           :     +- *(2) Project [segment_id#141, date#164, period#171, obs_count#4866L, sum_velocity#4868, min_velocity#4870, max_velocity_obs#4872, severe_ping_count#4874L, (sum_velocity#4868 / cast(obs_count#4866L as double)) ",
+      "optimized_plan_excerpt": "*(4) Project [street_id#92, segment_id#141, date#164, period#171, obs_count#4866L, sum_velocity#4868, min_velocity#4870, max_velocity_obs#4872, severe_ping_count#4874L, mean_velocity#4883, street_level#93, street_type#13397, length#94, raw_street_name#127]\n+- *(4) BroadcastHashJoin [street_id#92], [street_id#126], LeftOuter, BuildRight, false\n   :- *(4) Project [segment_id#141, date#164, period#171, obs_count#4866L, sum_velocity#4868, min_velocity#4870, max_velocity_obs#4872, severe_ping_count#4874L, mean_velocity#4883, street_id#92, street_level#93, street_type#13397, length#94]\n   :  +- *(4) BroadcastHashJoin [segment_id#141], [segment_id#91], Inner, BuildRight, false\n   :     :- *(4) Project [segment_id#141, date#164, period#171, obs_count#4866L, sum_velocity#4868, min_velocity#4870, max_velocity_obs#4872, severe_ping_count#4874L, (sum_velocity#4868 / cast(obs_count#4866L as double)) AS mean_velocity#4883]\n   :     :  +- *(4) HashAggregate(keys=[segment_id#141, date#164, period#171], functions=[count(velocity#147), sum(velocity#147), min(velocity#147), max(velocity#147), sum(is_low_speed#179)], output=[segment_id#141, date#164, period#171, obs_count#4866L, sum_velocity#4868, min"
     },
     "parquet_pruning_spark": {
       "partition_filters_and_read_schema_verified": true,
-      "pruning_plan_excerpt": "== Physical Plan ==\n*(1) Project [segment_id#715L, date#716, period#717, LOS#763]\n+- *(1) ColumnarToRow\n   +- FileScan parquet [segment_id#715L,date#716,period#717,LOS#763,year_month#751] Batched: true, DataFilters: [], Format: Parquet, Location: InMemoryFileIndex(1 paths)[file:/workspace/data/lakehouse/curated_gold], PartitionFilters: [isnotnull(year_month#751), (year_month#751 = 2020-08)], PushedFilters: [], ReadSchema: struct<segment_id:bigint,date:string,period:string,LOS:string>\n\n\n== Parsed Logical Plan ==\n'Project ['segment_id, 'date, 'period, 'LOS]\n+- Filter (year_month#751 = 2020-08)\n   +- Relation [segment_id#715L,date#716,period#717,mean_velocity#718,median_velocity#719,obs_count#720L,sum_velocity#721L,min_velocity#722L,max_velocity_obs#723L,severe_ping_count#724L,created_at#725,updated_at#726,s_node_id#727L,e_node_id#728L,length#729L,street_id#730L,max_velocity#731,street_leve"
+      "pruning_plan_excerpt": "*(1) Project [segment_id#15344L, date#15345, period#15346, LOS#15395]\n+- *(1) ColumnarToRow\n   +- FileScan parquet [segment_id#15344L,date#15345,period#15346,LOS#15395,year_month#15429] Batched: true, DataFilters: [], Format: Parquet, Location: InMemoryFileIndex(1 paths)[file:/workspace/data/lakehouse/curated_gold], PartitionFilters: [isnotnull(year_month#15429), (year_month#15429 = 2020-08)], PushedFilters: [], ReadSchema: struct<segment_id:bigint,date:string,period:string,LOS:string>\n"
     },
     "spark_fpgrowth_rules_count": 335,
     "spark_kmeans_clusters_populated": 6,
     "spark_kmeans_train_only_verified": true,
     "spark_kmeans_standard_scaler_verified": true,
-    "spark_kmeans_train_segments": 6926,
-    "spark_rf_train_rows": 5494,
+    "spark_kmeans_training_cost": 21261.2011,
+    "spark_kmeans_iterations": 20,
+    "spark_kmeans_train_segments": 6912,
+    "spark_rf_train_rows": 5481,
     "spark_rf_numeric_features_count": 23,
+    "spark_rf_test_rows": 1182,
+    "spark_rf_test_accuracy_6class": 0.9399,
+    "spark_rf_test_severe_roc_auc": 0.9924,
     "spark_pipeline_model_saved": true,
     "spark_pipeline_reload_parity": true,
     "spark_unseen_category_handled": true,
     "spark_structured_streaming_wal_created": true,
     "spark_sink1_output_path": "outputs/spark_bronze_stream_sink",
     "spark_sink1_last_progress": {
-      "id": "f1c5e56f-53d3-4cfb-8764-2717ac071bf2",
-      "runId": "c8541d4d-0887-47a9-a9e0-ac7c9e6193fe",
+      "id": "f6d7104b-987a-45fa-82d7-731116ae688e",
+      "runId": "6185f2aa-458d-458c-ad5b-5451a2387ac3",
       "name": null,
-      "timestamp": "2026-11-09T13:25:11.038Z",
-      "batchId": 0,
+      "timestamp": "2026-11-18T20:07:21.731Z",
+      "batchId": 1,
       "numInputRows": 200,
-      "inputRowsPerSecond": 0.0,
-      "processedRowsPerSecond": 262.4671916010499,
+      "inputRowsPerSecond": 274.34842249657066,
+      "processedRowsPerSecond": 322.5806451612903,
       "durationMs": {
-        "addBatch": 252,
-        "commitOffsets": 115,
-        "getBatch": 58,
-        "latestOffset": 168,
-        "queryPlanning": 34,
-        "triggerExecution": 762,
-        "walCommit": 114
+        "addBatch": 198,
+        "commitOffsets": 119,
+        "getBatch": 37,
+        "latestOffset": 141,
+        "queryPlanning": 4,
+        "triggerExecution": 620,
+        "walCommit": 119
       },
       "stateOperators": [],
       "sources": [
         {
-          "description": "FileStreamSource[file:/workspace/outputs/stream_landing_json/batch0]",
-          "startOffset": null,
-          "endOffset": {
+          "description": "FileStreamSource[file:/workspace/outputs/stream_landing_json/batch*]",
+          "startOffset": {
             "logOffset": 0
+          },
+          "endOffset": {
+            "logOffset": 1
           },
           "latestOffset": null,
           "numInputRows": 200,
-          "inputRowsPerSecond": 0.0,
-          "processedRowsPerSecond": 262.4671916010499
+          "inputRowsPerSecond": 274.34842249657066,
+          "processedRowsPerSecond": 322.5806451612903
         }
       ],
       "sink": {
@@ -106,66 +125,68 @@
       }
     },
     "spark_sink2_last_progress": {
-      "id": "061a7333-3d69-484f-8424-e01aa65e0ed7",
-      "runId": "c2c41bfe-8eae-49e3-94ff-8d9826d5d425",
+      "id": "bf49342a-86fa-4eb0-b224-b92e751e3873",
+      "runId": "a7616189-d4b0-41ec-9cfc-7c400da3f20b",
       "name": "hcmc_agg_sink2",
-      "timestamp": "2026-11-09T13:25:12.014Z",
-      "batchId": 0,
-      "numInputRows": 200,
+      "timestamp": "2026-11-18T20:07:24.816Z",
+      "batchId": 2,
+      "numInputRows": 0,
       "inputRowsPerSecond": 0.0,
-      "processedRowsPerSecond": 146.09203798392988,
+      "processedRowsPerSecond": 0.0,
       "durationMs": {
-        "addBatch": 907,
-        "commitOffsets": 116,
-        "getBatch": 38,
-        "latestOffset": 158,
-        "queryPlanning": 32,
-        "triggerExecution": 1369,
-        "walCommit": 108
+        "addBatch": 298,
+        "commitOffsets": 140,
+        "getBatch": 0,
+        "latestOffset": 0,
+        "queryPlanning": 9,
+        "triggerExecution": 576,
+        "walCommit": 127
       },
       "eventTime": {
-        "avg": "2020-07-29T10:45:36.000Z",
-        "max": "2020-08-02T08:00:00.000Z",
-        "min": "2020-07-03T08:00:00.000Z",
-        "watermark": "1970-01-01T00:00:00.000Z"
+        "watermark": "2020-12-01T12:30:00.000Z"
       },
       "stateOperators": [
         {
           "operatorName": "stateStoreSave",
-          "numRowsTotal": 14,
-          "numRowsUpdated": 14,
-          "allUpdatesTimeMs": 253,
-          "numRowsRemoved": 0,
-          "allRemovalsTimeMs": 4,
-          "commitTimeMs": 632,
-          "memoryUsedBytes": 10944,
+          "numRowsTotal": 2,
+          "numRowsUpdated": 0,
+          "allUpdatesTimeMs": 0,
+          "numRowsRemoved": 10,
+          "allRemovalsTimeMs": 176,
+          "commitTimeMs": 773,
+          "memoryUsedBytes": 11936,
           "numRowsDroppedByWatermark": 0,
           "numShufflePartitions": 8,
           "numStateStoreInstances": 8,
           "customMetrics": {
-            "loadedMapCacheHitCount": 0,
+            "loadedMapCacheHitCount": 32,
             "loadedMapCacheMissCount": 0,
-            "stateOnCurrentVersionSizeBytes": 9792
+            "stateOnCurrentVersionSizeBytes": 2320
           }
         }
       ],
       "sources": [
         {
-          "description": "FileStreamSource[file:/workspace/outputs/stream_landing_json/batch0]",
-          "startOffset": null,
+          "description": "FileStreamSource[file:/workspace/outputs/stream_landing_json/batch*]",
+          "startOffset": {
+            "logOffset": 1
+          },
           "endOffset": {
-            "logOffset": 0
+            "logOffset": 1
           },
           "latestOffset": null,
-          "numInputRows": 200,
+          "numInputRows": 0,
           "inputRowsPerSecond": 0.0,
-          "processedRowsPerSecond": 146.09203798392988
+          "processedRowsPerSecond": 0.0
         }
       ],
       "sink": {
         "description": "MemorySink",
-        "numOutputRows": 14
+        "numOutputRows": 0
       }
-    }
+    },
+    "spark_sink2_watermark": "2020-12-01T12:30:00.000Z",
+    "spark_sink2_watermark_advanced": true,
+    "spark_sink2_batches_committed": 3
   }
 }

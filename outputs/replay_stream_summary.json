@@ -7,34 +7,34 @@
   "num_partitions": 3,
   "partition_key": "segment_id",
   "partition_distribution": {
-    "0": 11064,
-    "1": 11207,
-    "2": 11504
+    "0": 11050,
+    "1": 11189,
+    "2": 11488
   },
-  "total_events_emitted": 33775,
-  "valid_unique_events": 33441,
-  "injected_duplicate_events": 334,
-  "injected_late_in_watermark_events": 1170,
-  "injected_late_out_of_watermark_events": 501,
-  "affected_late_windows": 219,
-  "affected_late_segment_windows": 501,
+  "total_events_emitted": 33727,
+  "valid_unique_events": 33394,
+  "injected_duplicate_events": 333,
+  "injected_late_in_watermark_events": 1168,
+  "injected_late_out_of_watermark_events": 500,
+  "affected_late_windows": 226,
+  "affected_late_segment_windows": 500,
   "raw_ping_replay_summary": {
     "replay_mode": "raw_gps_pings",
     "seed": 42,
     "late_every": 20,
     "watermark_seconds": 1800,
-    "total_raw_events_emitted": 91847,
-    "valid_unique_raw_pings": 90938,
-    "unique_valid_events": 90938,
-    "injected_duplicate_raw_pings": 909,
-    "injected_late_in_watermark_raw_pings": 3182,
-    "injected_late_out_of_watermark_raw_pings": 1364,
-    "affected_segment_windows_by_late_pings": 1196,
-    "affected_time_slots_by_late_pings": 407,
+    "total_raw_events_emitted": 91694,
+    "valid_unique_raw_pings": 90787,
+    "unique_valid_events": 90787,
+    "injected_duplicate_raw_pings": 907,
+    "injected_late_in_watermark_raw_pings": 3177,
+    "injected_late_out_of_watermark_raw_pings": 1361,
+    "affected_segment_windows_by_late_pings": 1193,
+    "affected_time_slots_by_late_pings": 384,
     "partition_distribution": {
-      "0": 29534,
-      "1": 34337,
-      "2": 27976
+      "0": 29475,
+      "1": 34262,
+      "2": 27957
     }
   },
   "kafka_broker_delivery": {
@@ -45,14 +45,14 @@
     "num_partitions": 3,
     "messages_sent": 3000,
     "partition_messages_sent": {
-      "0": 1016,
-      "1": 1004,
-      "2": 980
+      "0": 1017,
+      "1": 1007,
+      "2": 976
     },
     "partition_end_offsets": {
-      "2": 5909,
-      "1": 6070,
-      "0": 6321
+      "2": 1952,
+      "1": 2014,
+      "0": 2034
     }
   }
 }

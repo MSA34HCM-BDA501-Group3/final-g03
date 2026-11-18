@@ -51,7 +51,7 @@ microbatch alone does not dedup across microbatches.
 | observed_max_velocity | Original GIS metadata, retained separately; not silently substituted into GPS lookup |
 | date/date_utc/period_idx/weekday | ICT local date (`date`), UTC calendar date (`date_utc`), slot 0–47 and Monday 0–Sunday 6, including midnight rollover |
 | period_sin/period_cos | ICT cyclic slot, no learned category vocabulary |
-| LOS | A≥.80, B≥.65, C≥.50, D≥.35, E≥.20, F otherwise, from mean_velocity/max_velocity |
+| LOS | Ratio utility `derive_los` (`A≥.80, B≥.65, C≥.50, D≥.35, E≥.20, F otherwise` from `mean_velocity/max_velocity`) in `spark_etl.py` / `pipeline.py`; `pipeline.py` attaches BkTraffic urban 5 km/h `derive_urban_los` (`89.19%` exact match vs reference `train.csv` LOS) for Gold operational windows |
 | length_imputed | Invalid length was repaired using positive GIS median, fallback27m if unavailable |
 
 Rules: E1 identity/segment parse → E2 timestamp parse → E3 velocity → E4 FK.
@@ -99,14 +99,14 @@ Tests deliberately mutate every aggregate, remove/add/duplicate keys, inject bad
 GPS, change future velocities, exercise ID collisions, LOS boundaries/zero velocity,
 ICT date rollover (`date` + `date_utc`), and actual Spark `BroadcastHashJoin`/Parquet pruning.
 
-## Validation on 08–09/11/2026
+## Validation on 08–09/11/2026 (PR #1) & Wave 2 Unified Alignment
 
-- Verified on both **Apache Spark 3.5.7 (Java 17)** (`song-recommender-spark:3.5.7`) and **PySpark 4.2.0 (Java 21)** (`Dockerfile.spark`).
-- Historical PR-integration test record: **5 Spark tests** (`test_quyen_spark.py`) and **15 Platform V3 tests** (`test_platform_v3.py`) passed at that point. The suite has since changed; this historical count is not the current collected-test count. Run `pytest -v` to obtain the authoritative result.
+- Verified on both **Apache Spark 3.5.7 (Java 17)** (`hcmc-traffic-spark:3.5.7`) and **PySpark 4.2.0 (Java 21)** (`Dockerfile.spark`).
+- Historical PR-integration test record (08–09/11/2026): **5 Spark tests** (`test_quyen_spark.py`) passed in the Spark container alongside early Platform V3 tests (`test_platform_v3.py`). Following Wave 2 unification (`pipeline.py` now also enforces clean motorized roads: `84,206` segments, `52,181` active nodes, `90,787` accepted pings, `33,394` windows), `pipeline.py` and `spark_batch.py` share identical motorized counts and Lakehouse Parquet compatibility (`bronze_raw_events`, `stream_replay_windows`, `curated_gold/year_month=*`).
 - Full raw snapshot using exclusive warmup cutoff `2020-08-01T00:00:00Z`, `local[2]`, 4 shuffle partitions:
 - 90,938 input deliveries = 90,787 accepted unique + 151 quarantined + 0 retries.
   All 151 are `E4_UNKNOWN_SEGMENT` after 427 non-road GIS entities (`S3_NON_ROAD_TYPE`) were excluded (accounting for exactly `33,441 - 33,394 = 47` windows).
-- 33,394 accepted windows, 52,181 active nodes (`52,425` over all `84,633` segments).
+- 33,394 accepted windows, 52,181 active nodes (pruned `525,786` / `90.97%` from `577,967` raw nodes).
 - 580 GIS quarantine records use first-failure accounting (`154` `S2_NONPOSITIVE_LENGTH` + `426` `S3_NON_ROAD_TYPE`, with 1 overlapping segment).
 - Independent raw Python fold: **0 mismatches in all five monoid fields and mean**;
   **0 missing/extra/duplicate window keys**. Salted (2-stage) vs unsalted (1-stage) and baseline vs broadcast two-way `exceptAll` both `0`.

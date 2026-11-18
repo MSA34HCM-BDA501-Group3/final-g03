@@ -30,7 +30,6 @@ from reportlab.platypus import (
 )
 
 REPO_DIR = Path(__file__).resolve().parent.parent
-WORKSPACE_DIR = REPO_DIR.parent
 OUTPUTS_DIR = REPO_DIR / "outputs"
 CHART_DIR = OUTPUTS_DIR / "slide_charts"
 
@@ -132,9 +131,12 @@ def _load_ground_truth() -> dict[str, str]:
     metrics = json.loads((OUTPUTS_DIR / "metrics.json").read_text(encoding="utf-8"))
     manifest = json.loads((OUTPUTS_DIR / "model_registry_manifest.json").read_text(encoding="utf-8"))
     mongo = json.loads((OUTPUTS_DIR / "mongo_verify.json").read_text(encoding="utf-8"))
+    spark = json.loads((OUTPUTS_DIR / "spark_runtime_evidence.json").read_text(encoding="utf-8"))
     ix = mongo["ixscan_explain_verification"]
     lat = mongo["uc2_arterial_query"]["latency_benchmark_ms"]
     ev = metrics["evaluation"]
+    cj = spark["catalyst_join_spark"]
+    ms = spark["monoid_salting_spark"]
     return {
         "model_sha12": manifest["sha256_digest"][:12],
         "static_sha12": manifest["static_feature_store_sha256"][:12],
@@ -147,7 +149,15 @@ def _load_ground_truth() -> dict[str, str]:
         "rf_pr": f"{ev['average_precision']:.4f}",
         "mongo_med": f"{lat['warm_median_ms']:.3f} ms",
         "mongo_p95": f"{lat['warm_p95_ms']:.3f} ms",
+        "mongo_speedup": f"{lat['ixscan_vs_collscan_speedup_x']:.2f}x",
         "mongo_stages": ", ".join(ix["winning_stages"]),
+        "join_base_ms": f"{cj['baseline_median_ms']:.2f}",
+        "join_opt_ms": f"{cj['optimized_median_ms']:.2f}",
+        "join_speedup": f"{cj['join_speedup_pct']:.2f}%",
+        "monoid_unsalted_ms": f"{ms['unsalted_median_ms']:.2f}",
+        "monoid_salted_ms": f"{ms['salted_median_ms']:.2f}",
+        "monoid_unsalted_iqr": f"{ms['unsalted_iqr_ms']:.2f}",
+        "monoid_salted_iqr": f"{ms['salted_iqr_ms']:.2f}",
     }
 
 
@@ -447,10 +457,10 @@ def build_boundary_drawing() -> Drawing:
         "1. External Inputs (2 Nguồn)",
         [
             "1) GPS Telemetry Stream (Kafka):",
-            "   90,938 pings từ xe di động",
-            "   (1% Duplicates, 5% Late Events)",
+            "   90,938 pings thô (90,787 hợp lệ)",
+            "   (1% Duplicates, 1.5% Late > 30m)",
             "2) OSM / GIS Master Topology:",
-            "   52,425 giao lộ, 84,633 đoạn đường",
+            "   52,181 giao lộ, 84,206 đoạn cơ giới",
             "   (train.csv tách riêng đối chứng)",
         ],
         header_fill=NAVY,
@@ -465,8 +475,8 @@ def build_boundary_drawing() -> Drawing:
         [
             "• Bước 1 (P1): Quality Funnel & LOS",
             "• Bước 2 (P2): Line-Graph PageRank",
-            "   & 7D K-Means (88.15% Cold-Start)",
-            "• Bước 3 (P3): Causal ML (+30m)",
+            "   & 7D K-Means (88.13% Cold-Start)",
+            "• Bước 3 (P3): Predictive ML (+30m)",
             "• Bước 4 (P4): O(1) Stream Sketches",
             "   & Two-Tier Reconciliation",
         ],
@@ -482,11 +492,11 @@ def build_boundary_drawing() -> Drawing:
         "3. System Outputs (4 Đầu ra)",
         [
             "1) Medallion Lakehouse (Parquet)",
-            "   (10 tháng · 33,441 cửa sổ 30m)",
+            "   (10 tháng · 33,394 cửa sổ 30m)",
             "2) Frozen Model & Feature Registry",
             "3) Quarantine & WAL Checkpoints",
             "4) MongoDB 8.0 IXSCAN (< 1 ms)",
-            "   & Streamlit 5-Tab UI (:8501)",
+            "   & Dual-UI (:8000 TOC & :8501)",
         ],
         header_fill=BLUE,
         fill_color=CALLOUT_BG,
@@ -507,7 +517,7 @@ def build_mlops_drawing() -> Drawing:
         "Phase A: Offline Batch Fit (t <= T_train)",
         [
             "• Cutoff: ≤ 2020-12-12T08:00:00Z",
-            "• 5,494 mẫu TRAIN (Horizon Purge 50)",
+            "• 1,885 organic TRAIN (tách burst)",
             "• Chỉ Phase A gọi .fit() & khóa Registry",
             "• Ghi SHA-256 cho 3 Frozen Artifacts",
         ],
@@ -538,10 +548,10 @@ def build_mlops_drawing() -> Drawing:
         72,
         "Phase C: Two-Tier Reconciliation",
         [
-            "• Tier 1: exceptAll == 0 (32,940 khung)",
-            "• Tier 2: Backfill 501 cửa sổ trễ > 30m",
-            "• Heal Lag Store cho 3,953 cửa sổ sau",
-            "• Re-score 377 cửa sổ → RECONCILED (v2)",
+            "• Tier 1: exceptAll == 0 (0 diff)",
+            "• Tier 2: Backfill 500 cửa sổ trễ > 30m",
+            "• Heal Lag Store cho 609 cửa sổ sau",
+            "• Re-score 384 cửa sổ → RECONCILED (v2)",
         ],
         header_fill=AMBER,
         fill_color=WARN_BG,
@@ -576,30 +586,30 @@ def _append_cover_and_ch1_context(story: list, s: dict[str, ParagraphStyle], gt:
             (
                 "<b>Tóm tắt cốt lõi (Toàn cảnh bài toán &amp; lời giải trong 4 bước):</b><br/>"
                 "<b>Mục tiêu của hệ thống</b> là giám sát hiện trạng và dự báo trước 30 phút nguy cơ kẹt xe trên toàn "
-                "mạng lưới <b>84,633 đoạn đường một chiều</b> tại TP.HCM từ dữ liệu hành trình GPS của xe cộ "
+                "mạng lưới <b>84,206 đoạn đường cơ giới một chiều</b> tại TP.HCM (đã lọc 427 lối đi bộ/hầm không cơ "
+                "giới từ 84,633 đoạn thô) từ dữ liệu hành trình GPS của xe cộ "
                 "(chẳng hạn lúc 07:08 sáng trên đoạn đường Lý Thường Kiệt mã 47407, một chiếc xe gửi về tín hiệu báo "
                 "đang di chuyển chậm ở vận tốc 4 km/h).<br/>"
                 "Tuy nhiên, dữ liệu thực tế gặp <b>3 rào cản lớn</b>: <b>(1) Thiếu hụt thông tin:</b> Gần "
-                "<b>88.15%</b> đoạn đường (chủ yếu là đường nhánh, hẻm dân cư) không có xe gửi GPS về, và đa số "
-                "đường bị thiếu thông tin tốc độ tối đa cho phép; <b>(2) Đứt quãng:</b> Xe gửi tín hiệu không đều, "
-                "lúc cách nhau 30 phút, lúc ngắt quãng nhiều giờ đến nhiều ngày; <b>(3) Nhiễu đường truyền:</b> Bản "
-                "tin gửi về theo thời gian thực thường bị trùng lặp hoặc đến trễ.<br/>"
+                "<b>88.13%</b> đoạn đường (74,211 đoạn nhánh, hẻm dân cư) không có xe gửi GPS về, và đa số "
+                "đường bị thiếu thông tin tốc độ tối đa cho phép; <b>(2) Đứt quãng &amp; Burst:</b> Xe gửi tín hiệu "
+                "không đều, 66.30% khoảng cách ≥ 60 phút và có 7,192 cửa sổ cụm tín hiệu tổng hợp; <b>(3) Nhiễu đường "
+                "truyền:</b> Bản tin gửi về theo thời gian thực thường bị trùng lặp hoặc đến trễ.<br/>"
                 "Để giải quyết trọn vẹn, hệ thống vận hành qua <b>4 bước nối tiếp nhau</b>:<br/>"
-                "• <b>Bước 1 – Chuẩn hóa bức tranh hiện trạng (Spark Batch ETL):</b> Làm sạch 90,938 bản tin GPS thô, "
-                "tự động ước lượng tốc độ tối đa cho từng loại đường, và gom dữ liệu theo từng khung 30 phút "
-                "(33,441 cửa sổ) để xác định đường đang Thông thoáng (mức A–B), Đông đúc (C–D) hay Kẹt cứng (E–F).<br/>"
-                "• <b>Bước 2 – Lấp đầy 'vùng mù' bằng cấu trúc bản đồ (Đồ thị &amp; Phân cụm):</b> Với 88.15% đoạn "
-                "đường không có GPS, hệ thống phân tích cấu trúc giao lộ (PageRank) để tìm các 'nút cổ chai' tự nhiên, "
-                "đồng thời gom nhóm các đoạn đường có đặc điểm giống nhau (K-Means) để suy đoán hành vi giao thông cho "
-                "những nơi thiếu cảm biến và làm biến đầu vào cho Bước 3.<br/>"
-                "• <b>Bước 3 – Dự báo trước 30 phút (Machine Learning):</b> Kết hợp trạng thái hiện tại trên đường, "
-                "khung giờ trong ngày và đặc trưng nút cổ chai ở Bước 2 để huấn luyện mô hình Random Forest dự báo xác "
-                f"suất một đoạn đường sẽ bị kẹt cứng sau đúng 30 phút nữa (đạt <b>ROC-AUC = {gt['rf_roc']}</b>, "
-                f"<b>PR-AUC = {gt['rf_pr']}</b>).<br/>"
-                "• <b>Bước 4 – Cảnh báo trực tuyến &amp; Tự động bù dữ liệu trễ (Kafka Streaming &amp; Dashboard):</b> "
-                "Đưa mô hình vào chấm điểm trực tiếp luồng dữ liệu GPS đổ về liên tục để hiển thị cảnh báo tức thì "
-                f"dưới 1 mili-giây (<b>{gt['mongo_p95']}</b>) trên Dashboard điều hành; đồng thời lưu trữ các bản tin "
-                "đến muộn để cuối ngày đối soát và cập nhật lại lịch sử chính xác <b>100%</b>."
+                "• <b>Bước 1 – Chuẩn hóa bức tranh hiện trạng (Spark Batch ETL):</b> Làm sạch 90,938 bản tin GPS thô "
+                "còn 90,787 bản tin cơ giới hợp lệ, tự động ước lượng tốc độ tối đa, và gom theo khung 30 phút "
+                "(33,394 cửa sổ cơ giới; 89.19% khớp BkTraffic) để gán mức Thông thoáng (A–B), Đông đúc (C–D) "
+                "hay Kẹt cứng (E–F).<br/>"
+                "• <b>Bước 2 – Lấp đầy 'vùng mù' bằng cấu trúc bản đồ (Đồ thị &amp; Phân cụm):</b> Với 88.13% đoạn "
+                "đường không có GPS, hệ thống phân tích cấu trúc giao lộ (PageRank không U-turn) tìm nút cổ chai, "
+                "đồng thời gom nhóm hành vi đường phố (7D K-Means) để suy đoán cho nơi thiếu cảm biến.<br/>"
+                "• <b>Bước 3 – Dự báo trước 30 phút (Machine Learning):</b> Tách chuỗi burst tổng hợp khỏi tập học để "
+                "còn 1,885 mẫu tự nhiên, kết hợp trạng thái hiện tại, giờ Việt Nam và đặc trưng đồ thị để huấn luyện "
+                f"Random Forest dự báo kẹt cứng sau 30 phút (đạt <b>ROC-AUC = {gt['rf_roc']}</b>, "
+                f"<b>PR-AUC = {gt['rf_pr']}</b>, <b>Severe F1 = {gt['rf_f1']}</b>).<br/>"
+                "• <b>Bước 4 – Cảnh báo trực tuyến Dual-UI &amp; Đối soát dữ liệu trễ:</b> Phục vụ trực tuyến qua "
+                f"FastAPI + ReactJS/Leaflet TOC Web (:8000) và Streamlit (:8501) (<b>{gt['mongo_p95']}</b> "
+                "p95); đồng thời cuối ngày đối soát bù 500 cửa sổ trễ và hàn gắn 609 lag chính xác <b>100%</b>."
             ),
             s,
             bg=OK_BG,
@@ -639,7 +649,7 @@ def _append_cover_and_ch1_context(story: list, s: dict[str, ParagraphStyle], gt:
                 "đi ngang qua <b>đoạn đường Lý Thường Kiệt số 47407</b> (dài 16m tại Quận 10) gửi về vận tốc tức thời "
                 "chỉ <b>4 km/h</b>; hoặc lúc <b>11:30 trưa</b> tại <b>Công Trường Quốc Tế (đoạn 21064, Quận 3)</b>, xe "
                 "báo vận tốc <b>12 km/h</b>. Để biến hàng chục nghìn con số vận tốc rời rạc như vậy thành thông tin "
-                "điều hành dễ hiểu trên toàn mạng lưới <b>84,633 đoạn đường một chiều</b>, hệ thống quy đổi tỷ lệ "
+                "điều hành dễ hiểu trên toàn mạng lưới <b>84,206 đoạn cơ giới một chiều</b>, hệ thống quy đổi tỷ lệ "
                 "giữa vận tốc thực tế so với tốc độ tối đa cho phép của đoạn đường sang <b>6 mức phục vụ giao thông "
                 "(Level of Service — LOS từ A đến F)</b>: <b>mức A–B (đạt từ 65% tốc độ tối đa trở lên)</b> là đường "
                 "thông thoáng, xe chạy tự do; <b>mức C–D (từ 35% đến dưới 65%)</b> là đường đông đúc giờ cao điểm; "
@@ -653,8 +663,8 @@ def _append_cover_and_ch1_context(story: list, s: dict[str, ParagraphStyle], gt:
         story,
         CHART_DIR / "map_hcmc_hotspots_coldstart.png",
         0.80,
-        "Hình 1.1. Bản đồ giao thông TP.HCM tái tạo từ 84,633 đoạn đường thực tế cùng sông Sài Gòn và các quận "
-        "trung tâm: phần xám nhạt là 74,606 đoạn đường nhánh không có xe gửi GPS (88.15%), các trục đỏ là điểm nóng "
+        "Hình 1.1. Bản đồ giao thông TP.HCM tái tạo từ 84,206 đoạn đường cơ giới cùng sông Sài Gòn và các quận "
+        "trung tâm: phần xám nhạt là 74,211 đoạn đường nhánh không có xe gửi GPS (88.13%), các trục đỏ là điểm nóng "
         "hay kẹt cứng.",
         s,
     )
@@ -668,7 +678,7 @@ def _append_cover_and_ch1_context(story: list, s: dict[str, ParagraphStyle], gt:
                 "mili-giây. Tuy nhiên, trong đồ án Dữ liệu lớn, tập dữ liệu này đóng vai trò <b>mẫu chuẩn kiểm chứng "
                 "quy mô (Proof-of-Scale)</b>: khi kết nối thực tế hơn 1 triệu xe buýt, taxi, xe công nghệ và xe tải "
                 "tại TP.HCM phát tín hiệu mỗi 5–10 giây, hệ thống sẽ phải xử lý <b>8–17 tỷ bản tin/ngày "
-                "(~1.5–3.0 TB/ngày)</b>. Ở quy mô đó, hiện tượng lệch tải giờ cao điểm (gấp 687.43 lần trung vị) và "
+                "(~1.5–3.0 TB/ngày)</b>. Ở quy mô đó, hiện tượng lệch tải giờ cao điểm (gấp 684.95 lần trung vị) và "
                 "bộ nhớ lọc trùng không giới hạn sẽ làm tràn RAM máy đơn. Chạy kiến trúc phân tán trên mẫu chuẩn giúp "
                 "nhóm đối chứng từng phép tính với <i>baseline.py</i> đạt <b>sai số bằng 0.0</b> trước khi mở rộng ra "
                 "cụm máy chủ lớn."
@@ -704,16 +714,16 @@ def _append_ch1_problems_usecases_and_boundary(story: list, s: dict[str, Paragra
         [
             "Bước 1 (P1)\nDescriptive",
             "Hiện tại và trong lịch sử, đoạn đường nào đang thông thoáng hay kẹt cứng?",
-            "90,938 bản tin GPS thô gửi không đều; 88.34% đoạn đường thiếu max_velocity.",
+            "90,938 bản tin GPS thô (90,787 hợp lệ); 88.34% đoạn thiếu max_velocity.",
             (
-                "33,441 cửa sổ 30 phút gắn mức LOS A–F chuẩn xác (sai số 0.0 so với baseline.py), "
-                "làm nền dữ liệu sạch cho Bước 2 và Bước 3."
+                "33,394 cửa sổ 30 phút gắn mức LOS A–F chuẩn xác (sai số 0.0 so với baseline.py, "
+                "89.19% khớp BkTraffic), làm nền dữ liệu sạch cho Bước 2 và Bước 3."
             ),
         ],
         [
             "Bước 2 (P2)\nDiagnostic",
-            "Làm sao hiểu các nút cổ chai và 88.15% đoạn đường nhánh bị Cold-Start (0 GPS)?",
-            "Đồ thị 84,633 đoạn đường một chiều (151,929 hướng rẽ) và các giỏ ùn tắc LOS E/F.",
+            "Làm sao hiểu các nút cổ chai và 88.13% đoạn đường nhánh bị Cold-Start (0 GPS)?",
+            "Đồ thị 84,206 đoạn cơ giới (92,453 cạnh chuyển tiếp bỏ U-turn) và các giỏ LOS E/F.",
             (
                 "Điểm nút cổ chai Line-Graph PageRank, luật SON/FPGrowth và 6 cụm hành vi 7D K-Means — vừa phục vụ "
                 "Sở GTVT, vừa cấp Static Features cho Bước 3."
@@ -722,19 +732,19 @@ def _append_ch1_problems_usecases_and_boundary(story: list, s: dict[str, Paragra
         [
             "Bước 3 (P3)\nPredictive",
             "Đúng 30 phút nữa (t + 30m), đoạn đường nào sẽ chuyển sang kẹt cứng?",
-            "7,898 cặp quan sát cách nhau đúng 30 phút, giờ Việt Nam và Static Features từ Bước 2.",
+            "7,885 cặp +30m (1,885 organic TRAIN sau lọc burst), giờ VN và Static Features.",
             (
                 "Mô hình Random Forest (23D Feature Vector) dự báo LOS và xác suất kẹt cứng sau 30 phút "
-                "(ROC-AUC = 0.9882, PR-AUC = 0.9471), đóng băng cho Bước 4."
+                "(ROC-AUC = 0.9900, PR-AUC = 0.9595, Severe F1 = 0.9301), đóng băng cho Bước 4."
             ),
         ],
         [
             "Bước 4 (P4)\nPrescriptive",
-            "Làm sao vừa cảnh báo dưới 1 ms trên màn hình trực ban, vừa không mất Late Events?",
-            "Luồng Kafka đổ về liên tục có lẫn 1% Duplicates và 1.5% Late Events quá 30m Watermark.",
+            "Làm sao vừa cảnh báo dưới 1 ms trên Dual-UI, vừa không mất Late Events?",
+            "Luồng Kafka đổ về liên tục có lẫn 1% Duplicates (333) và 500 cửa sổ trễ > 30m.",
             (
-                "O(1) Stream Sketches (33.0 KiB), cảnh báo MongoDB IXSCAN dưới 1 ms (0.636 ms) trên Dashboard "
-                "và Two-Tier Reconciliation tự động backfill 501 cửa sổ trễ."
+                "O(1) Stream Sketches (33.0 KiB), MongoDB IXSCAN (0.389 ms median / 0.692 ms p95) phục vụ "
+                "TOC Web (:8000) & Streamlit (:8501), và Recon bù 500 trễ + 609 lag."
             ),
         ],
     ]
@@ -758,31 +768,31 @@ def _append_ch1_problems_usecases_and_boundary(story: list, s: dict[str, Paragra
         [
             "UC-2: Ưu tiên đèn xanh\n(IXSCAN < 1 ms)",
             "Kỹ sư Tín hiệu Đèn",
-            "Danh sách trục đường lớn cấp 1–2 có xác suất kẹt cứng P(Severe) ≥ 70% sau 30 phút, phản hồi 0.636 ms.",
+            "Danh sách 1,202 trục cấp 1–2 có P(Severe) ≥ 70% sau 30 phút, phản hồi warm 0.389 ms (p95 0.692 ms).",
             "Chủ động kéo dài pha đèn xanh hướng trục chính trước khi dòng xe kịp dồn ứ khóa chặt ngã tư.",
         ],
         [
             "UC-3: Quy hoạch vùng mù\n(Cold-Start Audit)",
             "Chuyên viên Sở GTVT",
-            "Bản đồ xếp hạng nút cổ chai Line-Graph PageRank (Phú Định, Lê Lai, Nguyễn Kiệm) cả nơi chưa có GPS.",
+            "Bản đồ xếp hạng nút cổ chai PageRank (Nguyễn Kiệm #1 = 2.7799, Ngã tư Gò Dưa = 2.7196, Phú Định).",
             "Chọn đúng vị trí trọng yếu để ưu tiên lắp mới camera giám sát và biển phân luồng tải trọng.",
         ],
         [
             "UC-4: Né kẹt dây chuyền\n(Co-Congestion Rules)",
             "Ứng dụng Dẫn đường",
-            "Cảnh báo các cặp đường thường kẹt đồng thời (Cộng Hòa ↔ Trường Chinh) hoặc lan truyền sau 30 phút.",
+            "Cảnh báo cặp đường thường kẹt đồng thời (Nguyễn Thị Minh Khai ↔ Cống Quỳnh, Lift 15.23x) hoặc trễ +30m.",
             "Khuyến nghị tài xế rẽ sang lộ trình thay thế từ các ngã tư phía xa trước khi đi vào vùng ùn tắc.",
         ],
         [
             "UC-5: Phân bổ ca tuần tra\n(7D K-Means Regimes)",
             "Đội Tuần tra Giao thông",
-            "Bản đồ phân hoạch toàn bộ 84,633 đoạn đường thành 6 nhóm hành vi (7D K-Means) & tra cứu Peer Segments.",
-            "Tập trung lực lượng chốt trực đúng nhóm 2,352 giao lộ nội đô hay kẹt mãn tính vào giờ cao điểm.",
+            "Bản đồ phân hoạch toàn bộ 84,206 đoạn cơ giới thành 6 nhóm hành vi (7D K-Means) & tra cứu Peer Segments.",
+            "Tập trung lực lượng chốt trực đúng Cụm 2 (5,372 đoạn nội đô tỷ lệ kẹt E/F 42.01%) vào giờ cao điểm.",
         ],
         [
             "UC-6: Đối soát dữ liệu trễ\n(Two-Tier Recon)",
             "Kỹ sư Dữ liệu / MLOps",
-            "Báo cáo Two-Tier Reconciliation cuối ngày: 501 cửa sổ trễ đã backfill và 377 dự báo lịch sử đã cập nhật.",
+            "Báo cáo Two-Tier Recon cuối ngày: bù 500 cửa sổ trễ, hàn 609 cửa sổ lag & chấm lại 384 dự báo.",
             "Đảm bảo 100% số liệu báo cáo tổng kết ngày và Medallion Lakehouse chính xác tuyệt đối.",
         ],
     ]
@@ -800,16 +810,16 @@ def _append_ch1_problems_usecases_and_boundary(story: list, s: dict[str, Paragra
         Paragraph(
             (
                 "<b>Hai nguồn dữ liệu đầu vào độc lập (2 External Inputs):</b> (1) <i>GPS Telemetry Stream</i> "
-                "(<i>producer.py</i>, <i>seed = 42</i>) phát 90,938 bản tin từ <i>segment_status.csv</i> vào "
-                "<i>Apache Kafka 4.1.0</i> (tái hiện môi trường mạng di động có 1.0% Duplicates và 5.0% Late Events); "
-                "(2) <i>OSM / GIS Master Topology</i> gồm <i>nodes.csv</i> (577,967 điểm tọa độ), "
-                "<i>streets.csv</i> (5,553 tuyến đường) và <i>segments.csv</i> (84,633 đoạn đường một chiều), trong "
-                "khi tệp <i>train.csv</i> được tách hoàn toàn khỏi dây chuyền xử lý và chỉ dùng làm bảng đối chứng độc "
-                "lập (khớp 100.0% khóa cửa sổ). <b>Bốn nhóm kết quả đầu ra chính thức (4 System Outputs):</b> "
-                "(1) <i>Medallion Lakehouse (Parquet)</i> chia 10 phân vùng tháng và bảng tổng hợp <i>dataset.csv</i> "
-                "(59 cột); (2) <i>Frozen Model Registry &amp; Static Feature Store</i> phủ đủ 84,633 đoạn đường; "
+                "(<i>producer.py</i>, <i>seed = 42</i>) phát 33,727 thông điệp cửa sổ (từ 90,938 pings thô / "
+                "90,787 hợp lệ trong <i>segment_status.csv</i>) vào <i>Apache Kafka 4.1.0</i> (1.0% Duplicates và "
+                "1.5% Late > 30m); (2) <i>OSM / GIS Master Topology</i> gồm <i>nodes.csv</i> (577,967 điểm tọa độ), "
+                "<i>streets.csv</i> (5,553 tuyến đường) và <i>segments.csv</i> (84,633 đoạn thô → 84,206 đoạn cơ giới "
+                "sau loại 427 non-road POIs), trong khi tệp <i>train.csv</i> được tách hoàn toàn khỏi dây chuyền xử lý "
+                "và chỉ dùng để đối chiếu mức độ khớp LOS (89.19%). <b>Bốn nhóm kết quả đầu ra chính thức (4 System "
+                "Outputs):</b> (1) <i>Medallion Lakehouse (Parquet)</i> chia 10 phân vùng tháng và <i>dataset.csv</i> "
+                "(60 cột); (2) <i>Frozen Model Registry &amp; Static Feature Store</i> phủ đủ 84,206 đoạn cơ giới; "
                 "(3) <i>Quarantine Parquet &amp; WAL Checkpoints</i>; và (4) <i>MongoDB 8.0 Operational Serving</i> "
-                "kết nối <i>Streamlit 5-Tab UI (:8501)</i>."
+                "kết nối <i>Dual-UI: FastAPI + ReactJS/Leaflet TOC Web (:8000) &amp; Streamlit 5-Tab UI (:8501)</i>."
             ),
             s["body"],
         )
@@ -880,7 +890,7 @@ def _append_ch1_problems_usecases_and_boundary(story: list, s: dict[str, Paragra
                 "<b>Khoảng trống nghiên cứu &amp; Lý do cần nền tảng tích hợp HCMC Smart Traffic:</b> Các nghiên cứu "
                 "dự báo học thuật thường giả định chuỗi cảm biến sạch, liên tục trên cao tốc, trong khi hệ thống giám "
                 "sát đô thị thực tế lại thiếu cảnh báo sớm trước 30 phút và đối mặt vùng mù đường nhánh rộng lớn "
-                "(88.15% đoạn trống chuỗi GPS; 66.27% cặp quan sát ngắt quãng ≥ 60 phút). Triển khai rời rạc từng công "
+                "(88.13% đoạn trống chuỗi GPS; 66.30% cặp quan sát ngắt quãng ≥ 60 phút). Triển khai rời rạc từng công "
                 "nghệ đơn lẻ không giải được bài toán: một mô hình dự báo độc lập không thể tự làm sạch luồng GPS di "
                 "động nhiễu/trễ, không suy diễn được vùng thiếu cảm biến nếu tách rời phân tích cấu trúc mạng lưới "
                 "đường, và không phục vụ đồng thời trực ban TOC lẫn quy hoạch Sở GTVT. Toàn bộ nội dung báo cáo và bộ "
@@ -914,9 +924,8 @@ def _append_ch2_data_and_funnel(story: list, s: dict[str, ParagraphStyle]) -> No
             "577,967",
             "3 (19.44 MB)",
             "_id, long, lat",
-            "Có tới 525,542 điểm (90.93%) chỉ là Intermediate Shape Points để vẽ độ cong thân đường trên "
-            "OpenStreetMap; "
-            "chỉ có 52,425 giao lộ (Active Nodes) thực sự kết nối các đoạn đường.",
+            "Có tới 525,786 điểm (90.97%) chỉ là Intermediate Shape Points để vẽ độ cong thân đường trên "
+            "OpenStreetMap; chỉ có 52,181 giao lộ (Active Intersection Nodes) thực sự kết nối các đoạn cơ giới.",
         ],
         [
             "streets.csv",
@@ -924,31 +933,31 @@ def _append_ch2_data_and_funnel(story: list, s: dict[str, ParagraphStyle]) -> No
             "5 (0.20 MB)",
             "_id, level, max_velocity, name, type",
             "Cấp đường level 1..4; 82.23% (4,566 tuyến) bị khuyết max_velocity; 695 tên đường thô lệch bảng mã Unicode "
-            "NFD/NFC được chuẩn hóa về 649 tên chuẩn.",
+            "NFD/NFC được chuẩn hóa về 641 tên chuẩn.",
         ],
         [
             "segments.csv",
             "84,633",
             "11 (10.29 MB)",
             "_id, s/e_node_id, length, street_id, max_velocity...",
-            "88.34% (74,762 đoạn) khuyết max_velocity; 154 đoạn chiều dài ≤ 0m; 427 đoạn phi cơ giới; "
-            "74,606 đoạn (88.15%) bị Cold-Start (0 bản tin GPS).",
+            "88.34% (74,762 đoạn) khuyết max_velocity; 154 đoạn ≤ 0m; lọc 427 đoạn phi cơ giới còn 84,206 đoạn cơ giới "
+            "(74,211 đoạn = 88.13% Cold-Start, 0 GPS).",
         ],
         [
             "segment_status.csv",
             "90,938",
             "4 (3.58 MB)",
             "_id, updated_at, segment_id, velocity",
-            "Bản tin vận tốc GPS theo Event-Time UTC (07/2020–04/2021); chứa 151 bản tin trên lối đi bộ "
-            "(90,787 bản tin đường cơ giới); giờ cao điểm bị Data Skew gấp 687.43 lần trung vị.",
+            "Bản tin vận tốc GPS theo Event-Time UTC (07/2020–04/2021); cách ly 151 bản tin lỗi/phi cơ giới "
+            "(còn 90,787 bản tin hợp lệ); giờ cao điểm bị Data Skew gấp 684.95 lần trung vị.",
         ],
         [
             "train.csv",
             "33,441",
             "18 (4.99 MB)",
             "_id, segment_id, date, period, LOS...",
-            "Bảng đối chứng độc lập: khớp 100.0% khóa cửa sổ 30 phút; 85.21% khuyết max_velocity; "
-            "631 dòng mang tên Phường/Quận; 4,320 cửa sổ đổi ngày khi chuyển UTC sang ICT (+7h).",
+            "Bảng đối chứng độc lập (33,394 cửa sổ cơ giới sau lọc 47 phi cơ giới; 89.19% khớp LOS); 85.21% khuyết "
+            "Vmax; 631 dòng Phường/Quận; 4,305 cửa sổ đổi ngày UTC→ICT (+7h); 7,192 burst windows.",
         ],
     ]
     story.append(
@@ -983,80 +992,80 @@ def _append_ch2_data_and_funnel(story: list, s: dict[str, ParagraphStyle]) -> No
             "EC-1: Khuyết 85.21% max_velocity",
             "28,495 cửa sổ (85.21%), 74,762 đoạn",
             (
-                "3-Tier Velocity Imputation chỉ học từ TRAIN: Giữ giá trị gốc (4,946) → Segment P85 trên TRAIN (8,164) "
-                "→ Trung vị cùng (level, type) (20,124) → Chuẩn đô thị 80/60/50/40 km/h (207)."
+                "3-Tier Velocity Imputation chỉ học từ TRAIN: Gốc (4,946) → Segment P85 trên TRAIN (9,376) "
+                "→ Trung vị cùng (level, type) (17,693) → Chuẩn đô thị 80/60/50/40 km/h (1,379)."
             ),
         ],
         [
             "EC-2: Đoạn ≤ 0m & Non-Motorway",
-            "154 đoạn ≤ 0m, 427 đoạn phi cơ giới",
+            "154 đoạn ≤ 0m, 427 non-road POIs",
             (
-                "Ordered Quality Funnel cách ly 580 đoạn lỗi địa lý vào Quarantine Parquet theo rule đầu tiên; điền "
-                "chiều dài trung vị 27.0m; tách 151 bản tin phi cơ giới (còn 33,394 cửa sổ đường cơ giới)."
+                "Ordered Quality Funnel cách ly 580 bản ghi đoạn lỗi địa lý vào Quarantine Parquet; điền "
+                "chiều dài trung vị 27.0m; lọc 151 pings lỗi/phi cơ giới (còn 33,394 cửa sổ trên 84,206 đoạn)."
             ),
         ],
         [
             "EC-3: Lỗi Unicode NFD/NFC & Phường/Quận",
-            "631 Phường/Quận, 2,071 cửa sổ lệch dấu",
+            "631 Phường/Quận, 2,247 cửa sổ lệch dấu",
             (
-                "Street Entity Hygiene chuẩn hóa Unicode NFC (695 → 649 tên đường, gộp 46 biến thể); loại bỏ nhãn "
+                "Street Entity Hygiene chuẩn hóa Unicode NFC (695 → 641 tên đường, gộp 54 biến thể); loại bỏ nhãn "
                 "Phường/Quận khỏi giỏ giao dịch trước khi chạy SON / FPGrowth."
             ),
         ],
         [
             "EC-4: Lệch múi giờ UTC vs ICT (+7h)",
-            "4,320 / 33,441 cửa sổ (12.92%)",
+            "4,305 / 33,394 cửa sổ (12.89%)",
             (
                 "Giữ khóa ngày UTC để đối chứng chuẩn, đồng thời dịch sang giờ ICT <i>h</i><sub>VN</sub> = "
                 "(<i>h</i><sub>UTC</sub> + 7) mod 24, cộng 1 ngày khi <i>h</i><sub>UTC</sub> ≥ 17 và mã hóa sin/cos."
             ),
         ],
         [
-            "EC-5: Chuỗi GPS đứt quãng (> 30m)",
-            "Chỉ 7,898 / 23,414 cặp cách đúng 30p",
+            "EC-5: Chuỗi đứt quãng & Burst tổng hợp",
+            "7,885 / 23,399 cặp +30m; 7,192 burst",
             (
-                "Exact +30m Contiguous Horizon Join trên khóa (segment_id, slot_ts + 30m); loại bỏ toàn bộ 15,516 "
-                "bước nhảy ngắt quãng từ 60 phút trở lên để chống sai lệch nhãn mục tiêu."
+                "Exact +30m Contiguous Join trên (segment_id, slot_ts + 30m) loại 15,514 bước nhảy ≥ 60m (66.30%), "
+                "đồng thời tách 7,192 burst windows (3,596 cặp) khỏi tập TRAIN (còn 1,885 organic TRAIN)."
             ),
         ],
         [
-            "EC-6: 88.15% đoạn bị Cold-Start",
-            "74,606 / 84,633 đoạn không có GPS",
+            "EC-6: 88.13% đoạn bị Cold-Start",
+            "74,211 / 84,206 đoạn không có GPS",
             (
-                "Xây dựng Static Feature Store (segment_static_features.parquet) phủ kín 84,633 đoạn nhờ điểm "
+                "Xây dựng Static Feature Store (segment_static_features.parquet) phủ kín 84,206 đoạn cơ giới nhờ điểm "
                 "Line-Graph PageRank và tâm cụm 7D Behavioral K-Means."
             ),
         ],
         [
-            "EC-7: Shape Points & 48 Dangling Nodes",
-            "525,542 Shape Points, 48 đoạn cụt",
+            "EC-7: Shape Points & 314 Dangling Nodes",
+            "525,786 Shape Points, 314 đoạn cụt",
             (
-                "Cắt tỉa 90.93% Intermediate Shape Points trước khi dựng Line Graph; phân bổ lại xác suất của "
-                "48 Dangling Nodes ở mỗi vòng lặp để bảo toàn tổng PageRank = 84,633.0."
+                "Cắt tỉa 90.97% Intermediate Shape Points và loại U-turn trước khi dựng Line Graph (92,453 cạnh); "
+                "phân bổ lại 314 Dangling Nodes ở mỗi vòng lặp để bảo toàn tổng PageRank = 84,206.0."
             ),
         ],
         [
             "EC-8: Data Skew & Bẫy trung bình",
-            "Skew 687.43x; sai số 11.11 km/h",
+            "Skew 684.95x; sai số 11.11 km/h",
             (
-                "5-Tuple Commutative Monoid Combiner kết hợp 2-Stage Key Salting (8 buckets) kéo độ lệch giờ cao điểm "
-                "về 1.023x (CV = 0.0057), đạt sai số bằng 0.0 tuyệt đối."
+                "5-Tuple Commutative Monoid Combiner kết hợp 2-Stage Key Salting (8 buckets) kéo độ lệch slot giờ cao "
+                "điểm về 1.020x (CV = 0.0059), đạt sai số bằng 0.0 tuyệt đối."
             ),
         ],
         [
             "EC-9: 1% Duplicates & 1.5% Late Events",
-            "334 tin trùng, 501 cửa sổ trễ / 219 khung",
+            "333 tin trùng, 500 cửa sổ trễ / 226 khung",
             (
-                "Chặn 334/334 tin trùng bằng 32.0 KiB Bloom Filter; Sink 1 lưu 100% raw events; Phase C Two-Tier "
-                "Reconciliation backfill 501 cửa sổ trễ và heal Lag Store cho 3,953 cửa sổ kế tiếp."
+                "Chặn 333/333 tin trùng bằng 32.0 KiB Bloom Filter; Sink 1 lưu 100% raw events; Phase C Two-Tier "
+                "Reconciliation backfill 500 cửa sổ trễ và heal Lag Store cho 609 cửa sổ kế tiếp."
             ),
         ],
         [
             "EC-10: Crash Recovery & Stale Overwrite",
             "Ngắt tiến trình & tin cũ đến muộn",
             (
-                "Khôi phục trạng thái từ WAL Checkpoints (0 nhân đôi); Optimistic Version Lock (status_version) trong "
-                "MongoDB chặn 25/25 tin STREAM_PROVISIONAL cũ ghi đè lên bản BATCH_RECONCILED v2."
+                "Khôi phục trạng thái từ WAL Checkpoints (0 nhân đôi) & Spark Real Watermark; atomic pipeline "
+                "$status_version trong MongoDB chặn 25/25 tin v1 ghi đè lên bản BATCH_VERIFIED v2."
             ),
         ],
     ]
@@ -1083,21 +1092,21 @@ def _append_ch2_data_and_funnel(story: list, s: dict[str, ParagraphStyle]) -> No
             "segments.csv",
             "street_type IN (service, footway, path, steps...)",
             "427 đoạn (580 lỗi địa lý)",
-            "Cách ly địa lý; tách 151 bản tin lối đi bộ.",
+            "Cách ly 427 POIs (còn 84,206 cơ giới); 47 cửa sổ.",
         ],
         [
             '<font size="6.3">R3_ADMIN_POLYGON_STREET_NAME</font>',
             "streets / windows",
             "street_name khớp mẫu hành chính ^(Phường|Quận)",
-            "631 cửa sổ (1.89%)",
-            "Loại khỏi giỏ khai phá cặp đường hay kẹt cùng lúc.",
+            "631 cửa sổ",
+            "Loại khỏi giỏ FPGrowth và Top PageRank.",
         ],
         [
             '<font size="6.3">R4_UNICODE_NFD_AND_PREFIX_DRIFT</font>',
             "Chuẩn hóa tên",
             "street_name ≠ NFC(trim(name))",
-            "2,071 cửa sổ (46 tên)",
-            "Chuẩn hóa dấu tiếng Việt NFC (695 → 649 tên).",
+            "2,247 cửa sổ (54 tên gộp)",
+            "Chuẩn hóa dấu tiếng Việt NFC (695 → 641 tên).",
         ],
         [
             '<font size="6.3">R5_MISSING_MAX_VELOCITY</font>',
@@ -1107,11 +1116,11 @@ def _append_ch2_data_and_funnel(story: list, s: dict[str, ParagraphStyle]) -> No
             "Điền khuyết 3 bậc chỉ học từ tập TRAIN.",
         ],
         [
-            '<font size="6.3">R6_STATIONARY_OR_LATE_EVENT</font>',
-            "status / luồng",
-            "velocity &lt; 1 km/h (517) | trễ &gt; 30p (501)",
-            "517 bản tin / 501 cửa sổ",
-            "Giữ bản tin xe dừng kẹt cứng LOS F; lưu tin trễ chờ bù.",
+            '<font size="6.3">R6_STATIONARY_OR_INVALID_PING</font>',
+            "segment_status / luồng",
+            "velocity ≤ 0 / phi cơ giới (517 flagged)",
+            "151 pings cách ly (448 cửa sổ)",
+            "Cách ly 151 pings lỗi; giữ 90,787 pings cơ giới.",
         ],
     ]
     story.append(
@@ -1139,14 +1148,14 @@ def _append_ch2_data_and_funnel(story: list, s: dict[str, ParagraphStyle]) -> No
         make_equation_box(
             CHART_DIR / "eq_vmax_los.png",
             (
-                "<b>Bảo toàn quân số bản ghi:</b> Tổng đầu vào (90,938) = Bản trùng loại bỏ (0) + Hợp lệ (90,938) "
-                "+ Cách ly lỗi (0); khi lọc tách trước 427 đoạn lối đi bộ phi cơ giới trong <i>spark_batch.py</i>: "
-                "90,938 − 151 = 90,787 bản tin đường cơ giới tạo ra <b>33,394 cửa sổ</b> (chênh đúng 47 cửa sổ lối đi "
-                "bộ so với <b>33,441 cửa sổ</b> đối chứng). <b>Phân bổ ước lượng tốc độ tối đa (học trên TRAIN):</b> "
-                "Bậc 1a giữ giá trị gốc hợp lệ (4,946 cửa sổ) → Bậc 1b phân vị P85 trên TRAIN (8,164 cửa sổ) → Bậc 2 "
-                "trung vị theo cấp &amp; loại đường trên TRAIN (20,124 cửa sổ) → Bậc 3 chuẩn đô thị 80/60/50/40 km/h "
-                "(207 cửa sổ). <b>Phân bố 6 mức LOS suy dẫn:</b> LOS A (13,405) · B (2,571) · C (4,858) · D (6,098) · "
-                "E (3,463) · F (3,046)."
+                "<b>Bảo toàn quân số bản ghi:</b> Tổng bản tin đầu vào 90,938 = Bản trùng loại bỏ (0) + Hợp lệ "
+                "(90,787) + Cách ly lỗi R6/phi cơ giới (151); 90,787 bản tin đường cơ giới (42,124 severe pings) tạo "
+                "nên <b>33,394 cửa sổ cơ giới</b> (tách 47 cửa sổ phi cơ giới khỏi 33,441 dòng <i>train.csv</i>; khớp "
+                "<b>89.19%</b> nhãn LOS chuẩn BkTraffic). <b>Phân bổ Vmax trên 33,394 cửa sổ (học trên TRAIN):</b> "
+                "Bậc 1a gốc (4,946) → Bậc 1b P85 trên TRAIN (9,376) → Bậc 2 trung vị level×type (17,693) → Bậc 3 "
+                "chuẩn đô thị (1,379). <b>Phân bố 6 mức LOS suy dẫn:</b> LOS A (13,309) · B (4,926) · C (2,657) · "
+                "D (3,730) · E (3,401) · F (5,371) [đối chứng gốc: A 13,267 · B 4,694 · C 3,827 · D 3,701 · "
+                "E 3,821 · F 4,084]."
             ),
             s,
         )
@@ -1161,10 +1170,10 @@ def _append_ch2_data_and_funnel(story: list, s: dict[str, ParagraphStyle]) -> No
         make_callout(
             (
                 "<b>Limitations &amp; Risks (Mục 4 Data/EDA &amp; Mục 5 Data Pipeline):</b> "
-                "<b>(1) Thiên lệch không gian của cảm biến (Spatial Probe Selection Bias):</b> Chỉ có 10,027 / 84,633 "
-                "đoạn đường (11.85%) có dữ liệu GPS thực tế; dữ liệu tập trung mạnh ở các trục chính và đội xe thương "
-                "mại, chưa phản ánh trực tiếp vận tốc luồng xe máy trong hẻm nhỏ. "
-                "<b>(2) Giả định tốc độ tối đa tĩnh (Static Vmax Approximation):</b> 20,331 / 33,441 cửa sổ (60.79%) "
+                "<b>(1) Thiên lệch không gian của cảm biến (Spatial Probe Selection Bias):</b> Chỉ có 9,995 / 84,206 "
+                "đoạn đường cơ giới (11.87%) có dữ liệu GPS thực tế; dữ liệu tập trung mạnh ở các trục chính và đội xe "
+                "thương mại, chưa phản ánh trực tiếp vận tốc luồng xe máy trong hẻm nhỏ. "
+                "<b>(2) Giả định tốc độ tối đa tĩnh (Static Vmax Approximation):</b> 19,072 / 33,394 cửa sổ (57.11%) "
                 "sử dụng tốc độ tối đa suy diễn theo cấp và loại đường (Tier 2 &amp; Tier 3), chưa tự động hạ trần khi "
                 "đoạn đường bị rào chắn thi công hoặc ngập nước cục bộ. "
                 "<b>(3) Rủi ro tăng đột biến Quarantine khi đổi Schema đầu nguồn:</b> Cơ chế <i>ANSI try_cast</i> bảo "
@@ -1202,9 +1211,10 @@ def _append_ch3_architecture_and_spark(story: list, s: dict[str, ParagraphStyle]
         Paragraph(
             (
                 "Hình 3.1 trình bày <b>Sơ đồ Kiến trúc Giải pháp Tổng thể (Enterprise Cloud / Containerized Cluster "
-                "Reference Architecture)</b> trên cụm Docker <b>10.5 / 16.0 GB RAM</b> (hợp nhất "
+                "Reference Architecture)</b> trên cụm Docker <b>12.0 / 16.0 GB RAM</b> với <b>6 dịch vụ</b> (hợp nhất "
                 "<i>Apache Kafka 4.1.0 KRaft</i>, <i>Apache Spark 3.5.7 · Java 17</i>, "
-                "<i>Medallion Lakehouse (Parquet)</i>, <i>MongoDB 8.0.34</i> và <i>Streamlit 5-Tab UI :8501</i>). "
+                "<i>Medallion Lakehouse (Parquet)</i>, <i>MongoDB 8.0.34</i>, <i>FastAPI + ReactJS/Leaflet TOC Web "
+                ":8000</i> và <i>Streamlit 5-Tab UI :8501</i>). "
                 "Để người đọc dễ dàng tra cứu, Bảng 3.1a liệt kê đầy đủ từng thành phần <b>[C1]–[C17]</b> theo "
                 "6 phân vùng (<b>Zone A–F</b>), và Bảng 3.1b giải thích chi tiết <b>10 luồng dữ liệu đánh số "
                 "(1–10)</b>:"
@@ -1229,8 +1239,8 @@ def _append_ch3_architecture_and_spark(story: list, s: dict[str, ParagraphStyle]
             "[C1] GPS Probe Fleet",
             "producer.py (Python 3.11)",
             (
-                "Phát lại segment_status.csv (90,938 bản tin vận tốc) theo Event-Time kèm 1% Duplicates (334) và 5% "
-                "Late Events."
+                "Phát lại 33,394 cửa sổ (33,727 sự kiện kèm 1% Duplicates = 333 & 500 Late > 30m) hoặc 90,938 raw "
+                "pings (90,787 cơ giới)."
             ),
         ],
         [
@@ -1238,14 +1248,14 @@ def _append_ch3_architecture_and_spark(story: list, s: dict[str, ParagraphStyle]
             "[C2] OSM / GIS Topology",
             "raw_data/*.csv Loader",
             (
-                "Cung cấp đồ thị tĩnh: nodes.csv (577,967 điểm; 52,425 giao lộ thực), streets.csv (5,553 tuyến), "
-                "segments.csv (84,633 đoạn)."
+                "Cung cấp đồ thị tĩnh: nodes.csv (577,967 điểm; 52,181 giao lộ thực), streets.csv (5,553 tuyến), "
+                "segments.csv (84,633 thô → 84,206 cơ giới)."
             ),
         ],
         [
             "Zone A (External)",
             "[C3] Traffic Ops & Users",
-            "Web / REST Clients (:8501)",
+            "TOC Web (:8000) & UI (:8501)",
             (
                 "Trung tâm TOC, kỹ sư tín hiệu đèn, Sở GTVT và người đi đường tra cứu dự báo, nút cổ chai, điểm nóng "
                 "và đối soát."
@@ -1265,17 +1275,17 @@ def _append_ch3_architecture_and_spark(story: list, s: dict[str, ParagraphStyle]
             "[C5] Quality Funnel",
             "PySpark SQL (try_cast, NFC)",
             (
-                "Ordered Quality Funnel 5 bước: ANSI try_cast -> chuẩn hóa Unicode NFC (695 -> 649 tên) -> dịch giờ "
-                "ICT (+7h) -> 3-Tier Velocity Imputation."
+                "Ordered Quality Funnel 5 bước: ANSI try_cast -> loại 427 POIs -> Unicode NFC (695 -> 641 tên) -> "
+                "ICT (+7h) -> 3-Tier Vmax Imputation."
             ),
         ],
         [
             "Zone C (Speed Layer)",
             "[C6] Watermark (30m)",
-            "starter_stream.py (Dual Sink)",
+            "starter_stream.py / spark_engine",
             (
-                "Áp dụng Watermark 30 phút và tách Dual Sink: Sink 1 append 100% sự kiện thô ra Parquet; Sink 2 cập "
-                "nhật cửa sổ luồng."
+                "Áp dụng Watermark thật 30 phút (2020-12-01T12:30Z) và tách Dual Sink: Sink 1 Parquet WAL; Sink 2 "
+                "trạng thái luồng."
             ),
         ],
         [
@@ -1283,7 +1293,7 @@ def _append_ch3_architecture_and_spark(story: list, s: dict[str, ParagraphStyle]
             "[C7] O(1) Stream Sketches",
             "Bloom + HLL++ + EWMA (33 KiB)",
             (
-                "Duy trì bộ nhớ hằng số O(1): 32.0 KiB Bloom Filter lọc trùng, 1.0 KiB HyperLogLog++ đếm đoạn đường, "
+                "Duy trì bộ nhớ hằng số O(1): 32.0 KiB Bloom Filter lọc 333/333 trùng, 1.0 KiB HLL++ đếm đoạn, "
                 "và EWMA Hotspot (α=0.15)."
             ),
         ],
@@ -1293,16 +1303,16 @@ def _append_ch3_architecture_and_spark(story: list, s: dict[str, ParagraphStyle]
             "Read-Only .transform()",
             (
                 "Broadcast-join đặc trưng cửa sổ trong Watermark với Static Feature Store, gọi Frozen Model "
-                ".transform() và gắn STREAM_PROVISIONAL."
+                ".predict_proba() và gắn STREAM_PROVISIONAL."
             ),
         ],
         [
             "Zone D (Batch Layer)",
             "[C9] Combiner & Join",
-            "spark_batch.py / spark_engine.py",
+            "pipeline.py / spark_engine.py",
             (
-                "5-Tuple Commutative Monoid Combiner + 2-Stage Key Salting (8 buckets, giảm skew 687.43x -> 1.023x) + "
-                "Catalyst BroadcastHashJoin."
+                "5-Tuple Monoid + 8-Bucket Salting (skew 684.95x → 1.020x) + Catalyst BroadcastHashJoin "
+                f"(5 → 1 Exchange, {gt['join_speedup']} speedup)."
             ),
         ],
         [
@@ -1310,8 +1320,8 @@ def _append_ch3_architecture_and_spark(story: list, s: dict[str, ParagraphStyle]
             "[C10] Graph & Mining",
             "PageRank · FPGrowth · K-Means",
             (
-                "(1) Line-Graph PageRank (84,633 đoạn, 151,929 cạnh rẽ, β=0.85); (2) SON / FPGrowth (335 luật); (3) "
-                "Train-Only 7D K-Means (k=6)."
+                "(1) Line-Graph PageRank (84,206 cơ giới, 92,453 cạnh bỏ U-turn, β=0.85); (2) SON (12+14 luật) / "
+                "FPGrowth (335 luật); (3) Train-Only 7D K-Means (k=6)."
             ),
         ],
         [
@@ -1319,8 +1329,8 @@ def _append_ch3_architecture_and_spark(story: list, s: dict[str, ParagraphStyle]
             "[C11] Causal ML Fit",
             "pipeline.py + baseline.py",
             (
-                "Chia Chronological 70/15/15 (5,494 TRAIN / 1,167 VAL / 1,182 TEST); tính Causal Expanding Priors; "
-                "huấn luyện Random Forest 23D."
+                "Chia Chronological 70/15/15 (lọc 7,192 burst → 1,885 organic TRAIN / 1,167 VAL / 1,182 TEST); "
+                "VAL Gate (0.8990); RF 23D (cls_w=0.65)."
             ),
         ],
         [
@@ -1328,16 +1338,16 @@ def _append_ch3_architecture_and_spark(story: list, s: dict[str, ParagraphStyle]
             "[C12] Two-Tier Recon",
             "exceptAll + Late Backfill",
             (
-                "Tier 1 kiểm chứng exceptAll() == 0 (32,940 cửa sổ đúng hạn); Tier 2 backfill 501 cửa sổ trễ, heal "
-                "3,953 lag_1_los và chấm lại 377 cửa sổ."
+                "Tier 1 exceptAll_diff == 0 (100% khớp); Tier 2 backfill 500 cửa sổ trễ, heal 609 downstream lag "
+                "windows và re-score 384 cửa sổ (185 đổi prob)."
             ),
         ],
         [
             "Zone E (Registry)",
-            "[C13a] Spark PipelineModel",
-            "Frozen RF/GBT Model",
+            "[C13a] Frozen Model",
+            "Frozen RF / PipelineModel",
             (
-                "Lưu bất biến mô hình đã huấn luyện ở Phase A (model.joblib / PipelineModel) kèm khóa chữ ký SHA-256 "
+                "Lưu bất biến mô hình đã huấn luyện ở Phase A (model.joblib / Spark PipelineModel) kèm khóa SHA-256 "
                 "chỉ đọc cho [C8] và [C12]."
             ),
         ],
@@ -1346,8 +1356,8 @@ def _append_ch3_architecture_and_spark(story: list, s: dict[str, ParagraphStyle]
             "[C13b] Static Feature Store",
             "segment_static_features.parquet",
             (
-                "Lưu PageRank, K-Means cluster, bậc vào/ra và Priors phủ kín 100% mạng lưới (84,633 đoạn, gồm 74,606 "
-                "đoạn Cold-Start) + vmax_lookup.json."
+                "Lưu PageRank, K-Means cluster, bậc vào/ra và Priors phủ kín 100% mạng lưới cơ giới (84,206 đoạn, "
+                "gồm 74,211 Cold-Start) + vmax_lookup.json."
             ),
         ],
         [
@@ -1364,7 +1374,7 @@ def _append_ch3_architecture_and_spark(story: list, s: dict[str, ParagraphStyle]
             "[C15] Quarantine & WAL",
             "quarantine/ · checkpoints/",
             (
-                "Lưu vết bản ghi lỗi địa lý/định dạng (quarantine/), nhật ký hồi phục sự cố Write-Ahead Log "
+                "Lưu vết 580 đoạn & 151 pings lỗi (quarantine/), nhật ký hồi phục sự cố Write-Ahead Log "
                 "(checkpoints/) và báo cáo đối soát."
             ),
         ],
@@ -1373,17 +1383,17 @@ def _append_ch3_architecture_and_spark(story: list, s: dict[str, ParagraphStyle]
             "[C16] MongoDB 8.0",
             "mongo:8.0.34 (traffic_scores)",
             (
-                "Nhận dữ liệu qua 4 phân vùng ghi lô 500 bản ghi bằng UpdateOne(upsert=True) kèm Optimistic Version "
-                "Lock và Compound Index IXSCAN (0.636 ms)."
+                "Nhận 33,394 docs qua 4 partition (69 batches) UpdateOne(upsert=True) kèm atomic $status_version "
+                f"pipeline guard & IXSCAN ({gt['mongo_med']} / p95 {gt['mongo_p95']})."
             ),
         ],
         [
             "Zone F (Storage/UI)",
-            "[C17] Streamlit 5-Tab UI",
-            "app.py (:8501 · 1.0 GB RAM)",
+            "[C17] Dual-UI Gateway",
+            "FastAPI+React :8000 · Streamlit :8501",
             (
-                "Cổng giao diện điều hành 5 Tab: Tab 1 Overview & Hotspots, Tab 2 Live Forecast, Tab 3 PageRank & "
-                "Rules, Tab 4 K-Means, Tab 5 Sketches & Recon."
+                "TOC Web (FastAPI :8000 + ReactJS + Leaflet bản đồ 84,206 đoạn) & Streamlit 5-Tab UI (:8501: "
+                "Hotspots, Live Forecast, PageRank, K-Means, Recon)."
             ),
         ],
     ]
@@ -1415,8 +1425,8 @@ def _append_ch3_architecture_and_spark(story: list, s: dict[str, ParagraphStyle]
             "(1) Telemetry Stream",
             "[C1] Producer → [C4] Kafka 4.1",
             (
-                "producer.py phát 90,938 bản tin vận tốc vào topic hcmc-traffic-events (3 partitions, key=segment_id) "
-                "kèm 1% Duplicates và 5% Late Events."
+                "producer.py phát 33,727 sự kiện (33,394 cửa sổ cơ giới + 333 trùng + 500 trễ > 30m) hoặc 91,694 "
+                "pings thô vào hcmc-traffic-events."
             ),
         ],
         [
@@ -1480,15 +1490,15 @@ def _append_ch3_architecture_and_spark(story: list, s: dict[str, ParagraphStyle]
             "[C8] & [C12] → [C16] MongoDB 8.0",
             (
                 "Ghi lô 500 bản ghi bằng UpdateOne(upsert=True): [C8] ghi STREAM_PROVISIONAL (v1); [C12] ghi đè "
-                "BATCH_RECONCILED (v2) có khóa status_version."
+                "BATCH_VERIFIED (v2) có atomic $status_version pipeline guard."
             ),
         ],
         [
             "(10) IXSCAN BI Gateway",
             "[C16] + [C14] + [C15] → [C17] → [C3]",
             (
-                "[C16] MongoDB (IXSCAN 0.636 ms), [C14] Medallion Lakehouse và [C15] Quarantine/Audit cấp dữ liệu cho "
-                "[C17] Streamlit 5-Tab UI phục vụ [C3] Users."
+                f"[C16] MongoDB (IXSCAN warm {gt['mongo_med']} / p95 {gt['mongo_p95']}), [C14] Lakehouse & [C15] Audit "
+                "cấp dữ liệu cho [C17] Dual-UI (TOC Web :8000 & Streamlit :8501) phục vụ [C3] Users."
             ),
         ],
     ]
@@ -1516,8 +1526,8 @@ def _append_ch3_architecture_and_spark(story: list, s: dict[str, ParagraphStyle]
                 Paragraph("3.2. Zero-Conflict 3-Phase MLOps Lifecycle &amp; Khóa Chữ Ký Toàn Vẹn SHA-256", s["h2"]),
                 build_mlops_drawing(),
                 Paragraph(
-                    "Hình 3.2. Tách biệt rạch ròi quyền huấn luyện (chỉ học một lần ở Phase A trên 5,494 mẫu TRAIN "
-                    "≤ 2020-12-12T08:00:00Z) và quyền chấm điểm chỉ đọc (.transform) ở Phase B, Phase C. "
+                    "Hình 3.2. Tách biệt rạch ròi quyền huấn luyện (chỉ học một lần ở Phase A trên 1,885 organic TRAIN "
+                    "≤ 2020-12-12T08:00:00Z sau tách 7,192 burst) và quyền chấm điểm chỉ đọc (.transform) Phase B, C. "
                     f"Ba chữ ký SHA-256 khóa cố định: <b>model.joblib = {gt['model_sha12']}...</b> · "
                     f"<b>segment_static_features.parquet = {gt['static_sha12']}...</b> · "
                     f"<b>vmax_lookup.json = {gt['vmax_sha12']}...</b>",
@@ -1540,9 +1550,10 @@ def _append_ch3_architecture_and_spark(story: list, s: dict[str, ParagraphStyle]
                 "lệch nhau [1, 2, 3], phép lấy trung bình cục bộ rồi chia trung bình lần hai gây sai số tới "
                 "<b>11.111111 km/h</b>. Ngược lại, khi nâng mỗi bản tin lên <b>5-Tuple Commutative Monoid</b> "
                 "<i>m = (count, sum_v, min_v, max_v, severe_cnt)</i>, kết quả gộp trên Spark khớp 100% với "
-                "<i>baseline.py</i> trên toàn bộ 33,441 cửa sổ (42,170 bản tin kẹt, sai số = <b>0.0</b>). Kết hợp kỹ "
-                "thuật <b>2-Stage Key Salting</b> (8 buckets, 59,895 nhóm trung gian), độ lệch tải (<i>Data Skew</i>) "
-                "giờ cao điểm giảm mạnh từ <b>687.43x xuống còn 1.023x (CV = 0.0057)</b>."
+                "<i>baseline.py</i> trên toàn bộ 33,394 cửa sổ cơ giới (42,124 bản tin kẹt, sai số = <b>0.0</b>). Kết "
+                "hợp kỹ thuật <b>2-Stage Key Salting</b> (8 buckets, 59,655 nhóm trung gian ở pipeline / 59,714 ở "
+                "Spark runtime), độ lệch tải (<i>Data Skew</i>) giờ cao điểm giảm mạnh từ "
+                "<b>684.95x xuống còn 1.020x (CV = 0.0059)</b>."
             ),
             s,
         )
@@ -1558,36 +1569,41 @@ def _append_ch3_architecture_and_spark(story: list, s: dict[str, ParagraphStyle]
         [
             "2-Stage Key Salting (8 Buckets)",
             (
-                "Stage 1 gộp cục bộ theo (window_key, salt_bucket 0..7) tạo 59,895 nhóm; Stage 2 bỏ salt gộp về 33,441 "
-                "cửa sổ."
+                "Stage 1 gộp cục bộ theo (window_key, salt_bucket 0..7) tạo 59,714 nhóm Spark; Stage 2 bỏ salt gộp về "
+                "33,394 cửa sổ."
             ),
             (
-                "Kéo Data Skew từ 687.43x xuống 1.023x (CV = 0.0057); đối chiếu tập hợp 1-stage và 2-stage đạt "
-                "exceptAll() == 0."
+                f"Kéo lệch slot 684.95x → 1.020x (CV=0.0059); giảm Spark IQR {gt['monoid_unsalted_iqr']} → "
+                f"{gt['monoid_salted_iqr']} ms ở tradeoff {gt['monoid_unsalted_ms']} → {gt['monoid_salted_ms']} ms "
+                "(exceptAll diff = 0)."
             ),
         ],
         [
             "BroadcastHashJoin (spark_engine.py)",
-            "Đối chiếu SortMergeJoin (tắt broadcast) với BroadcastHashJoin khi join bảng chiều segments và streets.",
+            "Đối chiếu SortMergeJoin (autoBroadcast=-1) với BroadcastHashJoin trên 90,787 pings × segments × streets.",
             (
-                "Loại bỏ hoàn toàn SortMergeJoin (0 nút), giảm Shuffle Exchanges từ 10 xuống 2, thời gian chạy "
-                "0.946s → 0.506s."
+                "Loại bỏ SortMergeJoin (0 nút), giảm Shuffle Exchanges từ 5 xuống 1 (-80%), rút ngắn thời gian "
+                f"{gt['join_base_ms']} ms (IQR 12.83) → {gt['join_opt_ms']} ms (IQR 4.59) "
+                f"(+{gt['join_speedup']}; diff=0)."
             ),
         ],
         [
-            "BroadcastHashJoin (spark_batch.py)",
-            "Thực thi độc lập từ raw_data/ trên container Apache Spark 3.5.7 (Java 17) cho cả 3 phép join bảng bản đồ.",
-            ("Sinh đúng 3 nút BroadcastHashJoin (0 SortMergeJoin), giảm 5 bước Shuffle xuống 0, 0.932s → 0.666s."),
+            "Structured Streaming & Watermark",
+            "Sink 1 WAL Bronze Parquet (200 rows) & Sink 2 hcmc_agg_sink2 (3 micro-batches, stateStoreSave).",
+            (
+                "Watermark thật dịch tới 2020-12-01T12:30:00Z, loại 10 rows hết hạn khỏi State Store "
+                "(numRowsRemoved = 10, WAL 0 dupes)."
+            ),
         ],
         [
             "Parquet Partition & Column Pruning",
             (
-                "Lưu 10 phân vùng tháng year_month=2020-07..2021-04 (48 · 7,294 · 204 · 13 · 5,002 · 15,105 · "
-                "2,802 · 1 · 1,743 · 1,229 dòng)."
+                "Lưu 10 phân vùng tháng year_month=2020-07..2021-04 (48 · 7,268 · 204 · 13 · 5,002 · 15,102 · "
+                "2,790 · 1 · 1,737 · 1,229 dòng)."
             ),
             (
-                f"Truy vấn lọc tháng 2020-08 chỉ đọc đúng {gt['aug_rows']} dòng (thay vì quét cả 33,441 dòng) và "
-                "chỉ nạp 4 / 59 cột cần dùng."
+                f"Truy vấn lọc tháng 2020-08 chỉ đọc đúng {gt['aug_rows']} dòng (thay vì quét cả 33,394 dòng) và "
+                "chỉ nạp 4 / 60 cột cần dùng."
             ),
         ],
     ]
@@ -1605,7 +1621,7 @@ def _append_ch3_architecture_and_spark(story: list, s: dict[str, ParagraphStyle]
         CHART_DIR / "chart_spark_skew_catalyst.png",
         0.62,
         "Hình 3.3. Kết quả cân bằng tải giờ cao điểm bằng 2-Stage Key Salting (trên) và loại bỏ Shuffle dư thừa "
-        "nhờ Catalyst BroadcastHashJoin trên các bảng bản đồ tĩnh (dưới).",
+        "nhờ Catalyst BroadcastHashJoin trên Spark 3.5.7 (dưới).",
         s,
     )
     story.append(
@@ -1618,16 +1634,16 @@ def _append_ch3_architecture_and_spark(story: list, s: dict[str, ParagraphStyle]
         make_callout(
             (
                 "<b>Limitations &amp; Risks (Mục 3 System Architecture &amp; Mục 7A Spark Batch Processing):</b> "
-                "<b>(1) Tranh chấp tài nguyên trên máy chủ đơn (Single-Host Resource Contention):</b> Việc đóng gói cả "
-                "4 container (Kafka 1.5 GB, Spark 6.0 GB, MongoDB 2.0 GB, Streamlit 1.0 GB = 10.5 / 16.0 GB RAM) trên "
-                "cùng một máy vật lý giúp triển khai dễ dàng, nhưng có rủi ro cạnh tranh băng thông đọc/ghi đĩa (Disk "
-                "I/O) khi Spark thực hiện Shuffle đồng thời với lúc MongoDB ghi lô lớn. "
+                "<b>(1) Tranh chấp tài nguyên trên máy chủ đơn (Single-Host Resource Contention):</b> Việc đóng gói "
+                "6 container (Kafka 1.5 GB, Spark 6.0 GB, MongoDB 2.0 GB, TOC Backend + Web :8000, Streamlit :8501 = "
+                "12.0 / 16.0 GB RAM) trên một máy có rủi ro cạnh tranh I/O đĩa khi Spark Shuffle cùng lúc MongoDB ghi. "
                 "<b>(2) Độ trễ nhất quán cuối cùng (Eventual Consistency Gap):</b> Nhánh <i>Phase B (Speed Layer)</i> "
                 "phát cảnh báo tạm thời <i>v1</i> tức thì, nhưng các bản tin đến muộn quá 30 phút chỉ được cập nhật "
                 "vào biến trễ lịch sử sau khi tác vụ <i>Phase C (Batch Reconciliation)</i> hoàn tất vào cuối chu kỳ. "
-                "<b>(3) Chi phí nhân bản khóa của 2-Stage Salting:</b> Chia 8 giỏ muối giúp khử lệch tải giờ cao điểm "
-                "(687.43x → 1.023x), nhưng làm tăng số nhóm trung gian ở Stage 1 lên 59,895 nhóm đối với các khung giờ "
-                "thấp điểm vốn không bị lệch tải."
+                "<b>(3) Chi phí nhân bản khóa của 2-Stage Salting (Overhead Tradeoff):</b> Chia 8 giỏ muối giúp khử "
+                "lệch tải giờ cao điểm (684.95x → 1.020x) và giảm mạnh phương sai thời gian (IQR 31.29 → 11.27 ms), "
+                f"nhưng ở dữ liệu mẫu 90.8k pings phép gộp 2 tầng thêm chi phí ({gt['monoid_unsalted_ms']} → "
+                f"{gt['monoid_salted_ms']} ms) do phát sinh Shuffle thứ hai."
             ),
             s,
             bg=WARN_BG,
@@ -1640,7 +1656,7 @@ def _append_ch4_graph_patterns_and_kmeans(story: list, s: dict[str, ParagraphSty
     story.append(Spacer(1, 6))
     story.append(
         Paragraph(
-            "Chương 4. Bước 2 — Lấp Đầy 'Vùng Mù' 88.15% Đường Thiếu GPS Bằng Đồ Thị PageRank &amp; Phân Cụm K-Means",
+            "Chương 4. Bước 2 — Lấp Đầy 'Vùng Mù' 88.13% Đường Thiếu GPS Bằng Đồ Thị PageRank &amp; Phân Cụm K-Means",
             s["h1"],
         )
     )
@@ -1648,13 +1664,13 @@ def _append_ch4_graph_patterns_and_kmeans(story: list, s: dict[str, ParagraphSty
         make_callout(
             (
                 "<b>Tại sao cần Chương 4 trước khi xây mô hình dự báo ở Chương 5? (Sợi dây liên kết nhân quả):</b> "
-                "Sau Chương 2–3, chúng ta mới chỉ biết trạng thái giao thông trên 10,027 đoạn đường có xe gửi GPS, "
-                "còn <b>74,606 đoạn đường nhánh (88.15% thành phố) hoàn toàn trắng dữ liệu</b>. Chương 4 giải quyết "
+                "Sau Chương 2–3, chúng ta mới chỉ biết trạng thái giao thông trên 9,995 đoạn đường cơ giới có GPS, "
+                "còn <b>74,211 đoạn đường nhánh (88.13% thành phố) hoàn toàn trắng dữ liệu</b>. Chương 4 giải quyết "
                 "khoảng trống này với <b>hai mục đích gắn kết chặt chẽ</b>: <b>(1) Phục vụ điều hành trực tiếp:</b> "
                 "chỉ ra các nút cổ chai tự nhiên trên bản đồ cho Sở GTVT lắp camera và tìm các cặp đường hay kẹt dây "
                 "chuyền; <b>(2) Tạo biến đầu vào không gian cho Chương 5:</b> trích xuất điểm nút cổ chai "
-                "(<i>pagerank_score</i>), số nhánh vào/ra và mã nhóm hành vi (<i>cluster_id</i>) cho toàn bộ 84,633 "
-                "đoạn đường để truyền thẳng vào mô hình <b>Random Forest</b> ở Chương 5."
+                "(<i>pagerank_score</i>), số nhánh vào/ra và mã nhóm hành vi (<i>cluster_id</i>) cho toàn bộ 84,206 "
+                "đoạn đường cơ giới để truyền thẳng vào mô hình <b>Random Forest</b> ở Chương 5."
             ),
             s,
         )
@@ -1666,12 +1682,12 @@ def _append_ch4_graph_patterns_and_kmeans(story: list, s: dict[str, ParagraphSty
         Paragraph(
             (
                 "Trong 577,967 điểm tọa độ của bảng <i>nodes.csv</i> trích từ bản đồ OpenStreetMap, có tới "
-                "<b>525,542 điểm (90.93%) chỉ là các điểm hình học nằm dọc thân đường để vẽ độ uốn cong</b> "
+                "<b>525,786 điểm (90.97%) chỉ là các điểm hình học nằm dọc thân đường để vẽ độ uốn cong</b> "
                 "(<i>shape points</i>), hoàn toàn không phải ngã rẽ giao lộ. Hệ thống lọc bỏ toàn bộ các điểm uốn cong "
-                "trung gian này và giữ lại đúng <b>52,425 giao lộ thực sự</b>. Tiếp đó, hệ thống dựng <b>đồ thị nối "
-                "đoạn đường có hướng</b> (mỗi đoạn đường trong <b>84,633 đoạn</b> là 1 đỉnh; hai đoạn nối với nhau khi "
-                "điểm cuối đoạn trước trùng điểm đầu đoạn sau, tạo thành <b>151,929 hướng rẽ hợp lệ</b> và <b>48 đoạn "
-                "cụt</b> không có lối ra) rồi chạy 25 vòng lặp PageRank (hệ số cản β = 0.85):"
+                "trung gian này và giữ lại đúng <b>52,181 giao lộ thực sự</b>. Tiếp đó, hệ thống dựng <b>đồ thị nối "
+                "đoạn đường có hướng (loại bỏ U-turn)</b>: mỗi đoạn trong <b>84,206 đoạn cơ giới</b> là 1 đỉnh; hai "
+                "đoạn nối với nhau khi điểm cuối đoạn trước trùng điểm đầu đoạn sau, tạo thành <b>92,453 hướng rẽ hợp "
+                "lệ</b> và <b>314 đoạn cụt</b> không có lối ra, rồi chạy 25 vòng lặp PageRank (hệ số cản β = 0.85):"
             ),
             s["body"],
         )
@@ -1679,8 +1695,8 @@ def _append_ch4_graph_patterns_and_kmeans(story: list, s: dict[str, ParagraphSty
     story.append(
         make_equation_box(
             CHART_DIR / "eq_pagerank.png",
-            "<b>Bảo toàn tổng điểm PageRank toàn mạng lưới:</b> Nhờ chia đều lại xác suất của 48 đoạn cụt "
-            "ở mỗi vòng lặp, tổng điểm PageRank trên toàn bộ 84,633 đoạn đường bảo toàn đúng bằng <b>84,633.0</b>.",
+            "<b>Bảo toàn tổng điểm PageRank toàn mạng lưới:</b> Nhờ chia đều lại xác suất của 314 đoạn cụt "
+            "ở mỗi vòng lặp, tổng điểm PageRank trên toàn bộ 84,206 đoạn cơ giới bảo toàn đúng bằng <b>84,206.0</b>.",
             s,
         )
     )
@@ -1689,93 +1705,93 @@ def _append_ch4_graph_patterns_and_kmeans(story: list, s: dict[str, ParagraphSty
     pr_rows = [
         [
             "#1",
-            "61781",
-            "Phú Định",
-            "Cấp 4",
-            "3 → 2",
-            "3.7515",
-            "Cửa ngõ hội tụ luồng xe tải và kho bãi ven kênh Quận 6 – Quận 8",
-        ],
-        [
-            "#2",
-            "50017",
-            "Lê Lai",
-            "Cấp 4",
-            "2 → 2",
-            "3.4650",
-            "Hành lang gom lưu lượng hướng thẳng về chợ Bến Thành – Quận 1",
-        ],
-        [
-            "#3",
-            "62682",
-            "Châu Văn Liêm",
-            "Cấp 3",
-            "3 → 2",
-            "2.9246",
-            "Trục thương mại huyết mạch kết nối khu vực Chợ Lớn – Quận 5",
-        ],
-        [
-            "#4",
             "21969",
             "Nguyễn Kiệm",
             "Cấp 2",
             "3 → 1",
-            "2.7313",
-            "Nút cổ chai chụm 3 nhánh vào 1 hướng về vòng xoay Tân Sơn Nhất",
+            "2.7799",
+            "Nút cổ chai chụm 3 nhánh vào 1 hướng về vòng xoay Tân Sơn Nhất (Observed)",
         ],
         [
-            "#5",
+            "#2",
+            "37345",
+            "Cầu vượt Ngã tư Gò Dưa",
+            "Cấp 3",
+            "2 → 1",
+            "2.7196",
+            "Nút thắt cửa ngõ cầu vượt Quốc lộ 1 – Thủ Đức (Cold-Start, 0 GPS)",
+        ],
+        [
+            "#3",
             "34723",
             "Quốc lộ 1",
             "Cấp 1",
             "2 → 1",
-            "2.6430",
-            "Trục vành đai liên tỉnh chịu tải trọng xe vận tải hàng hóa lớn",
+            "2.6894",
+            "Trục vành đai liên tỉnh chịu tải xe vận tải hàng hóa lớn (Cold-Start)",
+        ],
+        [
+            "#4",
+            "40948",
+            "Quốc lộ 1",
+            "Cấp 1",
+            "2 → 1",
+            "2.6516",
+            "Nhánh gom tuyến vành đai phía Đông – Thủ Đức",
+        ],
+        [
+            "#5",
+            "81815",
+            "Song Hành Xa lộ Hà Nội",
+            "Cấp 4",
+            "2 → 2",
+            "2.6508",
+            "Hành lang gom lưu lượng khu Đông dọc Xa lộ Hà Nội (Observed)",
         ],
         [
             "#6",
-            "69417",
-            "Lê Văn Chí",
-            "Cấp 4",
-            "3 → 2",
-            "2.6031",
-            "Nhánh kết nối khu công nghệ cao và cụm đại học cửa ngõ Thủ Đức",
+            "41134",
+            "Dương Bá Trạc",
+            "Cấp 2",
+            "2 → 1",
+            "2.6435",
+            "Đoạn dẫn qua cầu Kênh Xáng kết nối Quận 8 vào trung tâm Quận 5",
         ],
         [
             "#7",
-            "17428",
-            "Lê Văn Chí",
-            "Cấp 4",
-            "3 → 2",
-            "2.6031",
-            "Đoạn đối xứng phân luồng tại giao lộ Lê Văn Chí – Linh Trung",
+            "15011",
+            "Phan Đăng Lưu",
+            "Cấp 2",
+            "2 → 2",
+            "2.6159",
+            "Trục huyết mạch quận Phú Nhuận – Bình Thạnh hướng Ngã tư Hàng Xanh",
         ],
         [
             "#8",
-            "50018",
-            "Lê Lai",
-            "Cấp 4",
-            "3 → 1",
-            "2.5843",
-            "Nhánh tiếp cận trực tiếp giao lộ Phạm Hồng Thái – Ngã sáu Phù Đổng",
+            "40916",
+            "Quốc lộ 1",
+            "Cấp 1",
+            "2 → 1",
+            "2.5677",
+            "Đoạn nối vành đai tập trung lưu lượng liên quận cửa ngõ Tây – Bắc",
         ],
         [
             "#9",
-            "21160",
-            "Phạm Hồng Thái",
-            "Cấp 4",
-            "3 → 1",
-            "2.5843",
-            "Nút chuyển tiếp dòng xe nội đô Quận 1 từ hành lang Lê Lai",
+            "30616",
+            "Quốc Lộ 50",
+            "Cấp 3",
+            "2 → 1",
+            "2.5502",
+            "Trục kết nối Bình Chánh – Quận 8 qua cửa ngõ Tây Nam",
         ],
         [
             "#10",
-            "77224",
-            "Kha Vạn Cân",
-            "Cấp 4",
-            "3 → 3",
-            "2.5599",
-            "Giao điểm trung chuyển mật độ cao dọc hành lang đường sắt Thủ Đức",
+            "51321",
+            "Hoàng Văn Thụ",
+            "Cấp 2",
+            "3 → 2",
+            "2.5432",
+            "Hành lang cửa ngõ sân bay Tân Sơn Nhất (chụm 3 nhánh vào 2)",
         ],
     ]
     story.append(
@@ -1790,7 +1806,7 @@ def _append_ch4_graph_patterns_and_kmeans(story: list, s: dict[str, ParagraphSty
                 "Ý nghĩa Cấu trúc Giao thông Thực tế (UC-3)",
             ],
             pr_rows,
-            [36, 44, 84, 36, 44, 54, 217],
+            [36, 44, 88, 36, 44, 52, 215],
             s,
         )
     )
@@ -1801,11 +1817,11 @@ def _append_ch4_graph_patterns_and_kmeans(story: list, s: dict[str, ParagraphSty
     story.append(
         Paragraph(
             (
-                "Mỗi khung 30 phút tạo thành một giỏ gồm tất cả các tuyến đường đã chuẩn hóa dấu tiếng Việt NFC đang "
-                "bị kẹt cứng (<i>LOS E/F</i>), giữ nguyên toàn bộ giỏ thực tế (tối đa <b>57 tuyến/khung</b>). Trên "
-                "<i>Apache Spark 3.5.7</i>, thuật toán <b>FPGrowth</b> tìm ra <b>286 tập phổ biến</b> và <b>335 luật "
-                "kết hợp</b>; thuật toán phân tán <b>2-Pass SON</b> trích xuất 30 luật kẹt đồng thời hai chiều và 20 "
-                "luật kẹt nối tiếp sau 30 phút:"
+                "Mỗi khung 30 phút tạo một giỏ gồm tất cả tuyến đường cơ giới đã chuẩn hóa dấu tiếng Việt NFC "
+                "đang bị kẹt cứng (<i>LOS E/F</i>; đã loại R3 Phường/Quận). Trên <i>Apache Spark 3.5.7</i>, thuật toán "
+                "<b>FPGrowth</b> tìm ra <b>335 luật kết hợp</b>; thuật toán <b>2-Pass SON</b> trích xuất "
+                "<b>12 luật kẹt đồng thời</b> hai chiều và <b>14 luật kẹt nối tiếp sau 30 phút</b> (đã kiểm soát "
+                "tính tự trễ <i>persistence_controlled = True</i> để tránh trùng lặp quán tính cùng tuyến):"
             ),
             s["body"],
         )
@@ -1813,67 +1829,67 @@ def _append_ch4_graph_patterns_and_kmeans(story: list, s: dict[str, ParagraphSty
     rule_rows = [
         [
             "Đồng thời (t ↔ t)",
-            "Lý Chính Thắng ↔ Nguyễn Thông (8 cửa sổ)",
-            "0.0233",
-            "100.0% / 66.7%",
-            "28.5833x",
-            "Hai trục giao cắt kênh Nhiêu Lộc – Quận 3",
-        ],
-        [
-            "Đồng thời (t ↔ t)",
-            "Cầu vượt Lý Thái Tổ - NTP ↔ Lý Thái Tổ (8 cửa sổ)",
-            "0.0233",
-            "80.0% / 50.0%",
-            "17.1500x",
-            "Ùn ứ lan giữa mặt cầu vượt và nhánh dẫn dưới",
-        ],
-        [
-            "Đồng thời (t ↔ t)",
-            "Cao Thắng ↔ Cống Quỳnh (10 cửa sổ)",
+            "Nguyễn Thị Minh Khai ↔ Cống Quỳnh (9 cửa sổ)",
             "0.0292",
-            "83.3% / 55.6%",
-            "15.8796x",
-            "Liên thông cụm giao lộ Quận 3 – Quận 1",
+            "69.2% / 64.3%",
+            "15.2308x",
+            "Cụm ngã tư trung tâm Quận 1 – Quận 3",
         ],
         [
             "Đồng thời (t ↔ t)",
-            "Hải Thượng Lãn Ông ↔ 3 Tháng 2 (12 cửa sổ)",
-            "0.0350",
-            "85.7% / 50.0%",
-            "12.2500x",
-            "Tương tác thương mại Chợ Lớn sang Quận 10",
+            "Cống Quỳnh ↔ Trần Hưng Đạo (10 cửa sổ)",
+            "0.0325",
+            "71.4% / 55.6%",
+            "12.2222x",
+            "Nút giao bệnh viện Từ Dũ – trục Trần Hưng Đạo Q.1",
         ],
         [
             "Đồng thời (t ↔ t)",
-            "Cộng Hòa ↔ Trường Chinh (16 cửa sổ)",
-            "0.0466",
-            "88.9% / 64.0%",
-            "12.1956x",
-            "Cặp trục xương sống cửa ngõ Tân Sơn Nhất",
+            "Nguyễn Thị Minh Khai ↔ Trần Hưng Đạo (9 cửa sổ)",
+            "0.0292",
+            "69.2% / 50.0%",
+            "11.8462x",
+            "Cặp hành lang song song dồn lưu lượng vào Q.1",
+        ],
+        [
+            "Đồng thời (t ↔ t)",
+            "Nguyễn Đình Chiểu ↔ Trần Hưng Đạo (8 cửa sổ)",
+            "0.0260",
+            "66.7% / 44.4%",
+            "11.4074x",
+            "Hai trục thương mại đông đúc Q.3 ↔ Q.1",
         ],
         [
             "Trễ (t → t+30p)",
-            "Nguyễn Ngọc Lộc (t) → Hải Thượng Lãn Ông (t+30p)",
-            "0.0127",
-            "83.3% (5 cửa sổ)",
-            "32.9167x",
-            "Giả thuyết sóng ùn tắc từ Q.10 xuống Q.5",
+            "Lê Quang Định (t) → Trần Quang Khải (t+30p)",
+            "0.0298",
+            "71.4% (5 cửa sổ)",
+            "24.0000x",
+            "Giả thuyết dòng xe Bình Thạnh đổ vào Q.1",
         ],
         [
             "Trễ (t → t+30p)",
             "Lê Quang Định (t) → Trần Quốc Toản (t+30p)",
-            "0.0127",
-            "41.7% (5 cửa sổ)",
-            "32.9167x",
-            "Giả thuyết dòng xe Bình Thạnh đổ vào Q.3",
+            "0.0298",
+            "71.4% (5 cửa sổ)",
+            "24.0000x",
+            "Giả thuyết làn xe di chuyển qua Q.3 sau 30 phút",
         ],
         [
             "Trễ (t → t+30p)",
-            "Nguyễn Văn Đậu (t) → Trần Hưng Đạo (t+30p)",
-            "0.0127",
-            "100.0% (5 cửa sổ)",
-            "24.6875x",
-            "Giả thuyết tín hiệu báo trước hành lang Nam",
+            "Lê Quang Định (t) → Trần Quốc Thảo (t+30p)",
+            "0.0298",
+            "71.4% (5 cửa sổ)",
+            "20.0000x",
+            "Giả thuyết dồn ứ hướng cầu Lê Văn Sỹ – Q.3",
+        ],
+        [
+            "Trễ (t → t+30p)",
+            "Nguyễn Thái Sơn (t) → Trần Quang Khải (t+30p)",
+            "0.0298",
+            "55.6% (5 cửa sổ)",
+            "18.6667x",
+            "Giả thuyết luồng xe từ Gò Vấp về Quận 1",
         ],
     ]
     story.append(
@@ -1896,11 +1912,11 @@ def _append_ch4_graph_patterns_and_kmeans(story: list, s: dict[str, ParagraphSty
         make_callout(
             (
                 "<b>Đánh giá trung thực về hạn chế cỡ mẫu nhỏ:</b> Các luật lan truyền sau 30 phút có hệ số Lift cao "
-                "(tới 32.9167x) nhưng thực chất chỉ cùng xuất hiện trong <b>5 đến 8 cửa sổ 30 phút</b> (tương đương "
-                "<b>2.5–4.0 giờ quan sát</b> trong suốt 10 tháng) do độ phủ GPS gốc thưa (11.85%). Với cỡ mẫu nhỏ như "
-                "vậy, chưa thể loại trừ sự trùng hợp ngẫu nhiên vào giờ cao điểm chung. Vì thế, hệ thống chỉ xem các "
-                "luật trễ này là <b>giả thuyết cảnh báo thăm dò</b> kết hợp đối chiếu trên bản đồ giao lộ chứ không "
-                "dùng làm quy luật cứng."
+                "(tới 24.0000x khi đã kiểm soát persistence) nhưng chỉ cùng xuất hiện trong <b>5 đến 8 cửa sổ "
+                "30 phút</b> (tương đương <b>2.5–4.0 giờ quan sát</b> trong suốt 10 tháng) do độ phủ GPS gốc thưa "
+                "(11.87%). Với cỡ mẫu nhỏ như vậy, chưa thể loại trừ sự trùng hợp ngẫu nhiên giờ cao điểm chung. Vì "
+                "thế, hệ thống chỉ xem 14 luật trễ này là <b>giả thuyết cảnh báo thăm dò</b> kết hợp đối chiếu trên "
+                "bản đồ giao lộ chứ không dùng làm quy luật cứng."
             ),
             s,
             bg=WARN_BG,
@@ -1909,16 +1925,19 @@ def _append_ch4_graph_patterns_and_kmeans(story: list, s: dict[str, ParagraphSty
     )
 
     story.append(
-        Paragraph("4.3. Phân 6 Nhóm Hành Vi Đường Phố Bằng K-Means (Học Trên TRAIN) Phủ Kín 84,633 Đoạn Đường", s["h2"])
+        Paragraph(
+            "4.3. Phân 6 Nhóm Hành Vi Đường Phố Bằng K-Means (Organic Train-Only) Phủ Kín 84,206 Đoạn Cơ Giới",
+            s["h2"],
+        )
     )
     story.append(
         Paragraph(
             (
-                "Thuật toán <b>StandardScaler + KMeans(k=6, seed=42)</b> chỉ học trên <b>6,926 đoạn đường thuộc tập "
-                "TRAIN</b> trong không gian 7 đặc trưng chuẩn hóa, đạt <b>Silhouette = 0.2853</b>, "
-                "<b>Davies-Bouldin = 1.1181</b> và <b>Calinski-Harabasz = 2,044.85</b>. Từ các tâm cụm này, toàn bộ "
-                "<b>84,633 đoạn đường</b> (gồm cả <b>74,606 đoạn thiếu GPS</b>) được gán nhóm hành vi đầy đủ để phục "
-                "vụ tra cứu đoạn tương đồng và truyền sang mô hình dự báo ở Chương 5:"
+                "Thuật toán <b>StandardScaler + KMeans(k=6, seed=42)</b> chỉ học trên <b>3,609 đoạn đường thuộc tập "
+                "organic TRAIN</b> (kích thước cụm trên TRAIN: 361 / 1,147 / 1,017 / 142 / 711 / 231) trong không gian "
+                "7 đặc trưng chuẩn hóa, đạt <b>Silhouette = 0.2197</b>, <b>Davies-Bouldin = 1.3592</b> và "
+                "<b>Calinski-Harabasz = 767.58</b>. Từ tâm cụm này, toàn bộ <b>84,206 đoạn cơ giới</b> (9,995 có GPS "
+                "&amp; <b>74,211 đoạn Cold-Start</b>) được gán nhóm hành vi đầy đủ để phục vụ tra cứu đoạn tương đồng:"
             ),
             s["body"],
         )
@@ -1927,70 +1946,70 @@ def _append_ch4_graph_patterns_and_kmeans(story: list, s: dict[str, ParagraphSty
         story,
         CHART_DIR / "map_hcmc_clusters_7d.png",
         0.52,
-        "Hình 4.1. Bản đồ 6 nhóm hành vi đường phố (K-Means, k = 6) phủ kín 100% mạng lưới 84,633 đoạn đường TP.HCM "
-        "trên nền sông Sài Gòn và các quận.",
+        "Hình 4.1. Bản đồ 6 nhóm hành vi đường phố (K-Means, k = 6) phủ kín 100% mạng lưới 84,206 đoạn đường cơ giới "
+        "TP.HCM trên nền sông Sài Gòn và các quận.",
         s,
     )
     cl_rows = [
         [
             "Nhóm 0",
-            "1,130",
-            "19.12 km/h",
-            "52.68 km/h",
-            "54.16%",
-            "0.6372",
-            "2,803 / 56,846",
-            "Đường nhánh & hẻm dân cư tốc độ thấp, dễ nghẽn cục bộ",
+            "2,936",
+            "46.49 km/h",
+            "71.56 km/h",
+            "15.19%",
+            "1.0045",
+            "540 / 3,161",
+            "Đại lộ / Quốc lộ Vmax cao (71.56 km/h), đoạn ~53.9m, E/F vừa",
         ],
         [
             "Nhóm 1",
-            "2,420",
-            "10.52 km/h",
-            "36.36 km/h",
-            "96.98%",
-            "1.0219",
-            "946 / 1,406",
-            "Giao lộ nội đô nghẽn mãn tính (đoạn ngắn ~26.8m sát ngã tư)",
+            "9,875",
+            "33.19 km/h",
+            "45.47 km/h",
+            "21.22%",
+            "0.9554",
+            "2,713 / 34,502",
+            "Đường nhánh & hẻm dân cư rộng khắp (phủ 34,502 đoạn Cold-Start)",
         ],
         [
             "Nhóm 2",
-            "19,006",
-            "44.25 km/h",
-            "50.14 km/h",
-            "3.54%",
-            "1.0041",
-            "349 / 3,448",
-            "Hành lang lưu thông thông thoáng ổn định (LOS A/B chủ đạo)",
+            "10,621",
+            "21.05 km/h",
+            "45.90 km/h",
+            "42.01%",
+            "0.9904",
+            "1,483 / 3,889",
+            "Trục nội đô hay ùn ứ giờ cao điểm (tỷ lệ kẹt E/F cao nhất 42.01%)",
         ],
         [
             "Nhóm 3",
-            "300",
-            "14.86 km/h",
-            "44.31 km/h",
-            "81.33%",
-            "0.9796",
-            "2,672 / 4,123",
-            "Đoạn đường dài (~188.3m) chịu tải dồn ứ giờ cao điểm",
+            "1,061",
+            "41.69 km/h",
+            "58.67 km/h",
+            "10.18%",
+            "0.9946",
+            "305 / 2,585",
+            "Đoạn đường dài (~235.7m) tốc độ thiết kế khá, ít kẹt",
         ],
         [
             "Nhóm 4",
-            "4,460",
-            "24.68 km/h",
-            "79.26 km/h",
-            "33.59%",
-            "1.1077",
-            "2,842 / 7,276",
-            "Trục đại lộ / quốc lộ cấp 1 tốc độ thiết kế cao, PageRank lớn",
+            "6,830",
+            "47.65 km/h",
+            "49.87 km/h",
+            "2.61%",
+            "1.0020",
+            "4,342 / 28,034",
+            "Hành lang lưu thông thông thoáng ổn định nhất (E/F chỉ 2.61%)",
         ],
         [
             "Nhóm 5",
-            "6,125",
-            "19.10 km/h",
-            "38.88 km/h",
-            "41.53%",
-            "0.9967",
-            "415 / 1,507",
-            "Tuyến phố thương mại cấp 3–4 dao động mạnh theo khung giờ",
+            "2,071",
+            "29.45 km/h",
+            "48.85 km/h",
+            "29.74%",
+            "1.6203",
+            "612 / 2,040",
+            "Nút cổ chai PageRank cao nhất (TB 1.6203), nhạy cảm dồn ứ ngã tư",
         ],
     ]
     story.append(
@@ -2024,12 +2043,12 @@ def _append_ch4_graph_patterns_and_kmeans(story: list, s: dict[str, ParagraphSty
             (
                 "<b>Limitations &amp; Risks (Mục 7B Batch Graph Mining &amp; Cold-Start Clustering):</b> "
                 "<b>(1) Cỡ mẫu nhỏ của các luật lan truyền trễ (+30m SON / FPGrowth):</b> Như đã phân tích ở Mục 4.2, "
-                "các luật kẹt nối tiếp sau 30 phút chỉ xuất hiện trong 5 đến 8 cửa sổ (2.5–4.0 giờ quan sát) do độ phủ "
+                "14 luật kẹt nối tiếp sau 30 phút chỉ xuất hiện trong 5 đến 8 cửa sổ (2.5–4.0 giờ quan sát) do độ phủ "
                 "GPS thưa; nếu áp dụng máy móc như quy luật cứng sẽ dẫn đến báo động giả vào giờ cao điểm. "
-                "<b>(2) Trọng số chuyển tiếp đồng nhất trong Line-Graph PageRank:</b> Đồ thị đoạn đường hiện chia đều "
-                "xác suất rẽ tại mỗi giao lộ theo bậc ra (<i>1 / out_degree</i>) vì bản đồ OpenStreetMap thiếu dữ liệu "
-                "đếm lưu lượng rẽ thực tế theo làn. "
-                "<b>(3) Đặc trưng tĩnh trên vùng Cold-Start (74,606 đoạn):</b> Nhãn cụm <i>7D K-Means</i> cho 88.15% "
+                "<b>(2) Trọng số chuyển tiếp đồng nhất trong Line-Graph PageRank:</b> Đồ thị đoạn đường (92,453 cạnh "
+                "không U-turn) hiện chia đều xác suất rẽ tại mỗi giao lộ theo bậc ra (<i>1 / out_degree</i>) vì bản đồ "
+                "OpenStreetMap thiếu dữ liệu đếm lưu lượng rẽ thực tế theo làn. "
+                "<b>(3) Đặc trưng tĩnh trên vùng Cold-Start (74,211 đoạn):</b> Nhãn cụm <i>7D K-Means</i> cho 88.13% "
                 "đoạn đường không có GPS dựa trên cấu trúc hình học và tốc độ tối đa suy diễn theo cấp đường, do đó "
                 "chưa phân biệt được các đoạn hẻm có họp chợ tự phát hay rào chắn tạm thời."
             ),
@@ -2052,11 +2071,11 @@ def _append_ch5_forecasting_and_ablation(story: list, s: dict[str, ParagraphStyl
     story.append(
         Paragraph(
             (
-                "Do xe gửi GPS ngắt quãng (15,516 / 23,414 cặp liên tiếp cách nhau từ 60 phút đến nhiều ngày), nếu "
-                "dùng lệnh trượt dòng tuần tự <i>shift(-1)</i> thì mô hình sẽ học sai thời điểm. Vì vậy, hệ thống chỉ "
-                "ghép nhãn bằng phép nối chính xác trên khóa <b>(segment_id, slot_ts + 30 phút)</b>, thu được đúng "
-                "<b>7,898 cặp chuẩn xác cách nhau 30 phút</b>, rồi chia theo trình tự thời gian 70/15/15 kèm cắt bỏ "
-                "các mẫu sát ranh giới có nhãn vắt sang tập sau:"
+                "Do xe gửi GPS ngắt quãng (15,514 / 23,399 cặp liên tiếp cách nhau ≥ 60 phút = 66.30%), "
+                "nếu dùng lệnh trượt dòng tuần tự <i>shift(-1)</i> thì mô hình sẽ học sai thời điểm. Hệ thống chỉ "
+                "ghép nhãn bằng phép nối chính xác trên khóa <b>(segment_id, slot_ts + 30 phút)</b> thu được "
+                "<b>7,885 cặp chuẩn xác</b>, đồng thời <b>loại 7,192 burst windows tổng hợp (3,596 cặp khỏi TRAIN)</b> "
+                "và cắt các mẫu sát ranh giới có nhãn vắt sang tập sau:"
             ),
             s["body"],
         )
@@ -2069,9 +2088,9 @@ def _append_ch5_forecasting_and_ablation(story: list, s: dict[str, ParagraphStyl
             "Không rò rỉ dữ liệu sang TRAIN/VAL/TEST",
         ],
         [
-            "Tập TRAIN (70%)",
+            "Tập Organic TRAIN",
             "slot_ts ≤ 2020-12-12T08:00:00Z",
-            "5,494 mẫu hợp lệ (đã cắt 50 mẫu sát biên)",
+            "1,885 mẫu tự nhiên (cắt 50 biên & tách 3,596 burst)",
             "max(target_ts) = 2020-12-12T08:00:00Z",
         ],
         [
@@ -2089,9 +2108,9 @@ def _append_ch5_forecasting_and_ablation(story: list, s: dict[str, ParagraphStyl
     ]
     story.append(
         make_table(
-            ["Tập Dữ liệu", "Điều kiện Mốc Thời gian (UTC)", "Quy mô Sau Khi Cắt Biên", "Bảo chứng Chống Rò rỉ"],
+            ["Tập Dữ liệu", "Điều kiện Mốc Thời gian (UTC)", "Quy mô Sau Khi Lọc & Cắt Biên", "Bảo chứng Chống Rò rỉ"],
             split_rows,
-            [82, 168, 148, 117],
+            [82, 168, 152, 113],
             s,
         )
     )
@@ -2109,20 +2128,20 @@ def _append_ch5_forecasting_and_ablation(story: list, s: dict[str, ParagraphStyl
     story.append(Spacer(1, 4))
     feat_rows = [
         [
-            "1. Trạng thái hiện tại &amp; lịch sử gần (7 biến · 79.82%)",
-            "current_los_ordinal (0.5051), mean_velocity (0.2236), trailing_severe_rate (0.0623), lag1_los_ordinal "
-            "(0.0035), velocity_ratio (0.0033), lag2_los_ordinal (0.0004), obs_count (0.0000)",
+            "1. Trạng thái hiện tại &amp; lịch sử gần (7 biến · 76.20%)",
+            "mean_velocity (0.4675), current_los_ordinal (0.1713), velocity_ratio (0.0690), obs_count (0.0256), "
+            "lag1_los_ordinal (0.0145), lag2_los_ordinal (0.0094), trailing_severe_rate (0.0048)",
         ],
         [
-            "2. Chu kỳ giờ Việt Nam &amp; hình học đường (7 biến · 12.18%)",
-            "period_sin (0.1018), period_cos (0.0156), length_m (0.0035), weekday (0.0004), street_level (0.0003), "
-            "max_velocity (0.0001), gap_minutes (0.0001)",
+            "2. Chu kỳ giờ Việt Nam &amp; hình học đường (7 biến · 11.23%)",
+            "period_sin (0.0362), period_cos (0.0266), length_m (0.0155), gap_minutes (0.0140), weekday (0.0107), "
+            "max_velocity (0.0085), street_level (0.0008)",
         ],
         [
-            "3. Đặc trưng bản đồ từ Bước 2 &amp; tỷ lệ kẹt quá khứ (9 biến · 8.00%)",
-            "segment_train_severe_prior (0.0492), segment_train_prior_los (0.0197), pagerank_score (0.0033), "
-            "street_causal_prior_los (0.0023), street_causal_prior_sev (0.0022), neighbor_los_ordinal (0.0016), "
-            "in_degree (0.0005), out_degree (0.0005), cluster_id (0.0004)",
+            "3. Đặc trưng bản đồ từ Bước 2 &amp; tỷ lệ kẹt quá khứ (9 biến · 12.57%)",
+            "pagerank_score (0.0482), neighbor_los_ordinal (0.0273), street_causal_prior_los (0.0142), "
+            "segment_train_prior_los (0.0122), segment_train_severe_prior (0.0107), street_causal_prior_sev (0.0107), "
+            "out_degree (0.0012), cluster_id (0.0009), in_degree (0.0003)",
         ],
     ]
     story.append(
@@ -2136,17 +2155,20 @@ def _append_ch5_forecasting_and_ablation(story: list, s: dict[str, ParagraphStyl
 
     story.append(
         Paragraph(
-            "5.3. Lựa Chọn Mô Hình Duy Nhất Qua Tập Kiểm Định VAL, Bảng Thử Nghiệm 7 Cấu Hình &amp; Ma Trận 6 Mức",
+            "5.3. Tuyển Chọn Qua Live VAL Composite Gate, Tách Burst, Bảng 7 Cấu Hình &amp; Ma Trận 6 Mức",
             s["h2"],
         )
     )
     story.append(
         Paragraph(
             (
-                "Hệ thống thử nghiệm 7 cấu hình ứng viên trên tập TRAIN và dùng tập kiểm định <b>VAL (1,167 mẫu)</b> "
-                "để chọn ra <b>một mô hình đa lớp duy nhất vận hành xuyên suốt toàn hệ thống</b>: cấu hình "
-                "<b>#5 Random Forest (23 biến, có ghép thêm PageRank &amp; K-Means từ Bước 2)</b> dẫn đầu trên tập VAL "
-                "(VAL ROC-AUC = 0.9593, VAL PR-AUC = 0.8704, độ chính xác 6 mức = 0.9529) và được khóa cố định."
+                "Hệ thống thử nghiệm 7 cấu hình ứng viên trên <b>1,885 mẫu organic TRAIN</b> (dùng trọng số lớp căn "
+                "bậc hai sạch <i>cls_w = 0.65</i>; đối chứng ablation tách burst: kèm burst 5,481 mẫu đạt TEST Acc = "
+                "0.9391 / Severe F1 = 0.9372 so với chỉ giữ organic 1,885 mẫu đạt Acc = 0.9289 / Severe F1 = 0.9301) "
+                "và dùng <b>Live VAL Composite Gate = 0.5·Acc + 0.5·PR-AUC</b> trên <b>VAL (1,167 mẫu)</b>: "
+                "<b>#5 Random Forest (23 biến)</b> thắng ở <b>0.8990</b> (VAL Acc = 0.9023, VAL PR-AUC = 0.8957, "
+                "VAL ROC-AUC = 0.9611, VAL Severe F1 = 0.8912, τ = 0.25) so với <b>RF 14D (0.5343)</b> (DT 23D = "
+                "0.8618; DT 14D = 0.4892) nên được chọn làm mô hình vận hành duy nhất."
             ),
             s["body"],
         )
@@ -2166,68 +2188,68 @@ def _append_ch5_forecasting_and_ablation(story: list, s: dict[str, ParagraphStyl
         [
             "2. Cây quyết định Decision Tree (Chỉ biến cục bộ)",
             "14 biến",
-            "0.9425",
-            "0.3794",
-            "0.9362",
-            "0.9514",
-            "0.9437",
-            "0.9856",
-            "0.9482",
+            "0.8832",
+            "0.3767",
+            "0.9467",
+            "0.8649",
+            "0.9040",
+            "0.9833",
+            "0.9296",
         ],
         [
             "3. Cây quyết định Decision Tree (+PageRank &amp; K-Means)",
             "23 biến",
-            "0.9425",
-            "0.3772",
-            "0.9362",
-            "0.9514",
-            "0.9437",
-            "0.9844",
-            "0.9327",
+            "0.8748",
+            "0.3817",
+            "0.9459",
+            "0.7568",
+            "0.8408",
+            "0.9799",
+            "0.9263",
         ],
         [
             "4. Random Forest (Chỉ biến cục bộ &amp; giờ VN)",
             "14 biến",
-            "0.9425",
-            "0.5455",
-            "0.9409",
-            "0.9459",
-            "0.9434",
-            "0.9866",
-            "0.9630",
+            "0.9239",
+            "0.4372",
+            "0.9429",
+            "0.8919",
+            "0.9167",
+            "0.9898",
+            "0.9557",
         ],
         [
             "5. Random Forest (+PageRank, Tỷ lệ quá khứ &amp; K-Means) [Chọn]",
             "23 biến",
-            "0.9450",
-            "0.5543",
-            "0.9358",
-            "0.9459",
-            "0.9409",
-            "0.9882",
-            "0.9471",
+            "0.9289",
+            "0.4475",
+            "0.9251",
+            "0.9351",
+            "0.9301",
+            "0.9900",
+            "0.9595",
         ],
         [
             "6. GBT Nhị phân (Chỉ báo kẹt cứng E/F, biến cục bộ)",
             "14 biến",
             "N/A",
             "N/A",
-            "0.6667",
+            "0.9362",
             "0.9514",
-            "0.7840",
-            "0.9812",
-            "0.9328",
+            "0.9437",
+            "0.9849",
+            "0.9534",
         ],
         [
             "7. GBT Nhị phân (+PageRank, Tỷ lệ quá khứ &amp; K-Means)",
             "23 biến",
             "N/A",
             "N/A",
-            "0.9365",
-            "0.9568",
-            "0.9465",
-            "0.9843",
-            "0.9419",
+            "0.9259",
+            "0.9459",
+            "0.9358",
+            "0.9822",
+            "0.9454",
         ],
     ]
     story.append(
@@ -2252,12 +2274,12 @@ def _append_ch5_forecasting_and_ablation(story: list, s: dict[str, ParagraphStyl
     story.append(Spacer(1, 4))
 
     cm_rows = [
-        ["Thực tế LOS A (959 · 81.13%)", "944", "9", "2", "0", "0", "4"],
-        ["Thực tế LOS B (10 · 0.85%)", "3", "4", "1", "0", "1", "1"],
-        ["Thực tế LOS C (15 · 1.27%)", "6", "0", "3", "1", "1", "4"],
-        ["Thực tế LOS D (13 · 1.10%)", "2", "1", "2", "7", "1", "0"],
-        ["Thực tế LOS E (20 · 1.69%)", "1", "1", "0", "3", "6", "9"],
-        ["Thực tế LOS F (165 · 13.96%)", "1", "1", "1", "2", "7", "153"],
+        ["Thực tế LOS A (959 · 81.13%)", "937", "14", "0", "4", "0", "4"],
+        ["Thực tế LOS B (10 · 0.85%)", "2", "4", "0", "2", "0", "2"],
+        ["Thực tế LOS C (15 · 1.27%)", "6", "0", "1", "5", "0", "3"],
+        ["Thực tế LOS D (13 · 1.10%)", "2", "1", "2", "7", "0", "1"],
+        ["Thực tế LOS E (20 · 1.69%)", "1", "0", "2", "7", "2", "8"],
+        ["Thực tế LOS F (165 · 13.96%)", "1", "2", "1", "4", "10", "147"],
     ]
     story.append(
         KeepTogether(
@@ -2277,8 +2299,9 @@ def _append_ch5_forecasting_and_ablation(story: list, s: dict[str, ParagraphStyl
                     s,
                 ),
                 Paragraph(
-                    "Bảng 5.4. Kết quả phân loại từng mức LOS A–F trên 1,182 mẫu TEST của mô hình chính Random Forest "
-                    "(23 biến): đường chéo chính đạt [944, 4, 3, 7, 6, 153], nhận diện được cả 6 mức giao thông.",
+                    "Bảng 5.4. Kết quả phân loại từng mức LOS A–F trên 1,182 mẫu TEST của Random Forest (23 biến): "
+                    "đường chéo chính [937, 4, 1, 7, 2, 147] nhận diện đủ cả 6 lớp (ROC-AUC 95% CI [0.9836, 0.9953], "
+                    "Severe F1 95% CI [0.9012, 0.9547]); Macro-F1 = 0.4475 do lớp B–E rất thưa (10–20 mẫu).",
                     s["caption"],
                 ),
             ]
@@ -2304,12 +2327,12 @@ def _append_ch5_forecasting_and_ablation(story: list, s: dict[str, ParagraphStyl
             (
                 "Nhìn vào bảng tổng gộp 1,182 mẫu kiểm thử ở trên, cách đoán đơn giản <b>Baseline</b> (hiện tại đường "
                 "đang ở mức nào thì đoán 30 phút nữa giữ nguyên mức đó) đạt độ chính xác 6 mức tới <b>94.84%</b> "
-                "(nhỉnh hơn 94.50% của Random Forest đúng 4 mẫu). Nguyên nhân rất rõ ràng: <b>94.84% thời gian "
-                "(1,121 / 1,182 mẫu) đoạn đường giữ nguyên trạng thái sau 30 phút</b> (riêng đường thông thoáng mức A "
-                "đã chiếm 81.13%). Tuy nhiên, ở <b>5.16% thời điểm giao thông thực sự chuyển trạng thái</b> "
-                "(61 trường hợp từ thoáng sang đông/kẹt hoặc ngược lại), khi tín hiệu GPS bị đứt quãng, và trên "
-                "<b>88.15% đoạn đường thiếu GPS</b>, phép so sánh trực diện 1-đối-1 dưới đây chỉ rõ sự khác biệt "
-                "cốt lõi giữa Baseline và mô hình chính <b>Random Forest (23 biến)</b>:"
+                "(so với 92.89% của Random Forest sau khi tách chuỗi burst khỏi tập huấn luyện). Nguyên nhân rất rõ "
+                "ràng: <b>94.84% thời gian (1,121 / 1,182 mẫu) đoạn đường giữ nguyên trạng thái sau 30 phút</b> "
+                "(riêng đường thông thoáng mức A đã chiếm 81.13%). Tuy nhiên, ở <b>5.16% thời điểm giao thông thực sự "
+                "chuyển trạng thái</b> (61 trường hợp từ thoáng sang đông/kẹt hoặc ngược lại), khi tín hiệu GPS bị "
+                "đứt quãng, và trên <b>88.13% đoạn đường thiếu GPS</b>, phép so sánh trực diện 1-đối-1 dưới đây chỉ "
+                "rõ ưu thế có ý nghĩa thống kê của mô hình chính <b>Random Forest (23 biến)</b>:"
             ),
             s["body"],
         )
@@ -2317,35 +2340,37 @@ def _append_ch5_forecasting_and_ablation(story: list, s: dict[str, ParagraphStyl
     tr_rows = [
         [
             "1. Nhóm đổi trạng thái\nLOS(t) ≠ LOS(t+30p)\n(61 / 1,182 mẫu TEST)",
-            "Đoán đúng mức mới: 0 / 61 (0.00%)\nPhát hiện biến động: ROC-AUC = 0.5000\n"
+            "Đoán đúng mức mới: 0 / 61 (0.00%)\nDetect biến động ROC-AUC = 0.5000\n"
             "PR-AUC kẹt cứng = 0.5408\nSai số xác suất Brier = 0.3279",
-            "Phát hiện biến động: ROC-AUC = 0.7664\nĐoán đúng mức mới: 9 / 61 (14.75% ở ngưỡng VAL τ=0.30; "
-            "mặc định 2 / 61 = 3.28%)\nXếp đúng hướng mới vị trí #1: 24 / 61 (39.34%)\n"
-            "PR-AUC kẹt cứng = 0.5708 · Brier = 0.2948",
-            "Baseline mù hoàn toàn (sai 100%) mỗi khi giao thông đổi pha; Random Forest phát hiện sớm tín hiệu "
-            "biến động và giảm 10.1% sai số xác suất.",
+            "Detect biến động: ROC-AUC = 0.9146 (PR-AUC = 0.4554; vs DT 0.7996)\n"
+            "Đoán đúng mức mới: 12 / 61 (19.67% ở ngưỡng VAL τ=0.40; mặc định 7/61 = 11.48%)\n"
+            "Top-1 hướng mới: 19 / 61 (31.15%) · PR-AUC = 0.6223 · Brier = 0.2872",
+            "Baseline mù 100% (0/61); RF vượt trội có ý nghĩa thống kê (McNemar 7 vs 0, p = 0.0156) & giảm "
+            "12.4% sai số xác suất Brier.",
         ],
         [
             "2. Đường đang thoáng (A–D)\nđột ngột hóa kẹt cứng (E–F)\n(chỉ có 8 / 993 mẫu TEST)",
             "Bắt trúng ở ngưỡng cứng: 0 / 8 (0.00%)\nGán xác suất kẹt = 0% đồng loạt cho mọi đoạn đường mức A–D",
             "Bắt trúng ở ngưỡng cứng mặc định: 0 / 8 (0.00% do cỡ mẫu quá hiếm 0.81%)\n"
-            "Xếp hạng rủi ro theo xác suất: ROC-AUC = 0.8136; xác suất cảnh báo trung bình tăng gấp 9.35x "
-            "(3.46% so với 0.37% đường thoáng ổn định)",
-            "Ghi nhận trung thực: với vỏn vẹn 8 ca đột ngột trong tập TEST, ngưỡng cứng chưa bắt kịp, nhưng xác "
-            "suất rủi ro của Random Forest vẫn tăng vọt gấp 9.35 lần để ưu tiên kiểm tra sớm.",
+            "Xếp hạng rủi ro theo xác suất: Onset ROC-AUC = 0.8539; xác suất cảnh báo tăng 3.32x "
+            "(8.23% so với 2.48% đường thoáng ổn định)",
+            "Ghi nhận trung thực: với vỏn vẹn 8 ca đột ngột trong TEST, ngưỡng cứng chưa bắt kịp, nhưng xác "
+            "suất rủi ro của Random Forest tăng 3.32x.",
         ],
         [
-            "3. Tín hiệu GPS ngắt quãng\ncách nhau trên 30 phút\n(3,513 mẫu · 47.45% đổi mức)",
-            "PR-AUC kẹt cứng = 0.6369\nROC-AUC = 0.7850\n(quán tính cũ mất tác dụng khi ngắt quãng lâu)",
-            "PR-AUC kẹt cứng = 0.7082 (+7.13%)\nROC-AUC = 0.8427 (+5.77%)\n(đối chiếu chuẩn lịch sử: PR-AUC = 0.7628)",
-            "Khi xe gửi tín hiệu thưa (chiếm 66.27% thực tế), các biến chu kỳ giờ Việt Nam + PageRank + K-Means "
-            "giúp Random Forest vượt xa Baseline.",
+            "3. Tín hiệu GPS ngắt quãng\ncách nhau trên 30 phút\n(3,605 mẫu · 49.21% đổi mức)",
+            "PR-AUC kẹt cứng = 0.5732\nROC-AUC = 0.7940\n(quán tính cũ mất tác dụng khi ngắt quãng lâu)",
+            "PR-AUC kẹt cứng = 0.6293 (+5.61 điểm)\nROC-AUC = 0.7848\n"
+            "(chu kỳ giờ VN + PageRank + K-Means)",
+            "Khi xe gửi tín hiệu thưa (chiếm 66.30% thực tế), các biến chu kỳ giờ Việt Nam + đồ thị giúp RF vượt "
+            "xa Baseline về PR-AUC (+5.61%).",
         ],
         [
-            "4. Vùng mù thiếu cảm biến\ntrên toàn mạng lưới TP.HCM\n(74,606 / 84,633 đoạn đường)",
-            "Độ phủ dự báo = 0.0%\n(không thể chạy vì không có mức LOS hiện tại trên đường)",
-            "Độ phủ dự báo = 100.0% (đủ 84,633 đoạn)\nnhờ ghép trực tiếp kho đặc trưng bản đồ tĩnh từ Bước 2",
-            "Chỉ duy nhất Random Forest (23 biến) mới chấm điểm rủi ro được cho 88.15% mạng lưới đường nhánh "
+            "4. Vùng mù thiếu cảm biến\ntrên toàn mạng lưới TP.HCM\n(74,211 / 84,206 đoạn cơ giới)",
+            "Độ phủ dự báo = 11.87% (Cold-Start = 0.0%)\n(không thể chạy vì không có LOS hiện tại trên đường)",
+            "Độ phủ dự báo = 100.0% (đủ 84,206 đoạn cơ giới)\n"
+            "Masked-GPS Proxy: 6-Class Acc = 0.5271, ROC-AUC = 0.6175, PR-AUC = 0.4282",
+            "Chỉ duy nhất Random Forest (23 biến) mới chấm điểm rủi ro được cho 88.13% mạng lưới đường nhánh "
             "chưa có xe gửi GPS.",
         ],
     ]
@@ -2364,10 +2389,9 @@ def _append_ch5_forecasting_and_ablation(story: list, s: dict[str, ParagraphStyl
                     s,
                 ),
                 Paragraph(
-                    "Bảng 5.5. Đối chứng trực diện 1-đối-1 giữa Baseline và mô hình duy nhất được hệ thống lựa chọn "
-                    "(Random Forest 23 biến), không pha trộn các mô hình phụ. Mọi con số giới hạn thực nghiệm (như "
-                    "2/61 mặc định → 9/61 sau hiệu chỉnh ngưỡng VAL, hay Recall cứng 0/8 trên nhóm đột ngột hóa kẹt "
-                    "cứng hiếm gặp) đều được báo cáo đầy đủ, minh bạch.",
+                    "Bảng 5.5. Đối chứng trực diện 1-đối-1 giữa Baseline và mô hình duy nhất được lựa chọn trên Live "
+                    "VAL Gate (Random Forest 23 biến). Mọi giới hạn thực nghiệm (7/61 mặc định → 12/61 ở τ=0.40, "
+                    "McNemar p=0.0156, Hard Recall 0/8 ca khởi phát hiếm & Macro-F1 = 0.4475) được báo cáo minh bạch.",
                     s["caption"],
                 ),
             ]
@@ -2392,17 +2416,14 @@ def _append_ch5_forecasting_and_ablation(story: list, s: dict[str, ParagraphStyl
             (
                 "<b>Limitations &amp; Risks (Mục 6 Modeling &amp; Mục 9 Experiments):</b> "
                 "<b>(1) Độ nhạy ngưỡng cứng trên các ca đột ngột hóa kẹt cứng (Sudden Severe Onset Recall = 0 / "
-                "8):</b> "
-                "Do trong 993 mẫu TEST đang thông thoáng (LOS A–D) chỉ có đúng 8 mẫu (0.81%) đột ngột chuyển sang kẹt "
-                "cứng (LOS E–F) sau 30 phút, bộ phân lớp ở ngưỡng cứng mặc định (0.50) chưa bắt trúng ca nào (0/8), dù "
-                "xác suất rủi ro trung bình do Random Forest xuất ra tăng gấp 9.35x (ROC-AUC = 0.8136). "
-                "<b>(2) Tính bảo thủ của ngưỡng argmax mặc định khi chuyển pha:</b> Trên 61 ca đổi trạng thái, ngưỡng "
-                "mặc định chỉ bắt trúng 2/61 ca (3.28%), đòi hỏi phải hiệu chỉnh ngưỡng cảnh báo sớm (τ = 0.30 "
-                "trên tập "
-                "VAL) để nâng lên 9/61 ca (14.75%). "
+                "8):</b> Do trong 993 mẫu TEST đang thông thoáng (LOS A–D) chỉ có đúng 8 mẫu (0.81%) đột ngột chuyển "
+                "sang kẹt cứng (LOS E–F) sau 30 phút, bộ phân lớp cứng chưa bắt trúng ca nào (0/8), dù xếp hạng xác "
+                "suất đạt Onset ROC-AUC = 0.8539 và rủi ro trung bình tăng 3.32x. "
+                "<b>(2) Tính bảo thủ khi chuyển pha &amp; Macro-F1 trung gian (0.4475):</b> Trên 61 ca đổi trạng thái, "
+                "mặc định đạt 7/61 (11.48%) và hiệu chỉnh VAL (τ = 0.40) nâng lên 12/61 (19.67%; McNemar p=0.0156); "
+                "các lớp trung gian B–E chỉ có 10–20 mẫu TEST nên kéo Macro-F1 xuống 0.4475 dù Severe F1 đạt 0.9301. "
                 "<b>(3) Thiếu biến ngoại sinh (Exogenous Blindness) &amp; giới hạn mùa vụ tập TEST:</b> Mô hình chưa "
-                "có dữ liệu thời tiết/mưa ngập hay va chạm giao thông tức thời, và tập TEST (12/2020–03/2021) mới chỉ "
-                "bao phủ các tháng mùa khô tại TP.HCM."
+                "có dữ liệu mưa ngập hay va chạm giao thông tức thời, và tập TEST (12/2020–04/2021) thiên về mùa khô."
             ),
             s,
             bg=WARN_BG,
@@ -2431,17 +2452,15 @@ def _append_ch6_streaming_recon_and_serving(story: list, s: dict[str, ParagraphS
     story.append(
         Paragraph(
             (
-                "Trình phát <b>producer.py</b> (<i>seed = 42</i>) đẩy luồng cửa sổ (<b>33,775 events</b> = "
-                "33,441 gốc + 334 duplicates, trong đó có 1,170 on-time late ≤ 30 phút và 501 beyond-watermark late "
-                "&gt; 30 phút trải trên 219 khung giờ) cùng luồng Raw GPS Pings (<b>91,847 events</b>) qua "
-                "<b>apache/kafka:4.1.0 KRaft</b> (3 partitions, đã kiểm chứng truyền nhận thực tế 3,000 JSON "
-                "messages). "
+                "Trình phát <b>producer.py</b> (<i>seed = 42</i>) đẩy luồng cửa sổ (<b>33,727 events</b> = "
+                "33,394 cửa sổ cơ giới + 333 duplicates, gồm 1,168 on-time late ≤ 30p và 500 beyond-watermark "
+                "late &gt; 30p trên 226 khung giờ) cùng luồng Raw GPS Pings (<b>91,694 events</b> = 90,787 hợp lệ "
+                "+ 907 trùng) qua <b>apache/kafka:4.1.0 KRaft</b> (3 partitions, kiểm chứng 3,000 JSON messages). "
                 "Mô-đun <b>Watermark (30m) &amp; Dual Sink [C6]</b> ghi nguyên vẹn 100% sự kiện vào "
-                "<b>Medallion Lakehouse [C9]</b> trước khi áp dụng ngưỡng <i>Watermark 30 phút</i> ở nhánh Speed "
-                "Layer. "
-                "Thử nghiệm ngắt đột ngột <i>starter_stream.py --kill-after-batch 1</i> xác nhận tiến trình tự "
-                "khôi phục "
-                "từ <b>WAL Checkpoint</b> và chạy tiếp micro-batch 2..3 với <b>0 duplicate records</b>."
+                "<b>Medallion Lakehouse [C9]</b> và kiểm chứng watermark thật trên Spark Structured Streaming "
+                "(<i>2020-12-01T12:30:00Z</i>, evict 10 rows hết hạn khỏi State Store). "
+                "Thử nghiệm ngắt đột ngột <i>starter_stream.py --kill-after-batch 1</i> tự khôi phục từ "
+                "<b>WAL Checkpoint</b> và chạy tiếp micro-batch 2..3 với <b>0 duplicate side effects</b>."
             ),
             s["body"],
         )
@@ -2486,12 +2505,12 @@ def _append_ch6_streaming_recon_and_serving(story: list, s: dict[str, ParagraphS
         [
             "BitPackedBloomFilter (Deduplication)",
             "262,144 bits đóng gói trong mảng uint8[32768] = đúng 32,768 Bytes (32.0 KiB), k = 4 hash functions.",
-            ("Chặn chính xác 334 / 334 (100%) duplicate events; empirical FPR chỉ 0.616% (< 2.55% theoretical bound)."),
+            ("Chặn chính xác 333 / 333 (100%) duplicate events; empirical FPR chỉ 0.611% (< 2.54% theoretical bound)."),
         ],
         [
             "HyperLogLog++ (Active Cardinality)",
             "1,024 registers đóng gói trong mảng uint8[1024] = đúng 1,024 Bytes (1.0 KiB), RSE = 3.25%.",
-            "Ước lượng 9,627.9 active segments so với 10,027 đoạn thực tế (relative error 3.98% < 5.0%).",
+            "Ước lượng 9,620.2 active segments so với 9,995 đoạn thực tế (relative error 3.75% < 5.0%).",
         ],
         [
             "EWMA Hotspot Decay Tracker",
@@ -2513,63 +2532,62 @@ def _append_ch6_streaming_recon_and_serving(story: list, s: dict[str, ParagraphS
 
     story.append(
         Paragraph(
-            "6.3. Two-Tier Batch–Stream Reconciliation, Late-Data Backfill &amp; Monotonic Version Guard", s["h2"]
+            "6.3. Two-Tier Batch–Stream Reconciliation, Late-Data Backfill &amp; Atomic $status_version Guard", s["h2"]
         )
     )
     story.append(
         Paragraph(
             (
                 "<b>Tier 1 (On-Time Subset Parity ≤ 30m):</b> Phép đối chiếu hai chiều <i>exceptAll() == 0</i> "
-                "xác nhận toàn bộ <b>32,940 / 32,940 on-time windows khớp 100.0%</b> giữa Speed Layer và Batch Layer. "
-                "<b>Tier 2 (Late-Data Backfill &amp; Causal Re-Scoring):</b> Cuối ngày, mô-đun <b>[C12]</b> quét lại "
-                "<b>Medallion Lakehouse</b> để backfill đủ <b>501 beyond-watermark late windows (&gt; 30m)</b> trên "
-                "<b>219 khung giờ</b>, nâng completeness từ <b>98.50% lên 100.00%</b>; đồng thời cập nhật lại "
-                "lag/priors "
-                "cho <b>3,953 downstream windows</b> trên cùng đoạn đường và <b>re-score 377 forecast windows</b> "
-                "(điều chỉnh xác suất chính xác hơn cho 100 cửa sổ). Kho phục vụ lưu rõ lifecycle từng bản ghi: "
-                "<b>488 provisional_stream (v1)</b>, <b>501 late_backfilled_by_batch (v2)</b> và "
-                "<b>32,452 batch_verified (v2)</b>; cơ chế <b>Monotonic Version Guard</b> đã chặn đứng "
-                "<b>25/25</b> stale stream events đến muộn không cho ghi đè lùi lên kết quả chuẩn v2."
+                "(<i>tier1_exceptAll_diff = 0</i>) xác nhận <b>100.0% in-watermark parity</b> giữa Speed Layer và "
+                "Batch Layer. <b>Tier 2 (Late-Data Backfill &amp; Causal Re-Scoring):</b> Cuối ngày, mô-đun "
+                "<b>[C12]</b> quét lại <b>Medallion Lakehouse</b> để backfill đủ <b>500 beyond-watermark late windows "
+                "(&gt; 30m)</b> trên <b>226 khung giờ</b>, nâng completeness từ <b>98.50% lên 100.00%</b>; đồng thời "
+                "hàn gắn lag/priors cho <b>609 downstream windows</b> và <b>re-score 384 forecast windows</b> (cập "
+                "nhật xác suất cho 185 cửa sổ). Kho phục vụ MongoDB 8.0 lưu rõ <b>33,394 documents</b> theo lifecycle: "
+                "<b>489 STREAM_PROVISIONAL (v1)</b>, <b>500 BATCH_RECONCILED (v2)</b> và <b>32,405 BATCH_VERIFIED "
+                "(v2)</b>; cơ chế <b>atomic $status_version pipeline guard</b> đã chặn <b>25/25</b> stale v1 events "
+                "không cho ghi đè lùi lên bản chuẩn v2."
             ),
             s["body"],
         )
     )
 
     story.append(
-        Paragraph("6.4. MongoDB 8.0.34 Serving Store (< 1 ms) &amp; Streamlit 5-Tab Dashboard (:8501)", s["h2"])
+        Paragraph("6.4. MongoDB 8.0.34 Serving Store (< 1 ms) &amp; Dual-UI (:8000 TOC Web · :8501 Streamlit)", s["h2"])
     )
     serve_rows = [
         [
             "Idempotent Upsert Engine",
             (
-                "Chia 33,441 documents qua 4 write partitions (8,131 / 8,485 / 8,222 / 8,603), thực thi 69 batches × "
-                "500 lệnh UpdateOne(upsert=True)."
+                "Chia 33,394 documents qua 4 write partitions (8,119 / 8,472 / 8,209 / 8,594), thực thi 69 batches × "
+                "500 lệnh UpdateOne(upsert=True) kèm $status_version guard."
             ),
             (
-                "Chạy replay nhiều lần vẫn giữ đúng 33,441 documents (0 duplicates); khi tắt container báo trạng "
-                "thái 'not_verified' trung thực."
+                "Chạy replay nhiều lần vẫn giữ đúng 33,394 documents (0 duplicates); chặn 25/25 bản tin cũ v1."
             ),
         ],
         [
             "Compound Index IXSCAN (UC-2)",
             (
                 "Compound Index level_prob_segment_idx {street_level: 1, severe_prob: -1, segment_id: 1}; lọc trục "
-                "cấp 1–2 có xác suất kẹt ≥ 70%."
+                "cấp 1–2 có P(Severe) ≥ 70%."
             ),
             (
-                f"Khớp 1,669 cửa sổ trục chính, trả Top-25 qua [{gt['mongo_stages']}], 0 in-memory SORT, "
-                f"warm_median = {gt['mongo_med']}, warm_p95 = {gt['mongo_p95']}."
+                f"Khớp 1,202 cửa sổ trục chính, trả Top-25 qua [{gt['mongo_stages']}], 0 in-memory SORT, "
+                f"warm median = {gt['mongo_med']} / p95 = {gt['mongo_p95']} (tăng tốc {gt['mongo_speedup']} so với "
+                "COLLSCAN 9.161 ms)."
             ),
         ],
         [
-            "Streamlit 5-Tab UI (:8501)",
+            "Dual-UI: TOC Web (:8000) & Streamlit (:8501)",
             (
-                "Kết nối trực tiếp MongoDB 8.0 kèm auto-refresh 5 giây và tự động fallback sang đọc Parquet "
-                "cục bộ khi chạy offline."
+                "TOC Web (FastAPI :8000 + ReactJS + Leaflet bản đồ 84,206 đoạn cơ giới) & Streamlit 5-Tab UI (:8501) "
+                "truy vấn trực tiếp MongoDB 8.0."
             ),
             (
-                "5 tabs trực quan: Overview &amp; Hotspots · +30m Live Forecast · Graph &amp; Propagation Rules · "
-                "7D K-Means &amp; Cold-Start Explorer · O(1) Sketches &amp; Reconciliation."
+                "TOC Web: bản đồ LOS/PR thời gian thực, cảnh báo +30m & mô phỏng sự cố; Streamlit 5 tabs: Hotspots · "
+                "Live Forecast · PageRank & Rules · K-Means Cold-Start · Sketches & Recon."
             ),
         ],
     ]
@@ -2586,36 +2604,34 @@ def _append_ch6_streaming_recon_and_serving(story: list, s: dict[str, ParagraphS
         story,
         CHART_DIR / "chart_streaming_serving.png",
         0.62,
-        "Hình 6.1. Phân bố 33,441 cửa sổ theo Two-Tier Reconciliation Lifecycle (trên) và độ trễ truy vấn dưới 1 ms "
-        "qua Compound Index IXSCAN trên MongoDB 8.0.34 (dưới).",
+        "Hình 6.1. Phân bố 33,394 cửa sổ theo Two-Tier Reconciliation Lifecycle (trên) và độ trễ IXSCAN 0.389 / 0.692 "
+        "ms vs COLLSCAN 9.161 ms (23.55x) trên MongoDB 8.0.34 (dưới).",
         s,
     )
     _add_centered_figure(
         story,
         CHART_DIR / "ui_tab1_overview_hotspots.png",
         0.88,
-        "Hình 6.2. Ảnh chụp cận cảnh Tab 1 trên Streamlit Dashboard (:8501): Bản đồ giao thông TP.HCM có sông Sài Gòn "
-        "và tên quận hiển thị cạnh bảng xếp hạng EWMA Hotspots (dẫn đầu là Lý Thường Kiệt).",
+        "Hình 6.2. Giao diện vận hành (:8501 ↔ MongoDB 8.0, cùng cổng TOC Web FastAPI + ReactJS/Leaflet :8000): "
+        "Bản đồ giao thông TP.HCM có sông Sài Gòn và bảng xếp hạng EWMA Hotspots (dẫn đầu #47407 Lý Thường Kiệt).",
         s,
     )
     _add_centered_figure(
         story,
         CHART_DIR / "ui_tab2_live_forecast_mongo.png",
         0.88,
-        "Hình 6.3. Ảnh chụp cận cảnh khung dự báo trên Tab 2 kết nối trực tiếp MongoDB 8.0 (33,441 documents): tại "
-        "đoạn "
-        "21064 — Công Trường Quốc Tế lúc 11:30 trưa đang ở mức E, Persistence Baseline giữ nguyên mức E (sai), "
-        "trong khi Random Forest (23D) dự báo đúng sau 30 phút chuyển sang mức F (xác suất kẹt cứng 59.6%).",
+        "Hình 6.3. Ảnh chụp cận cảnh khung dự báo Tab 2 kết nối MongoDB 8.0: tại đoạn 21064 — Công Trường Quốc Tế "
+        "(2021-04-22 11:30 ICT, LOS E · 12.0 km/h), Persistence Baseline giữ E (sai), còn Random Forest 23D (Wave 2) "
+        "dự báo đúng chuyển LOS F (severe_prob = 72.4%, thực tế 12:00 là F).",
         s,
     )
     _add_centered_figure(
         story,
         CHART_DIR / "ui_tab4_kmeans_coldstart.png",
         0.88,
-        "Hình 6.4. Ảnh chụp cận cảnh Cold-Start Lookup Explorer trên Tab 4: khi chọn đoạn 61781 — Phú Định "
-        "(chưa từng có dữ liệu GPS), hệ thống đối chiếu tức thì các đoạn có cảm biến tương đồng nhất trong Cluster "
-        "(Châu Văn Liêm, "
-        "Nguyễn Kiệm...).",
+        "Hình 6.4. Ảnh chụp cận cảnh Cold-Start Lookup Explorer trên Tab 4: chọn đoạn 61781 — Phú Định (0 GPS, PR = "
+        "2.2141, Cluster 5 trong 74,211 đoạn Cold-Start), hệ thống đối chiếu ngay các đoạn có cảm biến tương đồng "
+        "nhất trong cùng cụm (Nguyễn Kiệm, Song Hành Xa lộ Hà Nội...).",
         s,
     )
     story.append(
@@ -2632,15 +2648,15 @@ def _append_ch6_streaming_recon_and_serving(story: list, s: dict[str, ParagraphS
             (
                 "<b>Limitations &amp; Risks (Mục 8 Stream Processing &amp; Mục 10 Demonstration):</b> "
                 "<b>(1) Rủi ro bão hòa mảng bit Bloom Filter khi chạy dài ngày (Bit Saturation):</b> Mảng cố định "
-                "32.0 KiB (262,144 bits) đạt FPR = 0.616% trên 90,938 bản tin mẫu; tuy nhiên nếu chạy liên tục nhiều "
+                "32.0 KiB (262,144 bits) đạt FPR = 0.611% trên dữ liệu mẫu; tuy nhiên nếu chạy liên tục nhiều "
                 "ngày ở quy mô 1.5–3.0 TB/ngày mà không xoay vòng (Ring-Buffer Rotation) theo từng cửa sổ thời gian, "
                 "mảng bit sẽ dần đầy và làm tăng tỷ lệ báo trùng giả. "
                 "<b>(2) Độ trễ phản ánh của các bản tin đến muộn quá Watermark (&gt; 30 phút):</b> Các gói tin bị kẹt "
-                "trên mạng di động quá 30 phút (501 cửa sổ) bị nhánh trực tuyến bỏ qua để giữ tốc độ phản hồi và phải "
+                "trên mạng di động quá 30 phút (500 cửa sổ) bị nhánh trực tuyến bỏ qua để giữ tốc độ phản hồi và phải "
                 "chờ tiến trình <i>Two-Tier Reconciliation</i> cuối ngày mới được bù vào kho phục vụ. "
-                "<b>(3) Giới hạn hỗ trợ quyết định (Human-in-the-Loop UI):</b> Cổng giao diện <i>Streamlit (:8501)</i> "
-                "hiện đóng vai trò bảng điều khiển khuyến nghị cho con người, chưa đấu nối điều khiển tự động vòng kín "
-                "(Closed-Loop Control) trực tiếp vào tủ tín hiệu đèn giao thông SCATS."
+                "<b>(3) Giới hạn hỗ trợ quyết định (Human-in-the-Loop UI):</b> Hệ thống Dual-UI (<i>TOC Web :8000</i> "
+                "&amp; <i>Streamlit :8501</i>) hiện đóng vai trò bảng điều khiển khuyến nghị cho con người, chưa đấu "
+                "nối điều khiển tự động vòng kín trực tiếp vào tủ tín hiệu đèn giao thông SCATS."
             ),
             s,
             bg=WARN_BG,
@@ -2666,30 +2682,29 @@ def _append_ch7_team_progress_and_runbook(story: list, s: dict[str, ParagraphSty
                 "spark_batch.py, baseline.py,<br/>traffic_data/spark_etl.py,<br/>"
                 "compose.quyen.yml,<br/>tests/test_quyen_spark.py"
             ),
-            "Ordered Quality Funnel (ANSI try_cast), chuẩn hóa Unicode NFC &amp; giờ Việt Nam (UTC+7), "
-            "Train-Only Vmax Lookup, 5-Tuple Commutative Monoid Combiner khớp 100% baseline.py, "
-            "2-Stage Key Salting (687.43x → 1.023x), BroadcastHashJoin &amp; 10 phân vùng tháng Parquet.",
+            "Ordered Quality Funnel (ANSI try_cast, loại 427 POIs), Unicode NFC (695→641) &amp; UTC+7, "
+            "Train-Only Vmax Lookup, 5-Tuple Monoid (diff=0.0), Key Salting (684.95x → 1.020x), BroadcastHashJoin "
+            "(5→1 Exch, +17.07%) &amp; Parquet Pruning (7,268/33,394 dòng).",
         ],
         [
             "2. Nguyễn Thành Đạt\n(MSSV: 25MS23306)",
             "P2 &amp; P3: Graph Mining, 7D K-Means &amp; +30m Forecasting",
             "pipeline.py, spark_engine.py,<br/>Automated Test Suite tests/",
             (
-                "Lọc 90.93% intermediate shape points, tính Line-Graph PageRank 84,633 segments, khai phá FPGrowth "
-                "(335 rules) &amp; 2-Pass SON, phân 6 cụm 7D K-Means (Silhouette = 0.2853) phủ 74,606 Cold-Start "
-                "segments, "
-                "dự báo exact t+30m (ROC-AUC = 0.9882), phân tích Transition Cases &amp; Frozen SHA-256 Registry."
+                "Lọc 90.97% shape points, Line-Graph PageRank 84,206 cơ giới (92,453 cạnh bỏ U-turn), FPGrowth "
+                "(335 rules) &amp; SON (12+14), 7D K-Means (Sil=0.2197) phủ 74,211 Cold-Start, tách 7,192 burst "
+                "→ 1,885 organic TRAIN &amp; RF 23D (VAL 0.8990; ROC=0.9900, PR=0.9595, Detect=0.9146, "
+                "McNemar p=0.0156)."
             ),
         ],
         [
             "3. Phạm Công Minh\n(MSSV: 25MS23310)",
-            "P4: Kafka Streaming, Reconciliation, MongoDB &amp; Streamlit UI",
-            "producer.py, starter_stream.py,<br/>app.py, docker-compose.yml,<br/>scripts/*",
+            "P4: Kafka Streaming, Recon, MongoDB &amp; Dual-UI (:8000/:8501)",
+            "producer.py, starter_stream.py,<br/>app.py, toc_backend/*, toc_frontend/*,<br/>scripts/*",
             (
-                "Hạ tầng Docker 10.5 / 16.0 GB RAM, luồng Kafka 4.1.0 KRaft (3 partitions), Watermark (30m) Dual Sink, "
-                "O(1) Stream Sketches 33.0 KiB (Bloom 32.0 KiB + HLL++ 1.0 KiB), WAL Crash-Recovery (0 duplicates), "
-                "backfill 501 late windows / re-score 377 cửa sổ, MongoDB 8.0.34 IXSCAN (0.636 ms) &amp; Streamlit "
-                "5-Tab UI."
+                "Hạ tầng Docker 6 container 12.0/16.0 GB RAM, Kafka 4.1 KRaft, Spark Streaming Watermark thật "
+                "(2020-12-01T12:30Z), Sketches 33.0 KiB, WAL (0 dupes), Recon (500 trễ, 609 lag, 384 rescore), "
+                "MongoDB 8.0.34 ($status_version &amp; IXSCAN 0.389/0.692 ms) &amp; Dual-UI (:8000 &amp; :8501)."
             ),
         ],
     ]
@@ -2712,30 +2727,22 @@ def _append_ch7_team_progress_and_runbook(story: list, s: dict[str, ParagraphSty
         Paragraph(
             (
                 "Mọi phép biến đổi dữ liệu và bất biến toán học trong báo cáo đều được kiểm tra tự động qua bộ kiểm "
-                "thử <b>pytest</b> &amp; <b>Spark unittest</b>: (1) Bảo toàn quân số Quality Funnel, ngưỡng 6 mức "
-                "<i>derive_los</i>, đổi ngày qua nửa đêm sang giờ Việt Nam và tính bất biến của "
-                "<i>vmax_lookup.json</i>; (2) Tính kết hợp của <b>5-Tuple Commutative Monoid Combiner</b> trên các "
-                "phân "
-                "vùng lệch, tiêm lỗi vận tốc và xác thực kế hoạch thực thi <b>BroadcastHashJoin</b> + Parquet "
-                "Partition "
-                "Pruning; (3) Bảo toàn tổng điểm <b>Line-Graph PageRank</b> (84,633.0), chuẩn hóa dấu <i>Unicode "
-                "NFC</i>, "
-                "giữ trọn giỏ tuyến đường <b>SON</b> và tra cứu đoạn tương đồng cho vùng <b>Cold-Start</b>; (4) Từ "
-                "chối "
-                "các khoảng đứt quãng 60 phút / 9 giờ khi ghép cặp exact t+30m, cắt sạch mẫu biên thời gian, kiểm thử "
-                "Future-Shuffle Falsification (<i>max_abs_diff = 0.0</i>) và kiểm tra chữ ký <i>SHA-256</i>; (5) Kích "
-                "thước đúng 32,768 Bytes của <b>BitPackedBloomFilter</b>, <b>Monotonic Version Guard</b> chống ghi "
-                "đè lùi, "
-                "hồi phục từ <b>WAL Checkpoint</b> và báo cáo trung thực <i>not_verified</i> khi tắt MongoDB. Toàn "
-                "bộ mã "
-                "nguồn đạt chuẩn <b>Ruff</b> (0 lỗi, độ phức tạp hàm <i>McCabe ≤ 14</i>)."
+                "thử <b>pytest</b> &amp; <b>Spark unittest</b>: (1) Bảo toàn quân số Quality Funnel, loại 427 POIs còn "
+                "84,206 đoạn cơ giới, ngưỡng 6 mức <i>derive_los</i> (89.19% khớp BkTraffic) và bất biến của "
+                "<i>vmax_lookup.json</i>; (2) Tính kết hợp <b>5-Tuple Monoid Combiner</b> trên phân vùng lệch &amp; "
+                "kế hoạch <b>BroadcastHashJoin</b> (5 → 1 Exchange, 0 exceptAll diff) + Parquet Pruning; (3) Bảo toàn "
+                "tổng <b>Line-Graph PageRank</b> (84,206.0; 92,453 cạnh bỏ U-turn), chuẩn hóa <i>Unicode NFC</i> &amp; "
+                "tra cứu Cold-Start (74,211 đoạn); (4) Tách 7,192 burst khỏi TRAIN, ghép +30m, cắt biên, kiểm thử "
+                "Future-Shuffle (<i>diff = 0.0</i>), VAL Gate &amp; <i>SHA-256</i>; (5) <b>BitPackedBloomFilter</b> "
+                "(32,768 Bytes), Spark real watermark, <b>$status_version</b> chặn ghi đè &amp; WAL (0 dupes). "
+                "Mã nguồn tuân thủ <b>Ruff</b> (0 lỗi, độ phức tạp hàm <i>McCabe ≤ 14</i>)."
             ),
             s["body"],
         )
     )
 
     story.append(
-        Paragraph("7.3. Ngân Sách Tài Nguyên Cụm Docker (10.5 / 16.0 GB RAM) &amp; Từ Điển 59 Cột dataset.csv", s["h2"])
+        Paragraph("7.3. Ngân Sách Tài Nguyên Cụm Docker (12.0 / 16.0 GB RAM) &amp; Từ Điển 60 Cột dataset.csv", s["h2"])
     )
     ram_rows = [
         [
@@ -2750,64 +2757,73 @@ def _append_ch7_team_progress_and_runbook(story: list, s: dict[str, ParagraphSty
             "mongo:8.0 (MongoDB 8.0.34)",
             "27017:27017",
             "2.0 GB",
-            "Kho phục vụ trực tuyến bda501.traffic_scores với chỉ mục kết hợp IXSCAN ([C16])",
+            "Kho phục vụ bda501.traffic_scores với IXSCAN (0.389/0.692 ms) &amp; $status_version ([C16])",
         ],
         [
             "spark",
-            "apache/spark:3.5.7-java17 (PySpark 3.5.7)",
+            "hcmc-traffic-spark:3.5.7 (PySpark 3.5.7)",
             "Nội bộ (bda501-net)",
             "6.0 GB",
-            (
-                " Xử lý phân tán cho làm sạch, đồ thị, học máy &amp; đối soát cuối ngày ([C5]–[C12]; tương thích "
-                "chéo PySpark 4.2.0 / Java 21)"
-            ),
+            "Xử lý phân tán làm sạch, đồ thị, học máy &amp; đối soát cuối ngày ([C5]–[C12])",
+        ],
+        [
+            "toc-web",
+            "groupexe-knowledgetest-app (FastAPI+React)",
+            "8000:8000",
+            "1.0 GB",
+            "Cổng TOC Web (FastAPI :8000 + ReactJS + Leaflet) giám sát &amp; mô phỏng sự cố ([C17])",
         ],
         [
             "app",
-            "python:3.12-slim (Streamlit)",
+            "groupexe-knowledgetest-app (Streamlit)",
             "8501:8501",
             "1.0 GB",
-            "Giao diện điều hành 5 tab kết nối trực tiếp MongoDB ([C17])",
+            "Giao diện điều hành Streamlit 5 Tab kết nối trực tiếp MongoDB ([C17])",
+        ],
+        [
+            "live-consumer",
+            "groupexe-knowledgetest-app (Stream)",
+            "Nội bộ (bda501-net)",
+            "0.5 GB",
+            "Consumer Kafka → Bloom/HLL++/EWMA → MongoDB v1 liên tục ([C6]–[C8])",
         ],
         [
             "Tổng cộng",
-            "4 Dịch vụ Container Cốt lõi",
+            "6 Dịch vụ Container Cốt lõi (Always-On)",
             "—",
-            "10.5 GB",
-            "Vận hành ổn định trên máy cá nhân 16.0 GB RAM (dư 5.5 GB cho hệ điều hành)",
+            "12.0 GB",
+            "Vận hành ổn định trên máy cá nhân 16.0 GB RAM (dư 4.0 GB cho hệ điều hành)",
         ],
     ]
     story.append(
         make_table(
             ["Dịch vụ", "Ảnh Container Chuẩn hóa", "Cổng Mạng", "Giới hạn RAM", "Vai trò Vận hành Thực tế"],
             ram_rows,
-            [56, 146, 68, 54, 191],
+            [62, 152, 66, 50, 185],
             s,
-            highlight_row=5,
+            highlight_row=7,
         )
     )
     story.append(Spacer(1, 4))
     story.append(
         Paragraph(
             (
-                "<b>Từ điển 59 cột của bảng dữ liệu chuẩn hóa data/dataset.csv (33,441 dòng):</b> "
-                "(1) <i>Định danh &amp; Tọa độ (10 cột):</i> event_id, segment_id, street_id, "
-                "street_name, street_type, "
-                "street_level, long_snode, lat_snode, long_enode, lat_enode · "
-                "(2) <i>Thời gian UTC/VN &amp; Phân tập (14 cột):</i> date, ict_date, weekday, is_weekend, period, "
-                "ict_period, period_idx, ict_period_idx, vn_hour, period_sin, period_cos, slot_ts, "
-                "target_ts, split_set · "
+                "<b>Từ điển 60 cột của bảng dữ liệu chuẩn hóa data/dataset.csv (33,394 dòng cơ giới):</b> "
+                "(1) <i>Định danh &amp; Tọa độ (10 cột):</i> event_id, segment_id, street_id, street_name, "
+                "street_type, street_level, long_snode, lat_snode, long_enode, lat_enode · "
+                "(2) <i>Thời gian UTC/VN, Phân tập &amp; Burst (15 cột):</i> date, ict_date, weekday, is_weekend, "
+                "period, ict_period, period_idx, ict_period_idx, vn_hour, period_sin, period_cos, slot_ts, "
+                "target_ts, split_set, is_synthetic_burst · "
                 "(3) <i>Tổng hợp vận tốc &amp; mức LOS (13 cột):</i> LOS, derived_los, los_ordinal, is_severe, "
                 "mean_velocity, sum_velocity, min_velocity, max_velocity_obs, severe_ping_count, max_velocity, "
                 "vmax_impute_tier, velocity_ratio, obs_count · "
                 "(4) <i>Đồ thị, Phân cụm &amp; Biến quá khứ (16 cột):</i> length_m, pagerank_score, in_degree, "
                 "out_degree, lag1_los_ordinal, lag2_los_ordinal, trailing_severe_rate, neighbor_los_ordinal, "
                 "segment_train_prior_los, segment_train_severe_prior, street_causal_prior_los, "
-                "street_causal_prior_sev, "
-                "gap_minutes, is_contiguous_30m, cluster_id, cluster · "
-                "(5) <i>Nhãn dự báo đúng +30 phút &amp; đối chiếu phụ (6 cột):</i> target_next_los_ordinal, "
-                "target_next_severe, "
-                "target_t30m_los_ordinal, target_t30m_severe, next_obs_los_ordinal, next_obs_severe."
+                "street_causal_prior_sev, gap_minutes, is_contiguous_30m, cluster_id, cluster · "
+                "(5) <i>Nhãn dự báo +30 phút &amp; đối chiếu phụ (6 cột):</i> target_next_los_ordinal, "
+                "target_next_severe, target_t30m_los_ordinal, target_t30m_severe, next_obs_los_ordinal, "
+                "next_obs_severe."
             ),
             s["body"],
         )
@@ -2819,30 +2835,35 @@ def _append_ch7_team_progress_and_runbook(story: list, s: dict[str, ParagraphSty
         )
     )
     cli_lines = [
-        "<b># 1. Khởi chạy cụm dịch vụ Docker (Kafka 4.1.0 KRaft, MongoDB 8.0.34, Spark 3.5.7, Streamlit UI :8501)</b>",
-        "docker compose up -d kafka mongo spark app",
+        "<b># 1. Khởi chạy 6 dịch vụ Docker (Kafka 4.1, Mongo 8.0, Spark 3.5.7, TOC Web :8000, Streamlit :8501)</b>",
+        "docker compose up -d kafka mongo spark app toc-web live-consumer",
         "",
         "<b># 2. Chạy trọn vẹn Unified Pipeline (P1 → P4) &amp; kiểm chứng 5-Tuple Monoid Combiner (baseline.py)</b>",
         "python pipeline.py",
         "python baseline.py",
         "",
-        "<b># 3. Thực thi tác vụ Spark Batch độc lập từ dữ liệu thô trên container Apache Spark 3.5.7</b>",
-        "$env:TRAFFIC_FIT_CUTOFF = '2020-08-01T00:00:00Z'",
-        "docker compose -f compose.quyen.yml run --rm batch",
+        "<b># 3. Thực thi kiểm chứng runtime &amp; Watermark thật trên container Apache Spark 3.5.7</b>",
+        "docker compose exec -T spark python3 spark_engine.py",
         "",
-        "<b># 4. Phát luồng sự kiện Kafka &amp; kiểm chứng tự hồi phục từ nhật ký WAL (--kill-after-batch 1)</b>",
-        "python producer.py --mode both --bootstrap-servers localhost:9092",
+        "<b># 4. Nạp MongoDB 8.0 + IXSCAN verification &amp; hồi phục luồng WAL (--kill-after-batch 1)</b>",
+        "python mongo_serving.py",
         "python starter_stream.py --kill-after-batch 1",
         "",
         "<b># 5. Xuất bản Sơ đồ Kiến trúc, Bản đồ TP.HCM, Báo cáo PDF &amp; Bộ Slide Thuyết trình (.pptx + .pdf)</b>",
         "python scripts/render_arch_diagram.py",
+        "python scripts/render_component_flows.py",
+        "python scripts/render_method_explainers.py",
         "python scripts/render_visual_assets.py",
         "python scripts/build_proposal_pdf.py",
         "python scripts/build_slides.py",
+        "python scripts/build_slides_pre_experiment.py",
         "",
         "<b># 6. Chạy bộ kiểm thử tự động toàn diện &amp; kiểm tra chất lượng mã nguồn Ruff (max-complexity=14)</b>",
         "pytest -v",
-        'ruff check . --select E,F,W,C901 --config "lint.mccabe.max-complexity=14" --config "line-length=120"',
+        (
+            'python -m ruff check . --select E,F,W,C901 '
+            '--config "lint.mccabe.max-complexity=14" --config "line-length=120"'
+        ),
     ]
     story.append(make_code_box(cli_lines, s))
     story.append(
@@ -2857,30 +2878,29 @@ def _append_ch7_team_progress_and_runbook(story: list, s: dict[str, ParagraphSty
     risk_rows = [
         [
             "1. Thiên lệch đại diện phương tiện\n(Fleet Representation Bias)",
-            "Nguồn GPS cộng đồng chỉ phủ 11.85% đoạn đường và nghiêng về ô tô/xe tải trên trục chính, chưa phản ánh "
-            "đầy đủ luồng xe máy (&gt; 80% lưu lượng TP.HCM) và mạng lưới hẻm dân cư.",
+            "Nguồn GPS cộng đồng chỉ phủ 11.87% đoạn cơ giới (9,995/84,206) và nghiêng về ô tô trên trục chính, "
+            "chưa phản ánh đầy đủ luồng xe máy (&gt; 80% lưu lượng TP.HCM) và mạng lưới hẻm dân cư.",
             "Kết hợp Line-Graph PageRank + 7D K-Means để suy diễn vùng mù; Giai đoạn 2 tích hợp thêm nguồn GPS xe "
-            "buýt, "
-            "xe công nghệ 2 bánh và camera giao thông.",
+            "buýt, xe công nghệ 2 bánh và camera giao thông.",
         ],
         [
-            "2. Trôi dạt phân phối mở\n(Open-World Concept Drift)",
-            "Mô hình và Static Feature Store đóng băng ở Phase A sẽ suy giảm chất lượng khi có rào chắn thi công mới, "
-            "phân luồng giao thông hoặc mưa ngập bất thường.",
-            "Thiết lập giám sát độ lệch phân phối (PSI / KL-Divergence) và tự động kích hoạt huấn luyện lại Phase A "
-            "theo cửa sổ trượt hàng tuần.",
+            "2. Trôi dạt phân phối &amp; lớp B–E thưa\n(Concept Drift &amp; Imbalance)",
+            "Mô hình khóa ở Phase A trên 1,885 organic TRAIN sẽ suy giảm khi mưa ngập mới; các lớp trung gian B–E chỉ "
+            "có 10–20 mẫu TEST kéo Macro-F1 xuống 0.4475 (dù Severe F1 = 0.9301).",
+            "Thiết lập giám sát PSI, tự động huấn luyện lại Phase A hàng tuần và bổ sung thu thập mẫu gán nhãn đều "
+            "cho các lớp chuyển tiếp B–E.",
         ],
         [
             "3. Khan hiếm mẫu chuyển pha đột ngột\n(Rare Sudden-Onset Scarcity)",
-            "Chỉ có 8 / 993 mẫu TEST (0.81%) chuyển đột ngột từ thoáng (A–D) sang kẹt cứng (E–F), khiến ngưỡng phân "
-            "lớp cứng mặc định đạt Recall 0/8 (dù xác suất rủi ro tăng 9.35x).",
+            "Chỉ có 8 / 993 mẫu TEST (0.81%) chuyển đột ngột từ thoáng (A–D) sang kẹt cứng (E–F), khiến ngưỡng "
+            "cứng đạt Recall 0/8 (dù Onset ROC-AUC = 0.8539 và rủi ro tăng 3.32x).",
             "Giai đoạn 1 bổ sung hàm phạt nhạy chi phí (Cost-Sensitive Focal Loss), hiệu chỉnh ngưỡng động theo cấp "
             "đường và tích hợp API thời tiết/sự cố.",
         ],
         [
             "4. Trần mở rộng của cụm máy đơn\n(Single-Host Deployment Ceiling)",
-            "Cụm Docker Compose 10.5 / 16.0 GB RAM trên 1 máy chủ đáp ứng tốt mẫu chuẩn Proof-of-Scale (38.5 MB), "
-            "nhưng sẽ nghẽn I/O ở quy mô 1.5–3.0 TB/ngày toàn thành phố.",
+            "Cụm Docker Compose 12.0 / 16.0 GB RAM (6 container) đáp ứng tốt Proof-of-Scale (38.5 MB) và Dual-UI "
+            "(:8000 / :8501), nhưng sẽ nghẽn I/O ở quy mô 1.5–3.0 TB/ngày toàn thành phố.",
             "Giai đoạn 3 chuyển đổi sang cụm Kubernetes đa máy chủ, xoay vòng Ring-Buffer Bloom Filter mỗi 30 phút và "
             "phân mảnh (Sharding) kho MongoDB 8.0.",
         ],
@@ -2935,14 +2955,15 @@ def main() -> None:
     primary_pdf = REPO_DIR / "HCMC_Smart_Traffic_Final_Report.pdf"
     build_proposal_pdf(primary_pdf)
     sync_targets = [
-        WORKSPACE_DIR / "HCMC_Smart_Traffic_Final_Report.pdf",
+        OUTPUTS_DIR / "HCMC_Smart_Traffic_Final_Report.pdf",
     ]
     for target in sync_targets:
-        if target.parent.exists():
-            try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            if primary_pdf.resolve() != target.resolve():
                 shutil.copy2(primary_pdf, target)
-            except OSError:
-                pass
+        except OSError:
+            pass
     print(f"Built {primary_pdf} ({primary_pdf.stat().st_size:,} bytes)")
 
 
