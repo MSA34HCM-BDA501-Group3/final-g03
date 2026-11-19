@@ -1,6 +1,0 @@
-table_name,relative_path,row_count,column_count,file_size_bytes,status
-nodes.csv,nodes.csv,577967,3,19444470,ok
-streets.csv,streets.csv,5553,5,201060,ok
-segments.csv,segments.csv,84633,11,10287487,ok
-segment_status.csv,segment_status.csv,90938,4,3579383,ok
-train.csv,train.csv,33441,18,4989743,ok
