@@ -4,7 +4,7 @@
 > - **Báo cáo & Đặc tả Kỹ thuật Markdown:** [`TECHNICAL_NOTE.md`](./TECHNICAL_NOTE.md) · [`product/00-proposal/project-proposal.md`](./product/00-proposal/project-proposal.md) · [`product/README.md`](./product/README.md)
 > - **Hướng dẫn Thiết lập Dữ liệu & Nhánh Spark Data Engineering:** [`docs/DATA_SETUP.md`](./docs/DATA_SETUP.md) · [`docs/QUYEN_DATA_ENGINEERING.md`](./docs/QUYEN_DATA_ENGINEERING.md) · [`docs/HUONG_DAN_BRANCH_QUYEN_VI.md`](./docs/HUONG_DAN_BRANCH_QUYEN_VI.md)
 > - **Gói Mẫu Chạy Nhanh & Giao diện Điều hành Duy nhất:** [`data/demo_sample/README.md`](./data/demo_sample/README.md) · **Web TOC Command Center `ReactJS + FastAPI` (`http://localhost:8000`)**
-> - **Báo cáo PDF, Slide Thuyết Trình & Hồ Sơ Kiểm Định Session 9:** [`HCMC_Smart_Traffic_Final_Report.pdf`](./HCMC_Smart_Traffic_Final_Report.pdf), [`HCMC_Smart_Traffic_Final_Presentation.pptx`](./HCMC_Smart_Traffic_Final_Presentation.pptx), [`HCMC_Smart_Traffic_Final_Slides.pdf`](./HCMC_Smart_Traffic_Final_Slides.pdf), [`PRESENTATION_SCRIPT.md`](./PRESENTATION_SCRIPT.md), [`SESSION9_TECHNICAL_AUDIT_REPORT.md`](./SESSION9_TECHNICAL_AUDIT_REPORT.md), [`evidence/session9/I_readiness.md`](./evidence/session9/I_readiness.md), [`BDA501_Session9_Lab_Manual.docx`](./BDA501_Session9_Lab_Manual.docx)
+> - **Báo cáo PDF, Slide Thuyết Trình & Hồ Sơ Kiểm Định Session 9:** [`HCMC_Smart_Traffic_Final_Report.pdf`](./HCMC_Smart_Traffic_Final_Report.pdf), [`HCMC_Smart_Traffic_Final_Presentation.pptx`](./HCMC_Smart_Traffic_Final_Presentation.pptx), [`HCMC_Smart_Traffic_Final_Slides.pdf`](./HCMC_Smart_Traffic_Final_Slides.pdf), [`PRESENTATION_SCRIPT.md`](./PRESENTATION_SCRIPT.md), [`SESSION9_TECHNICAL_AUDIT_REPORT.md`](./SESSION9_TECHNICAL_AUDIT_REPORT.md), [`SESSION9_LIVE_DEMO_RUNBOOK.md`](./SESSION9_LIVE_DEMO_RUNBOOK.md), [`evidence/session9/I_readiness.md`](./evidence/session9/I_readiness.md), [`BDA501_Session9_Lab_Manual.docx`](./BDA501_Session9_Lab_Manual.docx)
 
 ---
 
@@ -90,21 +90,26 @@ groupexe-knowledgetest/
 
 ### 4.1. Cụm 5 Dịch vụ Docker Mặc định & Web TOC Hợp nhất (`ReactJS + FastAPI :8000`)
 `docker-compose.yml` cung cấp **5 dịch vụ mặc định** (`kafka 1536M`, `mongo 2048M`, `spark 6144M`, `toc-web 1024M :8000`, `live-consumer 512M` — tổng hạn mức RAM tối đa **`11.0 GB / 16.0 GB`**, dư `5.0 GB` cho hệ điều hành) cùng 2 dịch vụ chạy theo profile (`pipeline` `[batch]` và `stream` `[stream]`):
-- **Ứng dụng Web Điều hành Hợp nhất (`ReactJS + TypeScript + FastAPI + Leaflet`) tại <http://localhost:8000> (`toc-web` = `toc_backend/main.py` + `toc_frontend/dist/`):** Phục vụ trọn vẹn 5 tab điều hành & phân tích (`01 · Điều Hành & Dự Báo +30p`, `02 · Live Kafka & Sketches 33 KiB`, `03 · PageRank & Luật Đồng Kẹt`, `04 · 6 Cụm K-Means & Cold-Start`, `05 · Spark 3.5.7, Ablation & Đối Soát`), 4 kịch bản thực tế trên thanh Đồng hồ TOC và phát **`🎬 Phát Story qua Kafka`** / **`⚡ Stress-Test 200 tin`** trực tiếp qua `Kafka 4.1`.
+- **Ứng dụng Web Điều hành Hợp nhất (`ReactJS + TypeScript + FastAPI + Leaflet`) tại <http://localhost:8000> (`toc-web` = `toc_backend/main.py` + `toc_frontend/dist/`):** Phục vụ trọn vẹn **6 tab điều hành & phân tích** (`01 · Điều Hành & Dự Báo +30p`, `02 · Live Kafka & Sketches 33 KiB` kèm bản đồ Live Streaming riêng, `03 · PageRank & Luật Đồng Kẹt`, `04 · 6 Cụm K-Means & Cold-Start`, `05 · Spark 3.5.7 & Ablation`, `06 · Luồng Thực Thi Pipeline (Live)` theo kiến trúc Lambda chuẩn Zones A–F), 4 kịch bản thực tế trên thanh Đồng hồ TOC (riêng cho Tab 01) và phát **`🎬 Phát Story qua Kafka`** / **`⚡ Stress-Test 200 tin`** ngay tại Tab 02 & Tab 06 qua `Kafka 4.1`.
 
 ```powershell
 # Khởi chạy trọn bộ 5 dịch vụ mặc định (kafka, mongo, spark, toc-web :8000, live-consumer):
 docker compose up -d --build
+
+# Chạy kiểm thử PySpark 3.5.7 trực tiếp bên trong container Spark (lưu ý: máy Windows host không cần cài Java/PySpark):
+docker compose exec -T spark python3 -m pytest -v tests/test_quyen_spark.py
 
 # Chạy tác vụ Spark Batch độc lập từ dữ liệu thô trên PySpark 4.2.0 / Java 21:
 $env:TRAFFIC_FIT_CUTOFF = '2020-08-01T00:00:00Z'
 docker compose -f compose.quyen.yml run --build --rm batch
 ```
 
-### 4.2. Demo Luồng Thời Gian Thực Đầu–Cuối (`🎬 Story Replay` & `⚡ Stress-Test 200 tin` qua `Kafka 4.1` → `MongoDB 8.0`)
-1. Mở **Web TOC Command Center** tại <http://localhost:8000> → chọn kịch bản thực tế trên thanh Đồng hồ TOC (mặc định: *Kịch bản 1 TEST — Nguyễn Bỉnh Khiêm `#21262` & Trương Định `#21263` chuyển `E ➔ F`*).
-2. Nhấn nút **`🎬 Phát Story qua Kafka`** ngay trên thanh đầu trang (hoặc chạy Terminal: `python producer.py --mode story --scenario noon_transition --bootstrap-servers localhost:9092`): từng khung 30 phút đi thật qua `Kafka 4.1 (3 Partitions)` $\to$ `live-consumer (32 KiB RotatingBloom + 1 KiB 64-bit HLL++ + Frozen 23D RF)` $\to$ `MongoDB 8.0`, cập nhật Đồng hồ TOC và bản đồ theo thời gian thực.
-3. Nhấn nút **`⚡ Stress-Test 200 tin`** (hoặc chạy `python producer.py --mode window --bootstrap-servers localhost:9092 --topic hcmc-traffic-events --max-messages 200 --replay-speed 0.2`) để kiểm chứng đa phân vùng, lọc trùng `RotatingBloom` và `Watermark 30m`.
+### 4.2. Demo Luồng Thời Gian Thực Đầu–Cuối & Sổ Tay Chạy Live Session 9
+> 👉 Xem hướng dẫn copy-paste đầy đủ 8 bước kiểm chứng live (Spark 3.5.7 Query Plan, MongoDB 8.0 IXSCAN, Kafka 4.1, WAL Recovery, Pytest) tại **[`SESSION9_LIVE_DEMO_RUNBOOK.md`](./SESSION9_LIVE_DEMO_RUNBOOK.md)**.
+
+1. Mở **Web TOC Command Center** tại <http://localhost:8000> → **Tab 01** mặc định mở *Kịch bản 3 TEST — Điện Biên Phủ `#50026` (`2021-01-04 07:00 ICT`, dự báo trúng pha `E ➔ F`, có nút Kiểm chứng mù ẩn/hiện thực tế)*.
+2. Chuyển sang **Tab 02 (`📡 02 · Live Kafka & Sketches 33 KiB`)** → nhấn **`🎬 Phát Story qua Kafka`** hoặc **`⚡ Stress-Test 200 tin`** (hoặc Terminal: `python producer.py --mode story --scenario morning_rush_dien_bien_phu --bootstrap-servers localhost:9092`): từng bản tin đi thật qua `Kafka 4.1 (3 Partitions)` $\to$ `live-consumer (32 KiB RotatingBloom + 1 KiB 64-bit HLL++ + Frozen 23D RF)` $\to$ `MongoDB 8.0` và cập nhật **Bản đồ Live Streaming độc lập** tại Tab 02 mà không ghi đè Tab 01.
+3. Mở **Tab 06 (`⚡ 06 · Luồng Thực Thi Pipeline (Live)`)** để trực quan hóa **Kiến trúc Lambda 2 làn** (Batch `v2` song song Speed/Stream `v1` + cầu nối Read-Only MLOps ➔ hội tụ Serving MongoDB 8.0) và bấm **`⚡ Bơm 200 tin Kafka Live`** ngay trên sơ đồ.
 
 ### 4.3. Chạy Trọn vẹn Pipeline 4 Bước, Kiểm chứng Hồi phục `WAL` & Kiểm thử Tự động
 ```powershell

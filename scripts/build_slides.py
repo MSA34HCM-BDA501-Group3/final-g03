@@ -1356,7 +1356,7 @@ def _add_slide_14_demonstration(
         5,
         "SECTION 10 · DEMONSTRATION — REACTJS + FASTAPI TOC COMMAND CENTER (:8000) · VERIFIED TEST CASES",
         "10. Demonstration: ReactJS + FastAPI TOC (:8000) — Hai Case Study Tập TEST",
-        f"Trung tâm Điều hành 5-Tab (:8000 ↔ MongoDB 8.0 · {ds['labeled_windows_count']:,} docs · "
+        f"Trung tâm Điều hành 6-Tab (:8000 ↔ MongoDB 8.0 · {ds['labeled_windows_count']:,} docs · "
         f"IXSCAN {lat['warm_median_ms']:.3f} ms / p95 {lat['warm_p95_ms']:.3f} ms · "
         f"{lat['ixscan_vs_collscan_speedup_x']:.2f}x)",
     )
@@ -1370,7 +1370,7 @@ def _add_slide_14_demonstration(
         1.54,
         "Case Study 1: #50026 Điện Biên Phủ",
         [
-            "2021-01-04 07:00 ICT (TEST): 122 đoạn hoạt động, 38 cảnh báo sớm trên bản đồ 5-Tab TOC (:8000).",
+            "2021-01-04 07:00 ICT (TEST): 122 đoạn hoạt động, 38 cảnh báo sớm trên bản đồ 6-Tab TOC (:8000).",
             "RF raw/cal = LOS F (57.9%), P(E/F) = 87.2%, P(chg) = 70.7%, Thực tế = LOS F (trúng pha E → F, vượt E!).",
         ],
         badge="Case 1 · #50026",
@@ -1599,11 +1599,11 @@ def _add_demo_cta_banner(s: DualSlide) -> None:
     _add_dual_rect(s, x, y_top, w, h, HEX_NAVY, border_hex=HEX_SKY_DEEP, lw=1.2, zorder=2)
     _add_dual_rect(s, x, y_top, 0.14, h, HEX_SKY_MID, zorder=3)
     cta_main = (
-        "→  CHUYỂN SANG LIVE DEMO: http://localhost:8000 (ReactJS + FastAPI TOC 5-Tab)  &  HỎI ĐÁP (Q&A) CÙNG HỘI ĐỒNG"
+        "→  CHUYỂN SANG LIVE DEMO: http://localhost:8000 (ReactJS + FastAPI TOC 6-Tab)  &  HỎI ĐÁP (Q&A) CÙNG HỘI ĐỒNG"
     )
     cta_sub = (
-        "Trực tiếp kiểm chứng: (1) Dự báo +30p #50026 & #21064  ·  (2) Luồng Kafka & 33 KiB Sketches  ·  "
-        "(3) PageRank / 6 Cụm Cold-Start  ·  (4) MongoDB 8.0 IXSCAN (< 1 ms)"
+        "Trực tiếp kiểm chứng: (1) Dự báo +30p #50026  ·  (2) Luồng Kafka & 33 KiB Sketches  ·  "
+        "(3) PageRank / Cold-Start  ·  (4) MongoDB IXSCAN (< 1 ms)  ·  (5) Luồng Lambda Pipeline"
     )
     s.ax.text(
         x + 0.34,
@@ -1669,7 +1669,7 @@ def _add_slide_17_session9_readiness_summary(prs: Presentation, t: dict | None =
         "1. Kiến Trúc & Ranh Giới [I] Đã Triển Khai vs [P] Đề Xuất Mở Rộng",
         [
             "[I] Đã triển khai: 5 dịch vụ Docker mặc định (11.0/16 GB RAM: Kafka 4.1 KRaft 3 phân vùng → Spark 3.5.7 → "
-            "Parquet + MongoDB 8.0 → live-consumer & ReactJS + FastAPI TOC 5-Tab :8000) cùng data/demo_sample/.",
+            "Parquet + MongoDB 8.0 → live-consumer & ReactJS + FastAPI TOC 6-Tab :8000) cùng data/demo_sample/.",
             "[P] Đề xuất mở rộng: Luồng viễn thông 8–17 tỷ tin/ngày, K8s HPA đa nút & đèn SCATS; thống nhất thuật ngữ "
             "Predictive ML (Past-Only Priors τ < t) & 7D Behavioral Archetypes.",
         ],
