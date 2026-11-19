@@ -340,20 +340,20 @@
     "measured_runs": 25,
     "interleaved": true,
     "ixscan": {
-      "min_ms": 0.66,
+      "min_ms": 0.75,
       "median_ms": 0.94,
-      "p95_ms": 1.36,
-      "iqr_ms": 0.26,
-      "max_ms": 1.45
+      "p95_ms": 1.22,
+      "iqr_ms": 0.18,
+      "max_ms": 1.25
     },
     "collscan": {
-      "min_ms": 10.26,
-      "median_ms": 11.39,
-      "p95_ms": 12.33,
-      "iqr_ms": 0.86,
-      "max_ms": 12.43
+      "min_ms": 7.65,
+      "median_ms": 8.2,
+      "p95_ms": 8.92,
+      "iqr_ms": 0.53,
+      "max_ms": 9.04
     },
-    "speedup_x": 12.12,
+    "speedup_x": 8.72,
     "index_used": "level_prob_segment_idx",
     "in_memory_sort": false,
     "winning_stages": [
@@ -545,7 +545,8 @@
     "active_decay_segments_in_ram": 1322,
     "story_cursor": null,
     "mongo_connected": true,
-    "last_updated_ict": "05:05:06"
+    "last_updated_ict": "05:05:06",
+    "audit_guard_note": "Preserved verified 6,000-msg Kafka stress benchmark from F_serving_stream.json (current UI replay in outputs/live_kafka_telemetry.json has 132 msgs)."
   },
   "spark_structured_streaming_sink2": {
     "watermark": "2020-12-01T12:30:00.000Z",

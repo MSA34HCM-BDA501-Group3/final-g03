@@ -45,12 +45,12 @@ HEX_OK_BG = "#DCFCE7"
 HEX_OK_BORDER = "#15803D"
 
 NAV_TABS = [
-    "01–02. Problem & Lit",
+    "01–02. Problem",
     "03–04. Arch & EDA",
-    "05–06. Pipe & Model",
-    "07–08. Batch & Stream",
+    "05–06. Pipe & ML",
+    "07–08. Batch/Strm",
     "09. Experiments",
-    "10–12. Demo, Risk, Plan",
+    "10–12. Demo & Plan",
 ]
 
 
@@ -75,6 +75,8 @@ def card_palette(theme: str) -> tuple[str, str, str, str, str]:
         return HEX_SKY_LIGHT, HEX_SKY_DARK, HEX_NAVY, HEX_SLATE_DARK, HEX_NAVY
     if theme == "sky":
         return HEX_SKY_PALE, HEX_SKY_DEEP, HEX_NAVY, HEX_SLATE_DARK, HEX_NAVY
+    if theme == "soft":
+        return "#F8FAFC", "#94A3B8", HEX_NAVY, HEX_SLATE_DARK, HEX_SKY_DEEP
     if theme == "emerald":
         return "#ECFDF5", HEX_OK_BORDER, "#064E3B", HEX_SLATE_DARK, HEX_OK_BORDER
     return HEX_WHITE, HEX_SLATE_DARK, HEX_NAVY, HEX_SLATE, HEX_SKY_PRIMARY
@@ -292,6 +294,7 @@ class DualSlide:
             va="center",
             zorder=5,
         )
+        _pptx_pill(self.slide, x, y_top, w, h, text, fc, ec, tc, font_size)
 
     def add_ring_gauge(
         self,
@@ -380,23 +383,25 @@ class DualSlide:
             0.58,
             self._ym(0.40),
             "FSB · FPT University",
-            fontsize=9.5,
+            fontsize=8.8,
             fontweight="bold",
             color=HEX_NAVY,
             ha="left",
             va="center",
         )
         self.ax.text(
-            2.30,
+            2.12,
             self._ym(0.40),
-            "|  HCMC Smart Traffic Platform",
-            fontsize=8.8,
+            "| HCMC Smart Traffic",
+            fontsize=8.4,
             color=HEX_MUTED,
             ha="left",
             va="center",
         )
 
-        _pptx_textbox(self.slide, 0.55, 0.24, 2.35, 0.30, "FSB · BDA501", 9.5, HEX_NAVY, bold=True)
+        _pptx_textbox(
+            self.slide, 0.55, 0.24, 3.60, 0.30, "FSB · FPT University | HCMC Smart Traffic", 8.5, HEX_NAVY, bold=True
+        )
         div = self.slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.55), Inches(0.65), Inches(14.90), Inches(0.015))
         div.fill.solid()
         div.fill.fore_color.rgb = rgb(HEX_BORDER)
@@ -404,9 +409,12 @@ class DualSlide:
         _zero_shape_margins(div)
 
         if len(self.nav_tabs) == 5:
-            tab_xs = [5.55, 7.50, 9.45, 11.40, 13.35]
+            tab_xs = [5.38, 7.32, 9.26, 11.20, 13.14]
+            tab_w = 1.84
         else:
-            tab_xs = [5.35, 7.05, 8.82, 10.55, 12.12, 13.55]
+            tab_xs = [5.15, 6.72, 8.29, 9.86, 11.43, 13.00]
+            tab_w = 1.48
+        half_w = tab_w / 2.0
         for idx, (tx, label) in enumerate(zip(tab_xs, self.nav_tabs)):
             is_act = idx == active_tab
             col = HEX_NAVY if is_act else "#94A3B8"
@@ -431,7 +439,9 @@ class DualSlide:
                 dot.fill.fore_color.rgb = rgb(HEX_SKY_PRIMARY)
                 dot.line.fill.background()
                 _zero_shape_margins(dot)
-            _pptx_textbox(self.slide, tx - 0.82, 0.24, 1.64, 0.30, label, 8.0, col, bold=is_act, align=PP_ALIGN.CENTER)
+            _pptx_textbox(
+                self.slide, tx - half_w, 0.24, tab_w, 0.30, label, 8.0, col, bold=is_act, align=PP_ALIGN.CENTER
+            )
 
         badge_txt = f"Slide {slide_num:02d} / {total_slides:02d}"
         ym_pill = self._ym(0.25, 0.28)
@@ -570,7 +580,7 @@ class DualSlide:
     def _draw_card_badge_mpl(self, x: float, w: float, ym: float, h: float, cut: float, badge: str, theme: str) -> None:
         bw = min(1.85, max(0.95, len(badge) * 0.085 + 0.24))
         bx = x + w - cut - bw - 0.12
-        by = ym + h - 0.40
+        by = ym + h - 0.37
         p_fc = HEX_SKY_MID if theme == "navy" else HEX_NAVY
         p_tc = HEX_NAVY if theme == "navy" else HEX_WHITE
         self.ax.add_patch(
@@ -619,7 +629,7 @@ class DualSlide:
             (x + w - cut - 0.05, ym + h - cut - 0.05),
         ]
         self.ax.add_patch(Polygon(tri, closed=True, facecolor=ac, edgecolor="none", zorder=3))
-        t_cy = ym + h - 0.28
+        t_cy = ym + h - 0.25
         self.ax.add_patch(
             Circle(
                 (x + 0.26, t_cy),
@@ -640,13 +650,13 @@ class DualSlide:
             )
         )
         self.ax.text(
-            x + 0.42, ym + h - 0.18, title, fontsize=10.3, fontweight="bold", color=tc, ha="left", va="top", zorder=4
+            x + 0.42, ym + h - 0.16, title, fontsize=10.5, fontweight="bold", color=tc, ha="left", va="top", zorder=4
         )
-        div_y = ym + h - 0.48
+        div_y = ym + h - 0.44
         self.ax.plot([x + 0.18, x + w - 0.22], [div_y, div_y], color=ec, lw=0.75, alpha=0.55, zorder=3)
         if badge:
             self._draw_card_badge_mpl(x, w, ym, h, cut, badge, theme)
-        max_chars = max(26, int((w - 0.36) * (108.0 / body_size)))
+        max_chars = max(26, int((w - 0.36) * (145.0 / body_size)))
         wrapped_lines = [
             ("• " if idx == 0 else "   ") + line
             for b in bullets
@@ -654,13 +664,13 @@ class DualSlide:
         ]
         self.ax.text(
             x + 0.20,
-            ym + h - 0.58,
+            ym + h - 0.52,
             "\n".join(wrapped_lines),
             fontsize=body_size,
             color=bc,
             ha="left",
             va="top",
-            linespacing=1.32,
+            linespacing=1.36,
             zorder=4,
         )
 
@@ -687,7 +697,7 @@ class DualSlide:
         shp.line.width = Pt(1.15)
         _zero_shape_margins(shp)
         cdiv = self.slide.shapes.add_shape(
-            MSO_SHAPE.RECTANGLE, Inches(x + 0.18), Inches(y_top + 0.45), Inches(w - 0.38), Inches(0.01)
+            MSO_SHAPE.RECTANGLE, Inches(x + 0.18), Inches(y_top + 0.43), Inches(w - 0.38), Inches(0.01)
         )
         cdiv.fill.solid()
         cdiv.fill.fore_color.rgb = rgb(ec)
@@ -695,19 +705,19 @@ class DualSlide:
         _zero_shape_margins(cdiv)
         bw = min(1.85, max(0.95, len(badge) * 0.085 + 0.24)) if badge else 0.0
         title_w = w - (bw + cut + 0.28 if badge else 0.35)
-        _pptx_textbox(self.slide, x + 0.14, y_top + 0.10, title_w, 0.34, title, 10.2, tc, bold=True)
+        _pptx_textbox(self.slide, x + 0.14, y_top + 0.09, title_w, 0.33, title, 10.3, tc, bold=True)
         if badge:
             p_fc = HEX_SKY_MID if theme == "navy" else HEX_NAVY
             p_tc = HEX_NAVY if theme == "navy" else HEX_WHITE
-            _pptx_pill(self.slide, x + w - cut - bw - 0.12, y_top + 0.11, bw, 0.24, badge, p_fc, p_fc, p_tc, 7.4)
-        tb = self.slide.shapes.add_textbox(Inches(x + 0.14), Inches(y_top + 0.48), Inches(w - 0.28), Inches(h - 0.56))
+            _pptx_pill(self.slide, x + w - cut - bw - 0.12, y_top + 0.10, bw, 0.24, badge, p_fc, p_fc, p_tc, 7.4)
+        tb = self.slide.shapes.add_textbox(Inches(x + 0.14), Inches(y_top + 0.46), Inches(w - 0.28), Inches(h - 0.52))
         tf = tb.text_frame
         tf.word_wrap = True
         tf.margin_left, tf.margin_right = Inches(0.03), Inches(0.03)
         tf.margin_top, tf.margin_bottom = Inches(0.02), Inches(0.02)
         for idx, b in enumerate(bullets):
             p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
-            p.space_after = Pt(3.0)
+            p.space_after = Pt(2.5)
             r = p.add_run()
             r.text = f"• {b}"
             r.font.name = "Segoe UI"
@@ -724,7 +734,7 @@ class DualSlide:
         bullets: list[str],
         badge: str | None = None,
         theme: str = "white",
-        body_size: float = 8.6,
+        body_size: float = 9.8,
     ) -> None:
         self._draw_card_mpl(x, y_top, w, h, title, bullets, badge, theme, body_size)
         self._draw_card_pptx(x, y_top, w, h, title, bullets, badge, theme, body_size)
@@ -755,7 +765,7 @@ class DualSlide:
         self.ax.add_patch(
             Rectangle((cx, ry), cw, row_h, facecolor=bg_hex, edgecolor=HEX_BORDER, lw=0.65, zorder=2)
         )
-        max_c = max(8, int((cw - 0.12) * (112.0 / font_size)))
+        max_c = max(8, int((cw - 0.12) * (140.0 / font_size)))
         wrapped = "\n".join(wrap_paragraph(val, max_c))
         if r_idx == 0:
             cell_col = HEX_WHITE
@@ -873,7 +883,7 @@ class DualSlide:
         rows: list[list[str]],
         col_fracs: list[float],
         highlight_row: int | None = None,
-        font_size: float = 8.1,
+        font_size: float = 8.8,
     ) -> None:
         row_h = h / (len(rows) + 1)
         ym_bottom = self._ym(y_top, h)

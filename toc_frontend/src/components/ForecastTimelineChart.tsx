@@ -3,13 +3,35 @@ import { SegmentTimelineResponse } from '../types';
 
 interface Props {
   timeline: SegmentTimelineResponse | null;
+  showActual?: boolean;
+  onToggleShowActual?: () => void;
 }
 
 const LOS_LIST = ['A', 'B', 'C', 'D', 'E', 'F'];
 const LOS_TO_IDX: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5 };
 
-export const ForecastTimelineChart: React.FC<Props> = ({ timeline }) => {
-  const [showActual, setShowActual] = useState<boolean>(true);
+function formatRfTimelineLabel(fc: SegmentTimelineResponse['forecast_comparison']): string {
+  const sevPct = (fc.severe_prob * 100).toFixed(1);
+  const chgPct = (fc.change_prob * 100).toFixed(1);
+  const isSevereHold =
+    (fc.rf_raw_los === 'E' || fc.rf_raw_los === 'F') &&
+    fc.severe_prob >= 0.5 &&
+    fc.rf_calibrated_los !== 'E' &&
+    fc.rf_calibrated_los !== 'F';
+  if (isSevereHold) {
+    return `RF +30p: LOS ${fc.effective_forecast_los} (Nguy cơ E/F ${sevPct}%)`;
+  }
+  return `RF +30p: LOS ${fc.effective_forecast_los} (E/F ${sevPct}% · Đổi ${chgPct}%)`;
+}
+
+export const ForecastTimelineChart: React.FC<Props> = ({
+  timeline,
+  showActual: controlledShowActual,
+  onToggleShowActual,
+}) => {
+  const [internalShowActual, setInternalShowActual] = useState<boolean>(true);
+  const showActual = controlledShowActual ?? internalShowActual;
+  const handleToggleShowActual = onToggleShowActual ?? (() => setInternalShowActual((v) => !v));
 
   if (!timeline) {
     return <div className="card">Đang tải chuỗi thời gian dự báo của đoạn đường...</div>;
@@ -27,17 +49,17 @@ export const ForecastTimelineChart: React.FC<Props> = ({ timeline }) => {
     feature_drivers: drv,
   } = timeline;
 
-  const W = 980;
-  const H = 342;
+  const W = 1140;
+  const H = 286;
   const xMin = -125;
   const xMax = 35;
-  const rightMargin = 232;
+  const rightMargin = 284;
   const mapX = (minOffset: number) => {
     const clamped = Math.max(xMin, Math.min(xMax, minOffset));
     return 72 + ((clamped - xMin) / (xMax - xMin)) * (W - 72 - rightMargin);
   };
 
-  // Top Band: Speed (km/h) in y=[38..154]
+  // Top Band: Speed (km/h) in y=[34..122]
   const maxObservedVel = Math.max(
     0,
     ...history_windows.map((h) => h.mean_velocity),
@@ -45,10 +67,10 @@ export const ForecastTimelineChart: React.FC<Props> = ({ timeline }) => {
     ...raw_pings_future.map((p) => p.velocity_kmh)
   );
   const vCeil = Math.max(max_velocity * 1.05, maxObservedVel * 1.08, 45);
-  const mapVelY = (v: number) => 154 - (Math.max(0, Math.min(vCeil, v)) / vCeil) * 114;
+  const mapVelY = (v: number) => 122 - (Math.max(0, Math.min(vCeil, v)) / vCeil) * 86;
 
-  // Bottom Band: LOS A (top=194) -> LOS F (bottom=296)
-  const mapLosY = (los: string) => 194 + ((LOS_TO_IDX[los] ?? 0) / 5) * 102;
+  // Bottom Band: LOS A (top=154) -> LOS F (bottom=248)
+  const mapLosY = (los: string) => 154 + ((LOS_TO_IDX[los] ?? 0) / 5) * 94;
 
   const xWinStart = mapX(-30);
   const xIssue = mapX(0);
@@ -86,8 +108,8 @@ export const ForecastTimelineChart: React.FC<Props> = ({ timeline }) => {
           <span className="badge badge-red">
             Nguy cơ E/F: {(fc.severe_prob * 100).toFixed(1)}% · Đổi pha: {(fc.change_prob * 100).toFixed(1)}%
           </span>
-          <button className="btn btn-amber" onClick={() => setShowActual((v) => !v)}>
-            {showActual ? '🙈 Ẩn nhãn thực tế t+30p (Đố Hội đồng)' : '👁️ Mở kết quả thực tế t+30p'}
+          <button className="btn btn-amber" onClick={handleToggleShowActual}>
+            {showActual ? '🙈 Ẩn nhãn thực tế t+30p (Chế độ kiểm chứng mù)' : '👁️ Mở kết quả thực tế t+30p'}
           </button>
         </div>
       </div>
@@ -99,10 +121,10 @@ export const ForecastTimelineChart: React.FC<Props> = ({ timeline }) => {
         <rect x={xIssue} y={24} width={xTargetEnd - xIssue} height={H - 46} fill="#ffe4e6" opacity={0.42} />
 
         {/* Band titles */}
-        <text x={76} y={33} fontSize={10.5} fontWeight={700} fill="#334155">
+        <text x={76} y={32} fontSize={10.5} fontWeight={700} fill="#334155">
           TẦNG 1 · VẬN TỐC XE THỰC ĐO &amp; CÁC BẢN TIN GPS THÔ (km/h, Vmax = {max_velocity} km/h)
         </text>
-        <text x={76} y={182} fontSize={10.5} fontWeight={700} fill="#334155">
+        <text x={76} y={143} fontSize={10.5} fontWeight={700} fill="#334155">
           TẦNG 2 · DIỄN BIẾN MỨC PHỤC VỤ LOS (A ➔ F) &amp; ĐỐI ĐẦU DỰ BÁO TRƯỚC +30 PHÚT
         </text>
 
@@ -142,13 +164,13 @@ export const ForecastTimelineChart: React.FC<Props> = ({ timeline }) => {
         {/* Vertical Issue Boundary Line at t = 0 */}
         <line x1={xWinStart} y1={24} x2={xWinStart} y2={H - 22} stroke="#3b82f6" strokeDasharray="4,4" />
         <line x1={xIssue} y1={24} x2={xIssue} y2={H - 22} stroke="#0f172a" strokeWidth={2.2} />
-        <text x={(xWinStart + xIssue) / 2} y={H - 7} textAnchor="middle" fontSize={10.2} fontWeight={700} fill="#1d4ed8">
+        <text x={xIssue - 8} y={H - 7} textAnchor="end" fontSize={10.2} fontWeight={700} fill="#1d4ed8">
           Khung thu thập {sem.collect_window} ({drv.obs_count_in_window} pings)
         </text>
         <text x={xIssue} y={17} textAnchor="middle" fontSize={10.5} fontWeight={800} fill="#0f172a">
           Chốt t = {sem.issue_time_ict} (0 Leakage)
         </text>
-        <text x={(xIssue + xTargetEnd) / 2} y={H - 7} textAnchor="middle" fontSize={10.2} fontWeight={700} fill="#be123c">
+        <text x={xIssue + 8} y={H - 7} textAnchor="start" fontSize={10.2} fontWeight={700} fill="#be123c">
           Dự báo {sem.forecast_window}
         </text>
 
@@ -261,11 +283,11 @@ export const ForecastTimelineChart: React.FC<Props> = ({ timeline }) => {
         <text
           x={xTargetEnd + 12}
           y={sameRfAct ? rfY - 4 : rfY + 4}
-          fontSize={10.5}
+          fontSize={10}
           fontWeight={800}
           fill="#be123c"
         >
-          RF (+30p): LOS {fc.effective_forecast_los} ({(fc.change_prob * 100).toFixed(0)}%)
+          {formatRfTimelineLabel(fc)}
         </text>
 
         {/* 3. Actual Ground Truth at t+30m */}

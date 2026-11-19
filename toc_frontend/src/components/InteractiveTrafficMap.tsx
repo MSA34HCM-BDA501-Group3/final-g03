@@ -38,6 +38,21 @@ function bearingDeg(sLat: number, sLon: number, eLat: number, eLon: number): num
   return ((rad * 180) / Math.PI + 360) % 360;
 }
 
+function formatPinForecastLine(fc: SegmentTimelineResponse['forecast_comparison']): string {
+  const safeCurLos = escapeHtml(fc.current_los);
+  const safeNextLos = escapeHtml(fc.effective_forecast_los);
+  const sevPct = (fc.severe_prob * 100).toFixed(1);
+  const chgPct = (fc.change_prob * 100).toFixed(1);
+  return (
+    `<div class="toc-focus-pin-sub">` +
+    `Hiện tại: <b>LOS ${safeCurLos}</b> (${fc.current_velocity} km/h) ➔ RF +30p: <b class="forecast-tag">LOS ${safeNextLos}</b>` +
+    `</div>` +
+    `<div class="toc-focus-pin-sub">` +
+    `Nguy cơ E/F: <b class="forecast-tag">${sevPct}%</b> · Đổi pha: <b>${chgPct}%</b>` +
+    `</div>`
+  );
+}
+
 function makeArrowIcon(angleDeg: number, color: string, size = 14): L.DivIcon {
   return L.divIcon({
     className: 'toc-arrow-icon',
@@ -266,8 +281,7 @@ export const InteractiveTrafficMap: React.FC<Props> = ({
         const isWorsening = nextLos > curLos;
         const mainColor = isWorsening ? '#ff2e63' : LOS_COLORS[curLos] || '#ef4444';
         const safeMainStreet = escapeHtml(selectedTimeline.street_name);
-        const safeCurLos = escapeHtml(curLos);
-        const safeNextLos = escapeHtml(nextLos);
+        const pinForecastHtml = formatPinForecastLine(fc);
 
         L.polyline(
           [
@@ -305,16 +319,15 @@ export const InteractiveTrafficMap: React.FC<Props> = ({
 
         L.marker([midLat, midLon], {
           interactive: false,
+          zIndexOffset: 1000,
           icon: L.divIcon({
             className: 'toc-focus-pin-wrap',
-            iconSize: [230, 52],
-            iconAnchor: [115, 62],
+            iconSize: [286, 68],
+            iconAnchor: [143, 76],
             html: `
               <div class="toc-focus-pin">
                 <div class="toc-focus-pin-title">📍 ${safeMainStreet} (#${selectedSegmentId})</div>
-                <div class="toc-focus-pin-sub">
-                  Hiện tại: <b>LOS ${safeCurLos}</b> (${fc.current_velocity} km/h) ➔ +30p: <b class="forecast-tag">LOS ${safeNextLos} (${(fc.change_prob * 100).toFixed(0)}%)</b>
-                </div>
+                ${pinForecastHtml}
               </div>
             `,
           }),
@@ -336,7 +349,7 @@ export const InteractiveTrafficMap: React.FC<Props> = ({
         const radius = isSelected ? 9 : isEarlyWarn ? 7.5 : isSevere ? 5.5 : 3.8;
         const safeStreet = escapeHtml(seg.street_name);
         const safeCurLos = escapeHtml(seg.current_los);
-        const safeCalLos = escapeHtml(seg.rf_cal_los);
+        const safeEffLos = escapeHtml(seg.effective_forecast_los || seg.rf_cal_los);
 
         if (isEarlyWarn || isSelected) {
           L.circleMarker([midLat, midLon], {
@@ -359,7 +372,7 @@ export const InteractiveTrafficMap: React.FC<Props> = ({
           .bindTooltip(
             `<b>${safeStreet} (#${seg.segment_id})</b><br/>` +
               `Hiện tại: <b>LOS ${safeCurLos}</b> (${seg.mean_velocity}/${seg.max_velocity} km/h)<br/>` +
-              `Dự báo +30p: <b>LOS ${safeCalLos}</b> · Đổi pha: ${(seg.change_prob * 100).toFixed(0)}%<br/>` +
+              `RF +30p: <b>LOS ${safeEffLos}</b> · Nguy cơ E/F: ${(seg.severe_prob * 100).toFixed(1)}% · Đổi pha: ${(seg.change_prob * 100).toFixed(1)}%<br/>` +
               `<i>Nhấp để phóng cận cảnh giao lộ</i>`,
             { sticky: true }
           )
@@ -420,7 +433,12 @@ export const InteractiveTrafficMap: React.FC<Props> = ({
       pts.push([nb.coords[2], nb.coords[3]]);
     });
     const bounds = L.latLngBounds(pts);
-    map.fitBounds(bounds, { padding: [58, 58], maxZoom: 16.5, animate: true });
+    map.fitBounds(bounds, {
+      paddingTopLeft: [44, 128],
+      paddingBottomRight: [44, 52],
+      maxZoom: 16.5,
+      animate: true,
+    });
   }, [viewMode, selectedSegmentId, selectedCoords, selectedTimeline, neighbors]);
 
   const inflowCount = neighbors.filter((n) => n.relation === 'UPSTREAM_INFLOW').length;

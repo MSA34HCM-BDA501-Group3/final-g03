@@ -110,7 +110,7 @@ export const TabInfraAudit: React.FC = () => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
       <div className="kpi-row-6">
         <div className="kpi-card">
-          <div className="kpi-label">Spark BroadcastHashJoin (B_benchmark)</div>
+          <div className="kpi-label">Spark BroadcastHashJoin (Catalyst)</div>
           <div className="kpi-val" style={{ color: '#2563eb' }}>
             {baseEx ?? '—'} ➔ {v1Ex ?? '—'} Exchanges
           </div>
@@ -274,7 +274,7 @@ export const TabInfraAudit: React.FC = () => {
         <div className="card-header">
           <div>
             <h2 className="card-title">
-              3A. Thực Nghiệm Có Kiểm Soát 3-Chiều Trên Apache Spark {sparkRt.spark_version || '3.5.7'} (Session 9 · <code>B_benchmark.csv</code>)
+              3A. Thực Nghiệm Có Kiểm Soát 3-Chiều Trên Apache Spark {sparkRt.spark_version || '3.5.7'} (Join + Salting Benchmark)
             </h2>
             <p className="card-subtitle">
               Chạy kết hợp Join + Salting: So sánh SortMergeJoin vs BroadcastHashJoin vs 2-Stage {saltBuckets ?? '—'}-Bucket Salted Monoid
@@ -564,7 +564,7 @@ export const TabInfraAudit: React.FC = () => {
           <div className="card-header">
             <div>
               <h2 className="card-title">
-                6. Kiểm Toán Chống Rò Rỉ Tương Lai {b1Rows.length} Biến ({b1Rows.length}D) (Card B1 · Future-Shuffle diff = 0.0)
+                6. Kiểm Toán Chống Rò Rỉ Tương Lai {b1Rows.length} Biến ({b1Rows.length}D) (Point-in-Time · Future-Shuffle diff = 0.0)
               </h2>
               <p className="card-subtitle">
                 Đối chứng <code>raw_data/</code> ↔ <code>data/dataset.csv</code>
@@ -572,7 +572,7 @@ export const TabInfraAudit: React.FC = () => {
               </p>
             </div>
             <span className={`badge ${allB1Pass ? 'badge-green' : 'badge-red'}`}>
-              {allB1Pass ? 'Card B1 PASS' : 'Card B1 CHECK'}
+              {allB1Pass ? 'Zero-Leakage PASS' : 'Zero-Leakage CHECK'}
             </span>
           </div>
           <div className="table-scroll" style={{ maxHeight: 250 }}>
@@ -611,14 +611,14 @@ export const TabInfraAudit: React.FC = () => {
           <div className="card-header">
             <div>
               <h2 className="card-title">
-                7. Kiểm Toán Sai Số Thực Nghiệm 33 KiB Sketches &amp; Độ Thưa {coldStartRatioPct}% (Card B3)
+                7. Kiểm Toán Sai Số Thực Nghiệm 33 KiB Sketches &amp; Độ Thưa {coldStartRatioPct}%
               </h2>
               <p className="card-subtitle">
                 Đối chứng <code>1 KiB HLL++</code> &amp; <code>32 KiB Bloom</code> với <code>Spark SQL Exact</code> (0 cảnh báo giả trên từng đoạn)
               </p>
             </div>
             <span className={`badge ${b3Rows.length > 0 ? 'badge-green' : 'badge-amber'}`}>
-              {b3Rows.length > 0 ? 'Card B3 PASS' : 'Card B3 PENDING'}
+              {b3Rows.length > 0 ? 'Sketches Audit PASS' : 'Sketches Audit PENDING'}
             </span>
           </div>
           <div className="table-scroll" style={{ maxHeight: 250 }}>

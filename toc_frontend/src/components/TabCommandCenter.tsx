@@ -53,6 +53,7 @@ export const TabCommandCenter: React.FC<Props> = ({
   onChangeAlertFilter,
 }) => {
   const [rightPanelMode, setRightPanelMode] = useState<'alerts' | 'ewma' | 'mongo'>('alerts');
+  const [showActual, setShowActual] = useState<boolean>(true);
   const sum = frameData?.summary;
   const sem = frameData?.window_semantics;
   const mb = frameData?.mongo_benchmark;
@@ -138,6 +139,11 @@ export const TabCommandCenter: React.FC<Props> = ({
                 Mặc định ưu tiên <b>đường sắp chuyển nặng / đổi trạng thái</b> lên đầu thay vì chỉ liệt kê F ➔ F
               </p>
             </div>
+            {!showActual && (
+              <span className="badge badge-amber" title="Nhấp nút bên dưới biểu đồ để mở lại kết quả thực tế">
+                🔒 Chế độ kiểm chứng mù
+              </span>
+            )}
           </div>
 
           <div className="filter-pills">
@@ -195,7 +201,7 @@ export const TabCommandCenter: React.FC<Props> = ({
                       <th>Tuyến đường</th>
                       <th>Hiện tại ➔ +30p</th>
                       <th>Thực tế</th>
-                      <th>Đổi pha</th>
+                      <th>Xác suất RF</th>
                       <th>Phân loại</th>
                     </tr>
                   </thead>
@@ -219,22 +225,31 @@ export const TabCommandCenter: React.FC<Props> = ({
                               Đoạn #{a.segment_id} · {a.mean_velocity}/{a.max_velocity} km/h ({a.obs_count} pings)
                             </div>
                           </td>
-                          <td>
+                          <td style={{ whiteSpace: 'nowrap' }}>
                             <span className={`los-pill los-${a.current_los}`}>{a.current_los}</span>
-                            <span style={{ margin: '0 5px', fontWeight: 800 }}>➔</span>
+                            <span style={{ margin: '0 4px', fontWeight: 800 }}>➔</span>
                             <span className={`los-pill los-${predShow}`}>{predShow}</span>
                           </td>
                           <td>
-                            {a.actual_next_los ? (
+                            {!showActual ? (
+                              <span
+                                className="badge badge-amber"
+                                title="Đang ẩn nhãn thực tế t+30p trong chế độ kiểm chứng mù"
+                              >
+                                🔒 Ẩn
+                              </span>
+                            ) : a.actual_next_los ? (
                               <span className={`los-pill los-${a.actual_next_los}`}>{a.actual_next_los}</span>
                             ) : (
                               <span style={{ color: '#94a3b8' }}>—</span>
                             )}
                           </td>
                           <td>
-                            <strong>{(a.change_prob * 100).toFixed(0)}%</strong>
-                            <div style={{ fontSize: '10px', color: '#dc2626' }}>
-                              E/F: {(a.severe_prob * 100).toFixed(0)}%
+                            <strong style={{ color: a.severe_prob >= 0.5 ? '#dc2626' : '#0f172a' }}>
+                              E/F: {(a.severe_prob * 100).toFixed(1)}%
+                            </strong>
+                            <div style={{ fontSize: '10.5px', color: '#475569' }}>
+                              Đổi pha: {(a.change_prob * 100).toFixed(1)}%
                             </div>
                           </td>
                           <td>
@@ -338,7 +353,11 @@ export const TabCommandCenter: React.FC<Props> = ({
         </div>
       </div>
 
-      <ForecastTimelineChart timeline={timelineData} />
+      <ForecastTimelineChart
+        timeline={timelineData}
+        showActual={showActual}
+        onToggleShowActual={() => setShowActual((v) => !v)}
+      />
     </div>
   );
 };

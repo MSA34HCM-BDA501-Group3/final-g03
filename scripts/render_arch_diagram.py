@@ -618,7 +618,9 @@ def _draw_arch_zones_and_components(ax) -> None:
     draw_service_icon(
         ax, 4.675, 7.65, ZONE_B_COLOR, "kafka", ["Apache Kafka Broker", "Partitioned Event Stream"], size=0.64
     )
-    draw_service_icon(ax, 4.675, 5.00, ZONE_B_COLOR, "funnel", ["Quality Funnel", "Schema & Hygiene Gate"], size=0.64)
+    draw_service_icon(
+        ax, 4.675, 5.00, ZONE_B_COLOR, "funnel", ["Quality Funnel (R1–R6)", "6-Rule Hygiene & NFC Gate"], size=0.64
+    )
 
     # 5. SPARK UNIFIED COMPUTE CLUSTER ENVELOPE (CONTAINING ZONE C & ZONE D)
     draw_rounded_box(ax, 6.55, 3.30, 8.10, 5.58, edgecolor="#334155", facecolor="white", lw=1.6, radius=0.0)
@@ -664,7 +666,7 @@ def _draw_arch_zones_and_components(ax) -> None:
         ax, 7.80, 7.12, ZONE_C_COLOR, "spark", ["Watermark & Windowing", "Dual-Sink Stream Router"], size=0.56
     )
     draw_service_icon(
-        ax, 10.60, 7.12, ZONE_C_COLOR, "cache", ["Stream Sketches", "Bloom · HyperLogLog · EWMA"], size=0.56
+        ax, 10.60, 7.12, ZONE_C_COLOR, "cache", ["Stream Sketches (33 KiB)", "RotatingBloom · HLL++ · EWMA"], size=0.56
     )
     draw_service_icon(ax, 13.35, 7.12, ZONE_C_COLOR, "ml", ["Online Scorer", "Read-Only Stream Inference"], size=0.56)
 
@@ -688,7 +690,7 @@ def _draw_arch_zones_and_components(ax) -> None:
         ax, 9.62, 5.06, ZONE_D_COLOR, "graph", ["Graph & Pattern Mining", "PageRank · SON · K-Means"], size=0.56
     )
     draw_service_icon(
-        ax, 11.56, 5.06, ZONE_D_COLOR, "ml", ["Causal ML Training", "Feature Pipeline · Model Fit"], size=0.56
+        ax, 11.56, 5.06, ZONE_D_COLOR, "ml", ["Predictive ML Training", "23D Features · Frozen RF Fit"], size=0.56
     )
     draw_service_icon(
         ax, 13.42, 5.06, ZONE_D_COLOR, "recon", ["Two-Tier Reconciliation", "Late Backfill & Re-Score"], size=0.56
@@ -883,7 +885,7 @@ def _walkthrough_steps(wm: dict[str, str]) -> list[tuple[float, str, str, str, s
             "#F8FAFC",
             [
                 "• Lúc 07:08 sáng, xe qua đoạn\n  Lý Thường Kiệt #47407 gửi:\n  velocity = 4 km/h.",
-                f"• EC-1: {wm['miss_pct']} cửa sổ\n  khuyết max_velocity.",
+                f"• EC-1: {wm['miss_pct']} cửa sổ gốc\n  khuyết max_velocity (85.19% sạch).",
                 f"• EC-6: {wm['cold_pct']} đoạn nhánh\n  bị Cold-Start (0 GPS).",
             ],
         ),
@@ -896,7 +898,7 @@ def _walkthrough_steps(wm: dict[str, str]) -> list[tuple[float, str, str, str, s
             [
                 "• 3-Tier Imputation nội suy\n  max_velocity = 40 km/h (TRAIN).",
                 "• 5-Tuple Monoid gộp cửa sổ\n  07:00–07:30: mean_v = 4 km/h.",
-                f"• r = 4/40 = 0.10 (< 0.20) → LOS F\n  trên {wm['windows']} cửa sổ (89.19% khớp).",
+                f"• derive_urban_los (4 km/h → LOS F)\n  trên {wm['windows']} cửa sổ (89.19% khớp).",
             ],
         ),
         (
@@ -913,8 +915,8 @@ def _walkthrough_steps(wm: dict[str, str]) -> list[tuple[float, str, str, str, s
         ),
         (
             11.32,
-            "P3 · CAUSAL ML (+30M)",
-            "4. Dự báo Nhân quả t+30m",
+            "P3 · PREDICTIVE ML (+30M)",
+            "4. Dự báo Điểm-tại-Thời-điểm t+30m",
             "#15803D",
             "#ECFDF5",
             [
@@ -1001,7 +1003,7 @@ def build_concrete_example_flow_png(out_path: Path) -> None:
             title,
             ha="center",
             va="center",
-            fontsize=10.2,
+            fontsize=8.8 if len(title) > 30 else 10.2,
             fontweight="bold",
             color="white",
             zorder=4,

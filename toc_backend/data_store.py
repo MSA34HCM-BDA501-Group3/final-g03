@@ -27,6 +27,21 @@ WORSENING_ALERT_TYPES = frozenset(
 EARLY_WARNING_ALERT_TYPES = WORSENING_ALERT_TYPES | {"RECOVERING_TRANSITION"}
 
 
+def _resolve_effective_forecast_los(
+    rf_pred_los: str,
+    rf_cal_los: str,
+    change_prob: float,
+    severe_prob: float,
+    change_threshold: float,
+) -> str:
+    """Resolve display forecast LOS without letting non-severe calibration mask >=50% E/F risk."""
+    raw_o = LOS_TO_ORD.get(rf_pred_los, 0)
+    cal_o = LOS_TO_ORD.get(rf_cal_los, 0)
+    if raw_o >= 4 and severe_prob >= 0.50 and cal_o < 4:
+        return rf_pred_los
+    return rf_cal_los if change_prob >= change_threshold else rf_pred_los
+
+
 def _read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
 
@@ -374,6 +389,7 @@ class TOCDataStore:
 
     def _classify_alert_category(self, row: Any) -> tuple[int, str]:
         cur_o, cal_o, raw_o = int(row.los_ordinal), int(row.rf_cal_ord), int(row.rf_pred_ord)
+        severe_prob = float(getattr(row, "rf_severe_prob", 0.0))
         eff_pred_o = max(cal_o, raw_o)
         if cur_o < 4 and eff_pred_o >= 4:
             return 0, "ONSET_A_D_TO_SEVERE"
@@ -381,6 +397,8 @@ class TOCDataStore:
             return 1, "SEVERE_WORSENING_E_TO_F"
         if eff_pred_o > cur_o:
             return 2, "WORSENING_TRANSITION"
+        if cur_o >= 4 and (raw_o >= 4 or severe_prob >= 0.50):
+            return 4, "PERSISTENT_SEVERE"
         if cal_o < cur_o:
             return 3, "RECOVERING_TRANSITION"
         if cur_o >= 4:
@@ -458,6 +476,13 @@ class TOCDataStore:
                     "current_los": str(r.LOS),
                     "rf_pred_los": str(r.rf_pred_los),
                     "rf_cal_los": str(r.rf_cal_los),
+                    "effective_forecast_los": _resolve_effective_forecast_los(
+                        str(r.rf_pred_los),
+                        str(r.rf_cal_los),
+                        float(r.rf_change_prob),
+                        float(r.rf_severe_prob),
+                        self.change_threshold,
+                    ),
                     "actual_next_los": r.actual_next_los,
                     "severe_prob": float(r.rf_severe_prob),
                     "change_prob": float(r.rf_change_prob),
@@ -489,8 +514,12 @@ class TOCDataStore:
                 "persistence_los": str(r.LOS),
                 "rf_pred_los": str(r.rf_pred_los),
                 "rf_cal_los": str(r.rf_cal_los),
-                "effective_forecast_los": (
-                    str(r.rf_cal_los) if float(r.rf_change_prob) >= self.change_threshold else str(r.rf_pred_los)
+                "effective_forecast_los": _resolve_effective_forecast_los(
+                    str(r.rf_pred_los),
+                    str(r.rf_cal_los),
+                    float(r.rf_change_prob),
+                    float(r.rf_severe_prob),
+                    self.change_threshold,
                 ),
                 "change_threshold": self.change_threshold,
                 "actual_next_los": r.actual_next_los,
@@ -509,6 +538,7 @@ class TOCDataStore:
         vn_hour: float = 12.0,
         alert_filter: str = "early_warning",
         max_map_segments: int = 450,
+        include_live_overlay: bool = False,
     ) -> dict[str, Any]:
         """Return exact point-in-time `t` map segments & prioritized Early-Warning Alert Board."""
         sub = self.win_df[
@@ -531,8 +561,11 @@ class TOCDataStore:
                 "mongo_benchmark": _query_mongo_benchmark_live(limit=12, root=self.root),
             }
 
-        live_by_seg = self._fetch_live_scores_for_slot(ict_date, float(vn_hour))
-        sub = self._overlay_live_scores(sub, live_by_seg)
+        if include_live_overlay:
+            live_by_seg = self._fetch_live_scores_for_slot(ict_date, float(vn_hour))
+            sub = self._overlay_live_scores(sub, live_by_seg)
+        else:
+            sub["lifecycle_status"] = [_static_lifecycle_status(s) for s in sub["split_set"]]
 
         priorities = [self._classify_alert_category(r) for r in sub.itertuples(index=False)]
         sub["alert_rank"] = [p[0] for p in priorities]
@@ -831,10 +864,12 @@ class TOCDataStore:
         past_pings, future_pings = self._extract_raw_pings_around(seg_id, f_dt)
 
         change_threshold = float(self.artifact.get("val_selected_change_threshold", 0.30))
-        eff_rf_los = (
-            str(focus_row["rf_cal_los"])
-            if float(focus_row["rf_change_prob"]) >= change_threshold
-            else str(focus_row["rf_pred_los"])
+        eff_rf_los = _resolve_effective_forecast_los(
+            str(focus_row["rf_pred_los"]),
+            str(focus_row["rf_cal_los"]),
+            float(focus_row["rf_change_prob"]),
+            float(focus_row["rf_severe_prob"]),
+            change_threshold,
         )
 
         return {
@@ -888,6 +923,9 @@ class TOCDataStore:
         """Return UC-3 PageRank Top-35 + Card B2 Falsification + UC-4 SON/FPGrowth & Lagged Rules."""
         pr_rows = _read_csv_records(self.root / "outputs" / "road_pagerank_top.csv", limit=35)
         st_map = self.static_df.set_index("segment_id")
+        latest_slots = (
+            self.win_df.sort_values("slot_dt").groupby("segment_id").last()[["ict_date", "vn_hour"]]
+        )
         for r in pr_rows:
             sid = int(r["segment_id"])
             r["street_name"] = _clean_street_name(r.get("street_name"), sid)
@@ -897,6 +935,10 @@ class TOCDataStore:
                 r["is_cold_start"] = bool(s_row["is_cold_start"])
                 r["obs_windows"] = int(s_row["obs_windows"])
                 r["mean_velocity"] = round(float(s_row["mean_velocity"]), 1)
+            if sid in latest_slots.index:
+                slot_row = latest_slots.loc[sid]
+                r["latest_ict_date"] = str(slot_row["ict_date"])
+                r["latest_vn_hour"] = float(slot_row["vn_hour"])
         b2_rows = _read_csv_records(self.root / "evidence" / "session9" / "H_B2_graph_zone_falsification.csv", limit=20)
         return {
             "pagerank_top": pr_rows,

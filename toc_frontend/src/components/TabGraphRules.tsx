@@ -8,10 +8,14 @@ import {
 } from '../types';
 
 interface Props {
-  onSelectSegmentOnMap: (segId: number) => void;
+  onSelectSegmentOnMap: (segId: number, ictDate?: string, vnHour?: number) => void;
+  onSelectColdStartSegment: (segId: number, streetName: string) => void;
 }
 
-export const TabGraphRules: React.FC<Props> = ({ onSelectSegmentOnMap }) => {
+export const TabGraphRules: React.FC<Props> = ({
+  onSelectSegmentOnMap,
+  onSelectColdStartSegment,
+}) => {
   const [data, setData] = useState<GraphRulesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,25 +55,34 @@ export const TabGraphRules: React.FC<Props> = ({ onSelectSegmentOnMap }) => {
     String(r.test_category || '').startsWith('B2_PART1')
   );
 
+  const handlePageRankRowClick = (r: PageRankTopItem) => {
+    const segId = Number(r.segment_id);
+    if (r.is_cold_start) {
+      onSelectColdStartSegment(segId, r.street_name);
+      return;
+    }
+    onSelectSegmentOnMap(segId, r.latest_ict_date || undefined, r.latest_vn_hour ?? undefined);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
       <div className="card">
         <div className="card-header">
           <div>
             <h2 className="card-title">
-              Kiểm Nghiệm Phản Biện Card B2: Vì Sao PageRank Cao Không Đồng Nghĩa Đang Kẹt Xe?
+              Kiểm Chứng Độc Lập: Vì Sao PageRank Cao Không Đồng Nghĩa Đang Kẹt Xe?
             </h2>
             <p className="card-subtitle">
               Đối chứng trực tiếp giữa cấu trúc hình học đồ thị (giao lộ thực sau khi lọc điểm uốn cong) và vận tốc GPS thực nghiệm
             </p>
           </div>
-          <span className="badge badge-blue">UC-3 &amp; Card B2 Verified</span>
+          <span className="badge badge-blue">UC-3 · Kiểm Chứng Độc Lập</span>
         </div>
         <div className="table-scroll" style={{ maxHeight: 230 }}>
           <table className="toc-table">
             <thead>
               <tr>
-                <th>Nhóm Đối Chứng (Card B2)</th>
+                <th>Nhóm Đối Chứng</th>
                 <th>Đoạn &amp; Tuyến đường</th>
                 <th>PageRank</th>
                 <th>Số khung GPS</th>
@@ -111,7 +124,9 @@ export const TabGraphRules: React.FC<Props> = ({ onSelectSegmentOnMap }) => {
           <div className="card-header">
             <div>
               <h2 className="card-title">1. Top-{data.pagerank_top.length} Nút Cổ Chai Cấu Trúc Directed Line-Graph PageRank (UC-3)</h2>
-              <p className="card-subtitle">Nhấp vào bất kỳ đoạn đường nào để xem trên bản đồ &amp; chuỗi dự báo</p>
+              <p className="card-subtitle">
+                Nhấp đoạn Cold-Start (0 GPS) ➔ mở Màn 4 (6 Cụm K-Means &amp; Đường tương đồng); nhấp đoạn Có GPS ➔ mở Màn 1 đúng khung giờ
+              </p>
             </div>
           </div>
           <div className="table-scroll">
@@ -131,7 +146,12 @@ export const TabGraphRules: React.FC<Props> = ({ onSelectSegmentOnMap }) => {
                   <tr
                     key={r.segment_id}
                     className="clickable"
-                    onClick={() => onSelectSegmentOnMap(Number(r.segment_id))}
+                    onClick={() => handlePageRankRowClick(r)}
+                    title={
+                      r.is_cold_start
+                        ? 'Nhấp để mở Màn 4 · Tra cứu cụm K-Means & Top-8 đường có GPS tương đồng'
+                        : 'Nhấp để mở Màn 1 · Xem bản đồ & dự báo +30p đúng khung giờ có GPS'
+                    }
                   >
                     <td>{idx + 1}</td>
                     <td>
@@ -146,9 +166,9 @@ export const TabGraphRules: React.FC<Props> = ({ onSelectSegmentOnMap }) => {
                     </td>
                     <td>
                       {r.is_cold_start ? (
-                        <span className="badge badge-amber">Cold-Start (0 GPS)</span>
+                        <span className="badge badge-amber">Cold-Start (0 GPS) ➔ Màn 4</span>
                       ) : (
-                        <span className="badge badge-green">Có GPS ({r.obs_windows} khung)</span>
+                        <span className="badge badge-green">Có GPS ({r.obs_windows} khung) ➔ Màn 1</span>
                       )}
                     </td>
                   </tr>

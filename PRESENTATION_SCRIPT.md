@@ -1,349 +1,419 @@
-# Kịch Bản Thuyết Trình Chuẩn 12 Phần (Hội Nghị, Báo Cáo Điều Hành & Bảo Vệ Đồ Án Học Phần BDA501 — Big Data Analytics)
+# Kịch Bản Thuyết Trình Song Song Live Demo (17 Slides + 4 Chặng Live Demo = 21 Phút Chuẩn)
 
 - **Tên đề tài:** Hệ thống Giám sát Hiện trạng & Dự báo Ùn tắc Giao thông Đô thị TP. Hồ Chí Minh (*HCMC Smart Traffic Big Data Analytics & Congestion Prediction Platform*)
 - **Đơn vị & Học phần:** `FSB · FPT University | MSE AI | BDA501 – Big Data Analytics` (`Fall 2026`)
 - **Giảng viên hướng dẫn (Instructor):** **Đặng Trần Khánh**
-- **Bộ slide trình chiếu đi kèm:** `HCMC_Smart_Traffic_Final_Presentation.pptx` & `HCMC_Smart_Traffic_Final_Slides.pdf` (`17 Slides` theo cấu trúc **12 Phần chuẩn Học thuật & Hội nghị + 2 Slide Trực quan hóa Phương pháp + Slide 17 Technical Readiness & Production Verification**)
-- **Báo cáo tổng kết & Kiểm định đi kèm:** `HCMC_Smart_Traffic_Final_Report.pdf` & `outputs/HCMC_Smart_Traffic_Final_Report.pdf` (`7 Chương`, `60 cột dataset.csv`)
-- **Nhóm thực hiện & Phân công Trình bày theo 17 Slides (3 Thành viên — Mỗi Slide đúng 1 Người nói):**
-  1. **Nguyễn Tạ Minh Quyền (`25MS23280`)** — Phụ trách **Slide 01, Slide 02 (`1. Problem Statement`), Slide 04 (`3. System Architecture`), Slide 05 (`4. Data, EDA & Data Problem`), Slide 06 (`Giải thích Phương pháp 1/2: Nội suy Vmax & Monoid`) & Slide 08 (`5. Data Pipeline & Data Processing`)**
-  2. **Nguyễn Thành Đạt (`25MS23306`)** — Phụ trách **Slide 03 (`2. Literature Review`), Slide 09 (`6. Modeling`), Slide 10 (`7. Batch Processing`), Slide 12 (`9A. Experiments: Ablation`) & Slide 13 (`9B. Experiments: Persistence Defense`)**
-  3. **Phạm Công Minh (`25MS23310`)** — Phụ trách **Slide 07 (`Giải thích Phương pháp 2/2: Line-Graph PageRank, 7D K-Means & O(1) Sketches`), Slide 11 (`8. Stream Processing`), Slide 14 (`10. Demonstration`), Slide 15 (`11. Limitations & Risks — Tổng hợp`), Slide 16 (`12. Plan`), Slide 17 (`13. Technical Readiness & Production Verification`) & Trình diễn `Live Demo` trực tiếp `ReactJS + FastAPI TOC Command Center (:8000)`**
+- **Bộ slide trình chiếu đi kèm:** `HCMC_Smart_Traffic_Final_Presentation.pptx` & `HCMC_Smart_Traffic_Final_Slides.pdf` (`17 Slides`: Cấu trúc 12 Phần chuẩn Học thuật + 2 Slide Trực quan hóa Phương pháp + Slide 17 Tổng kết Kiểm định Kỹ thuật)
+- **Tra cứu nhanh Báo cáo:** `HCMC_Smart_Traffic_Final_Report.pdf` (33 trang, 48 bookmark mục lục, Danh mục Thuật ngữ Bảng 0.1–0.2, Chương 1–8 + 16 Tài liệu tham khảo), `outputs/metrics.json`, `outputs/spark_runtime_evidence.json`, `outputs/mongo_verify.json`, `outputs/query_progress.json`
+- **Cơ chế Trình bày Song song Live Demo (Interleaved Present + Demo · Tổng đúng `21:00` · Đúng 2 Lần Chuyển Mic):**
+  Thay vì thuyết trình chay 18 phút rồi cuối giờ quay lại giải thích lặp 3 phút demo, mỗi chặng thuật toán và pipeline được **trình diễn trực tiếp ngay bên cạnh** trên màn hình mới **`Tab 06 · Luồng Thực Thi Pipeline (Live)`** và các tab chuyên biệt của **`ReactJS + FastAPI TOC (:8000)`**. Nhóm phân vai rạch ròi **Presenter (người nói)** và **Driver (người bấm chuột/chuyển cửa sổ hỗ trợ)** để triệt tiêu thời gian chết:
+  1. **Chặng 1 — Nguyễn Tạ Minh Quyền (`25MS23280`) · `00:00 – 06:00` (`6m00s`: Slide 01–06 `5m15s` + Live Demo #1 `0m45s` · Driver: Thành Đạt):** Mở đầu, Bài toán thực tế, Khảo sát tài liệu, Kiến trúc tổng thể `Zones A–F`, Kiểm toán Kaggle v6, Phương pháp (1/2) & **Live Demo #1 Luồng P1 (`Tab 06`, Stage 1–3)**. *(Sở hữu kỹ thuật chính: Mục 1, 4, 5 & 7A — Data, Quality Funnel & Spark Batch ETL)*
+  2. **Chặng 2 — Nguyễn Thành Đạt (`25MS23306`) · `06:00 – 14:15` (`8m15s`: Slide 07–13 `6m45s` + Live Demo #2 `0m45s` + Live Demo #3 `0m45s` · Driver: Công Minh):** Phương pháp (2/2), Data Pipeline (`R1–R6`), Modeling (`23D Predictive ML`), **Live Demo #2 Luồng P2–P3 (`Tab 06` Stage 4–5, `Tab 03`, `Tab 04`)**, Batch Processing (`Spark 3.5.7`), Stream & Serving (`Kafka 4.1 & MongoDB 8.0`), **Live Demo #3 Luồng P4 Live Kafka 200 tin & Spark Audit (`Tab 06/02`, `Tab 05`)**, và Thực nghiệm (`Ablation 7 mô hình` + `Persistence Defense`). *(Sở hữu kỹ thuật chính: Mục 2, 6, 7B & 9 — Literature, Graph, Modeling & Experiments)*
+  3. **Chặng 3 — Phạm Công Minh (`25MS23310`) · `14:15 – 21:00` (`6m45s`: Slide 14–17 `4m45s` + Live Demo #4 `2m00s` · Driver: Thành Đạt):** Demonstration (`#50026 Điện Biên Phủ` & `#21064 Công Trường Quốc Tế`), **Live Demo #4 Điều Hành Thực Địa TOC (:8000) & Kiểm Chứng Mù (`Tab 01` & `Mongo IXSCAN`)**, Limitations & Risks, Nghiệm thu & Lộ trình 3 giai đoạn, và Tổng kết 5 Trụ cột Kiểm định Kỹ thuật (mời Q&A, không chạy demo lặp cuối giờ). *(Sở hữu kỹ thuật chính: Mục 3, 8, 10, 11 & 12 — Architecture, Stream, MongoDB, Web TOC, Limitations & Plan)*
 
 ---
 
-## Phần 1. Bảng Ánh Xạ Cấu Trúc 12 Phần + Production Audit Sang 17 Slides (`18 Phút + 3 Phút Live Demo`)
+## Checklist Chuẩn Bị Trước Giờ G (30 Giây) & Phương Án Dự Phòng 15 Giây
 
-| Thứ tự Slide | Mục trong Cấu trúc 12 Phần | Nội dung Cốt lõi (Chỉ nêu `Limitations & Risks` ở các Phần Giải pháp) | Người Trình bày | Khung Thời gian | Mục Báo cáo |
+- **Bước 1 — Khởi chạy cụm 5 container mặc định (`11.0 GB RAM`: `kafka`, `mongo`, `spark`, `toc-web`, `live-consumer`):**
+  ```powershell
+  docker compose up -d --build
+  ```
+- **Bước 2 — Sắp sẵn 2 cửa sổ cạnh nhau để `Alt+Tab` tức thì:**
+  - **Cửa sổ 1:** Slide trình chiếu toàn màn hình (`HCMC_Smart_Traffic_Final_Presentation.pptx` hoặc `HCMC_Smart_Traffic_Final_Slides.pdf`).
+  - **Cửa sổ 2:** Trình duyệt mở sẵn `http://localhost:8000` (zoom `100%`, tắt thanh bookmark).
+- **Bước 3 — Đặt trạng thái sạch trước khi bấm đồng hồ:**
+  - Bấm nút **`🧹 Reset 0`** để đưa toàn bộ bộ đếm Kafka Live (`messages`, `Bloom`, `Watermark`, `HLL++`) về `0`.
+  - Trên **Tab 01 (`Điều Hành TOC`)**: chọn sẵn **Kịch bản 3 (`#50026 Điện Biên Phủ`, `2021-01-04`, khung `[07:00–07:30)`, chốt `t = 07:30 ICT`)**.
+  - Chuyển sẵn sang **Tab 06 (`Luồng Thực Thi Pipeline`)**, chọn trace **`#50026 Điện Biên Phủ`** để Chặng 1 bật lên là chạy ngay không tốn thời gian chọn.
+- **Bước 4 — Chốt phân vai Presenter / Driver:**
+  - **Chặng 1 (`00:00 – 06:00`):** **Minh Quyền** nói, **Thành Đạt** làm Driver.
+  - **Chặng 2 (`06:00 – 14:15`):** **Thành Đạt** nói, **Công Minh** làm Driver.
+  - **Chặng 3 (`14:15 – 21:00`):** **Công Minh** nói, **Thành Đạt** làm Driver.
+- **Phương án Dự phòng 15 giây (Backup Plan):** Nếu máy chiếu hoặc Docker container bất ngờ lag/nghẽn cổng `:8000`, Driver chuyển ngay sang thư mục ảnh thực địa đã kết xuất sẵn `outputs/slide_charts/ui_tab*.png` (`ui_tab1_overview_hotspots.png`, `ui_tab2_live_forecast_mongo.png`, `ui_tab4_kmeans_coldstart.png`) kết hợp đối chiếu trực tiếp bộ bằng chứng JSON (`outputs/metrics.json`, `outputs/spark_runtime_evidence.json`, `outputs/mongo_verify.json`, `outputs/query_progress.json`) — giữ nguyên lời thoại và đúng nhịp `21:00`.
+
+---
+
+## Phần 1. Bảng Ánh Xạ & Phân Bổ Thời Gian Liên Tục (`16:45` Slide + `04:15` Live Demo Song Song = `21:00`)
+
+| Slide / Live Demo | Chặng | Mục Cấu Trúc 12 Phần | Nội dung Cốt lõi | Người nói (Driver) | Khung Thời gian | Thời lượng |
+|---|---|---|---|---|---|---:|
+| **Slide 01** | Chặng 1 | **Mở đầu (Cover)** | Giới thiệu đề tài, học phần, 3 thành viên (1 lần duy nhất) & bố cục song song 4 Live Demo | **Minh Quyền** *(Đạt)* | `00:00 – 00:30` | `0m30s` |
+| **Slide 02** | Chặng 1 | **1. Problem Statement** | Ùn tắc lan truyền TP.HCM (`WHY`), 3 điểm nghẽn hiện hữu & 3 mục tiêu + giá trị (`WHAT`) | **Minh Quyền** *(Đạt)* | `00:30 – 01:30` | `1m00s` |
+| **Slide 03** | Chặng 1 | **2. Literature Review** | Khảo sát 4 hướng tiếp cận giao thông đô thị, khoảng trống nghiên cứu & logic 12 phần | **Minh Quyền** *(Đạt)* | `01:30 – 02:20` | `0m50s` |
+| **Slide 04** | Chặng 1 | **3. System Architecture** | Kiến trúc `Zones A–F`, 4 luồng màu Pipeline, `3-Phase MLOps`, `Predictive ML` + Arch Risks | **Minh Quyền** *(Đạt)* | `02:20 – 03:25` | `1m05s` |
+| **Slide 05** | Chặng 1 | **4. Data, EDA & Kaggle v6** | Kiểm toán 5 CSV Kaggle v6 (`41` cột, `38.50 MB`, `46/48` khung), `Proof-of-Scale` & `EC-1..EC-10` | **Minh Quyền** *(Đạt)* | `03:25 – 04:25` | `1m00s` |
+| **Slide 06** | Chặng 1 | **Phương pháp (1/2)** | `Train-Only 3-Tier Vmax`, `derive_urban_los` (`89.19%`) & `5-Tuple Monoid + Salting` | **Minh Quyền** *(Đạt)* | `04:25 – 05:15` | `0m50s` |
+| **Live Demo #1** | Chặng 1 | **Demo Song Song · P1** | `Tab 06` (`#50026 Điện Biên Phủ`, nút `Slide 06 · P1 Monoid/Vmax`): Stage 1→3 (`R1–R6`, `Vmax`, `Monoid 0.0`) → *Chuyển mic 1* | **Minh Quyền** *(Đạt)* | `05:15 – 06:00` | `0m45s` |
+| **Slide 07** | Chặng 2 | **Phương pháp (2/2)** | `Line-Graph PageRank` (`30` vòng lặp), `7D K-Means` (`88.13%`) & `33 KiB O(1) Sketches` | **Thành Đạt** *(Minh)* | `06:00 – 06:50` | `0m50s` |
+| **Slide 08** | Chặng 2 | **5. Data Pipeline** | Hành trình `07:08`, `6` quy tắc `R1–R6` (`0` silent drops), `Train-Only` & `Predictive ML` + Pipeline Risks | **Thành Đạt** *(Minh)* | `06:50 – 07:40` | `0m50s` |
+| **Slide 09** | Chặng 2 | **6. Modeling** | `Exact t+30m`, tách `7,192` burst (`1,885` organic TRAIN), biểu đồ `23D` & `VAL Gate` + Modeling Risks | **Thành Đạt** *(Minh)* | `07:40 – 08:35` | `0m55s` |
+| **Live Demo #2** | Chặng 2 | **Demo Song Song · P2–P3** | `Tab 06` Stage 4→5 (`PageRank`, `Cụm #1`, `23D`, `RF 23D` `LOS F 57.9% / 87.2%`), `Tab 03` (`15.23x`) & `Tab 04` (`#37345`) | **Thành Đạt** *(Minh)* | `08:35 – 09:20` | `0m45s` |
+| **Slide 10** | Chặng 2 | **7. Batch Processing** | `Spark 3.5.7`: `BHJ` (`Combined -12.45% / Isolated -25.76%`), `Salting` (`1.0197x`, `+87.92 ms`), `PageRank`, `FPGrowth 32`, `K-Means` | **Thành Đạt** *(Minh)* | `09:20 – 10:20` | `1m00s` |
+| **Slide 11** | Chặng 2 | **8. Stream & Serving** | `Kafka 4.1 KRaft`, real watermark, `WAL 73.7 KB`, `HLL++ 9,620.2`, `Tier-2 100%`, `Mongo IXSCAN 0.360 ms / 31.36x` | **Thành Đạt** *(Minh)* | `10:20 – 11:15` | `0m55s` |
+| **Live Demo #3** | Chặng 2 | **Demo Song Song · P4** | `Tab 06/02` bơm `⚡ 200 tin Kafka Live` (Stage 6→7, `Bloom > 0`, `Watermark > 0`, `HLL++`, `v1`) & lướt `Tab 05` Audit | **Thành Đạt** *(Minh)* | `11:15 – 12:00` | `0m45s` |
+| **Slide 12** | Chặng 2 | **9A. Experiments: Ablation** | `7-Model Ablation`, `6×6 CM`, lý giải vì sao chọn `RF 23D` thay vì `RF 14D` (sập `VAL 0.1697`) | **Thành Đạt** *(Minh)* | `12:00 – 13:10` | `1m10s` |
+| **Slide 13** | Chặng 2 | **9B. Experiments: Defense** | Đối chứng `Persistence`, đổi pha (`10/61 → 14/61, p=0.001953`), `Cold-Start` (`88.13%`, `58.63%`) → *Chuyển mic 2* | **Thành Đạt** *(Minh)* | `13:10 – 14:15` | `1m05s` |
+| **Slide 14** | Chặng 3 | **10. Demonstration** | 2 ảnh `Tab 01` thật (`#50026 Điện Biên Phủ` & `#21064 Công Trường Quốc Tế + Mongo IXSCAN`) trên `TOC (:8000)` | **Công Minh** *(Đạt)* | `14:15 – 15:10` | `0m55s` |
+| **Live Demo #4** | Chặng 3 | **Demo Thực Địa · TOC** | `Tab 01` Kịch bản 3 (`#50026`, chốt `07:30 ICT`, **Kiểm chứng mù** `E ➔ F`), Kịch bản 2 (`#21064`, chốt `12:00 ICT`) & `Mongo IXSCAN` | **Công Minh** *(Đạt)* | `15:10 – 17:10` | `2m00s` |
+| **Slide 15** | Chặng 3 | **11. Limitations & Risks** | Tổng hợp giới hạn 5 thành phần giải pháp (`Mục 3, 5, 6, 7, 8`) & 2 thẻ rủi ro/kiểm soát | **Công Minh** *(Đạt)* | `17:10 – 18:25` | `1m15s` |
+| **Slide 16** | Chặng 3 | **12. Plan & Roadmap** | Nghiệm thu `100%` (kỹ thuật & 3 chặng) & Lộ trình `Giai đoạn 1 / Giai đoạn 2 / Giai đoạn 3` | **Công Minh** *(Đạt)* | `18:25 – 19:40` | `1m15s` |
+| **Slide 17** | Chặng 3 | **Tổng kết Kiểm định** | Khép lại 5 trụ cột kiểm định kỹ thuật (đã chứng minh qua 4 Live Demo) → Mời Hội đồng Q&A | **Công Minh** *(Đạt)* | `19:40 – 21:00` | `1m20s` |
+
+---
+
+## Phần 2. Kịch Bản Lời Thoại Chi Tiết Từng Slide & 4 Chặng Live Demo Song Song (`00:00 – 21:00`)
+
+### Chặng 1 — Nguyễn Tạ Minh Quyền (`25MS23280`) · Slide 01–06 + Live Demo #1 (`00:00 – 06:00`, `6m00s` · Driver: Thành Đạt)
+
+#### Slide 01: Mở Đầu — Trang Bìa Đề Tài, Nhóm Thực Hiện & Bố Cục 3 Chặng (`00:00 – 00:30`)
+- **Người trình bày:** **Nguyễn Tạ Minh Quyền (`25MS23280`)**
+- **Chỉ dẫn trực quan:** Hướng về tiêu đề chính `HCMC Smart Traffic Big Data Platform` và dải tên 3 thành viên cùng giảng viên hướng dẫn.
+- **Lời thoại thuyết trình:**
+  > "Kính chào thầy Đặng Trần Khánh và quý thầy cô. Nhóm em gồm Nguyễn Tạ Minh Quyền, Nguyễn Thành Đạt và Phạm Công Minh, xin trình bày đồ án cuối kỳ môn BDA501 — Big Data Analytics tại FSB, Đại học FPT: Nền tảng Phân tích Dữ liệu Lớn và Dự báo Ùn tắc Giao thông TP.HCM. Trong 21 phút tới, nhóm trình bày 17 slide song song bốn chặng Live Demo trực tiếp theo từng khối kỹ thuật."
+- **Tra cứu nhanh:** Trang bìa & Chương 1 (`1.1`).
+
+---
+
+#### Slide 02: `1. Problem Statement` — Bài Toán Điều Hành Giao Thông Chủ Động Tại TP.HCM (`00:30 – 01:30`)
+- **Người trình bày:** **Nguyễn Tạ Minh Quyền (`25MS23280`)**
+- **Chỉ dẫn trực quan:** Quét lần lượt 3 thẻ bên trái (`WHY` → `3 Hạn chế` → `WHAT`) đối chiếu bản đồ TP.HCM bên phải.
+- **Lời thoại thuyết trình:**
+  > "Mở đầu Phần 1 trên Slide 02 là bài toán thực tế tại TP.HCM. Mật độ xe dày đặc từ Tân Sơn Nhất, Quận 1, Lý Thường Kiệt đến Thủ Đức khiến một điểm nghẽn giờ cao điểm dễ lan thành kẹt dây chuyền, nhưng điều tiết hiện vẫn phản ứng bị động sau sự cố.
+  >
+  > Công cụ hiện hữu vấp ba hạn chế: camera cố định quá đắt chỉ lắp ở ít nút giao; GPS hành trình lệch đại lộ, bỏ trống vùng mù đường nhánh và hay trễ tin; còn bảng giám sát chỉ báo nơi đang kẹt, chưa dự báo trước 30 phút và tách rời trực ban với quy hoạch.
+  >
+  > Vì vậy, đồ án giải quyết ba mục tiêu: ước lượng lưu thông toàn đô thị kể cả vùng mù, nhận diện nút cổ chai cấu trúc và dự báo sớm 30 phút cho trung tâm TOC, Sở GTVT và người dân."
+- **Tra cứu nhanh:** Chương 1 (`1.1–1.4`).
+
+---
+
+#### Slide 03: `2. Literature Review` — Khảo Sát 4 Hướng Tiếp Cận & Logic 12 Phần (`01:30 – 02:20`)
+- **Người trình bày:** **Nguyễn Tạ Minh Quyền (`25MS23280`)**
+- **Chỉ dẫn trực quan:** Điểm qua 4 dòng bảng khảo sát phía trên và nhấn mạnh thẻ Khoảng trống nghiên cứu ở phía dưới.
+- **Lời thoại thuyết trình:**
+  > "Ở Phần 2 trên Slide 03, nhóm khảo sát bốn hướng tiếp cận giao thông đô thị. Thứ nhất, cảm biến cố định SCATS, CCTV đo chính xác tại nút nhưng quá đắt nên bỏ trống đường nhánh. Thứ hai, GPS hành trình của Herrera và Zheng phủ rộng hơn nhưng lệch trục lớn, ngắt quãng và chỉ phản ánh hiện trạng. Thứ ba, dự báo ngắn hạn như ARIMA, DCRNN hay Graph WaveNet mạnh trên cao tốc dày cảm biến nhưng suy biến ở đô thị đứt quãng. Thứ tư, nền tảng TOC thường tách rời mô hình học thuật khỏi luồng GPS có tin trễ, tin trùng.
+  >
+  > Khoảng trống đó khẳng định cần một nền tảng tích hợp đi theo mạch 12 phần từ bài toán, kiến trúc, xử lý lô–luồng đến thực nghiệm."
+- **Tra cứu nhanh:** Chương 1 (`1.5`).
+
+---
+
+#### Slide 04: `3. System Architecture` — Kiến Trúc `Zones A–F`, 4 Luồng Pipeline & `3-Phase MLOps` (`02:20 – 03:25`)
+- **Người trình bày:** **Nguyễn Tạ Minh Quyền (`25MS23280`)**
+- **Chỉ dẫn trực quan:** Chỉ sơ đồ 6 phân vùng `Zones A–F` với 4 màu mũi tên Pipeline bên trái, thẻ `3-Phase MLOps` góc trên phải, và `Arch Risks` góc dưới phải.
+- **Lời thoại thuyết trình:**
+  > "Sang Phần 3 trên Slide 04 là kiến trúc lai Batch–Speed gồm sáu phân vùng Zones A–F, nối bởi bốn luồng màu: Speed tím, Batch xanh dương, MLOps Registry nét đứt xanh ngọc và Storage & Serving xanh lá. Dữ liệu từ Zone A qua Kafka KRaft và phễu chất lượng Zone B, tách nhánh vào Speed Layer Zone C (Watermark 30 phút) song song Batch Layer Zone D chạy đồ thị, phân cụm và huấn luyện học máy dự báo Predictive ML chỉ dùng dữ liệu quá khứ.
+  >
+  > Cơ chế 3-Phase MLOps chống xung đột ghi tại Zone E: Phase A học một lần trên 1,885 mẫu organic TRAIN rồi khóa mã băm SHA-256; Phase B trực tuyến chỉ đọc để phát cảnh báo v1; Phase C cuối ngày đối soát tin trễ nâng cấp bản chuẩn v2 tại Zone F gồm Parquet, MongoDB 8.0 và web ReactJS + FastAPI cổng 8000.
+  >
+  > Hai rủi ro kiến trúc là 5 container chung 11 GB RAM có thể tranh chấp đĩa và tin trễ quá 30 phút phải đợi Phase C."
+- **Tra cứu nhanh:** Chương 3 (`3.1, 3.2, 3.5`).
+
+---
+
+#### Slide 05: `4. Data, EDA & Data Problem` — Kiểm Toán Kaggle v6, `Proof-of-Scale` & `EC-1..EC-10` (`03:25 – 04:25`)
+- **Người trình bày:** **Nguyễn Tạ Minh Quyền (`25MS23280`)**
+- **Chỉ dẫn trực quan:** Chỉ biểu đồ dị thường góc trên trái, thẻ Kaggle v6 & `Proof-of-Scale` góc dưới trái, và bảng `EC-1..EC-10` bên phải.
+- **Lời thoại thuyết trình:**
+  > "Bước sang Phần 4 trên Slide 05, nhóm kiểm toán trực tiếp nguồn Kaggle v6 từ BkTraffic Bách khoa TP.HCM (giấy phép CC0), gồm 5 CSV, 41 cột, 38.50 MB: 577,967 nút bản đồ cắt 90.97% điểm cong còn 52,181 nút giao thực; 5,553 tuyến đường; 84,633 đoạn còn 84,206 đoạn cơ giới sau khi lọc 427 POI OSM; 90,938 pings còn 90,787 hợp lệ; và 33,441 cửa sổ phủ 46/48 khung giờ còn 33,394 cửa sổ cơ giới. Đây là mẫu chuẩn Proof-of-Scale kiểm chứng sai số 0.0 cho quy mô TP.HCM 8–17 tỷ tin và 1.5–3 TB/ngày.
+  >
+  > Bảng bên phải định lượng EC-1 đến EC-10: thiếu Vmax 85.21% bảng thô (28,495/33,441) và 85.19% cơ giới (28,448/33,394); 88.13% vùng mù; 66.30% đứt quãng từ 60 phút kèm 7,192 burst sáng 03/08/2020 — một sáng đổ dồn 36,096 pings (39.7% cả 10 tháng); 12.89% lệch ngày UTC+7; lệch tải 684.95x; tin trùng, trễ và sập luồng."
+- **Tra cứu nhanh:** Chương 2 (`2.1, 2.2`).
+
+---
+
+#### Slide 06: Trực Quan Hóa Phương Pháp (1/2) — `3-Tier Vmax`, `derive_urban_los` & `5-Tuple Monoid` (`04:25 – 05:15`)
+- **Người trình bày:** **Nguyễn Tạ Minh Quyền (`25MS23280`)**
+- **Chỉ dẫn trực quan:** Chỉ phễu 4 bậc bên trái cho `3-Tier Vmax` và hộp đối chiếu Đỏ/Xanh bên phải cho `5-Tuple Monoid + Key Salting`.
+- **Lời thoại thuyết trình:**
+  > "Trên Slide 06 là hai phương pháp nền tảng. Bên trái, để điền khuyết hơn 85% cửa sổ thiếu Vmax không rò rỉ tương lai, hệ thống chỉ học trên tập TRAIN theo bốn bậc: giữ 4,946 cửa sổ có biển gốc; lấy P85 tốc độ thoáng chính đoạn cho 7,650 cửa sổ; mượn trung vị cùng cấp–loại cho 19,601 cửa sổ; và dùng chuẩn 80/60/50/40 km/h cho 1,197 cửa sổ. Hàm derive_urban_los bậc 5 km/h khớp 89.19% nhãn BkTraffic.
+  >
+  > Bên phải là 5-Tuple Monoid kèm Key Salting: Máy A có 1 xe 10 km/h, Máy B có 3 xe 40 km/h — trung bình thật 32.5, gộp ngây thơ ra 25 (sai 7.5). Giữ 5 đại lượng cộng được giúp chia 8 giỏ song song sai số 0.0. Mời hội đồng xem trực tiếp luồng P1 trên Tab 06."
+- **Tra cứu nhanh:** Chương 2 (`2.4`) & Chương 3 (`3.3`).
+
+---
+
+#### Live Demo #1 — Luồng P1 (`R1–R6`, `Vmax` & `Monoid`) (`05:15 – 06:00`, `0m45s`)
+- **Presenter:** **Nguyễn Tạ Minh Quyền (`25MS23280`)** · **Driver:** **Nguyễn Thành Đạt (`25MS23306`)**
+- **Thao tác Driver (từng cú click):**
+  1. `Alt+Tab` sang trình duyệt `http://localhost:8000` (đang mở sẵn **`Tab 06 · Luồng Thực Thi Pipeline`** với trace **`#50026 Điện Biên Phủ`**).
+  2. Bấm nút nhảy nhanh **`Slide 06 · P1 Monoid/Vmax`** để chạy nối tiếp **Stage 1 → Stage 2 → Stage 3** trực tiếp trên dữ liệu thật.
+  3. Giữ con trỏ chuột lần lượt vào: danh sách `2` ping GPS thô (`17 & 6 km/h`), phễu `R1–R6` + tầng `Vmax 60 km/h`, và thẻ gộp **`5-Tuple Monoid`** (`11.5 km/h`, sai số `0.0`).
+  4. Ngay khi Quyền nói *"chuyển mic sang bạn Thành Đạt"*, Driver `Alt+Tab` trở lại cửa sổ Slide (Slide 07).
+- **Lời thoại thuyết trình song song (`0m45s`):**
+  > "Trên màn hình cổng 8000, Tab 06 — Luồng Thực Thi Pipeline — đang mở sẵn dấu vết đoạn #50026 đại lộ Điện Biên Phủ sáng 4/1/2021. Khi bấm nút Slide 06 · P1 Monoid/Vmax: Stage 1 nạp trực tiếp hai ping GPS thô là 17 và 6 km/h; Stage 2 lọc qua phễu R1–R6 không rớt ngầm, nội suy Vmax 60 km/h theo bảng Train-Only và quy đổi LOS bằng derive_urban_los; đến Stage 3, bộ 5-Tuple Monoid gộp chính xác thành vận tốc 11.5 km/h mức E với sai số toán học 0.0 so với đơn luồng. Em xin chuyển mic sang bạn Thành Đạt tiếp tục Chặng 2."
+
+---
+
+### Chặng 2 — Nguyễn Thành Đạt (`25MS23306`) · Slide 07–13 + Live Demo #2 & #3 (`06:00 – 14:15`, `8m15s` · Driver: Công Minh)
+
+#### Slide 07: Trực Quan Hóa Phương Pháp (2/2) — `Line-Graph PageRank`, `7D K-Means` & `33 KiB Sketches` (`06:00 – 06:50`)
+- **Người trình bày:** **Nguyễn Thành Đạt (`25MS23306`)**
+- **Chỉ dẫn trực quan:** Chỉ lần lượt 3 cột trực quan từ trái sang phải (`PageRank` → `7D K-Means` → `O(1) Sketches`).
+- **Lời thoại thuyết trình:**
+  > "Cảm ơn bạn Quyền. Trên Slide 07 là ba cơ chế về đồ thị, phân cụm và bộ đếm luồng O(1). Cột một là Line-Graph PageRank: sau khi cắt 90.97% điểm cong và bỏ cạnh quay đầu U-turn, mỗi đoạn cơ giới thành một đỉnh trên 92,453 cạnh chuyển tiếp, chạy PageRank 30 vòng lặp (hệ số 0.85) tìm nút phễu tự nhiên, đứng đầu Nguyễn Kiệm 2.7799.
+  >
+  > Cột hai là 7D K-Means: gom 84,206 đoạn vào 6 cụm hình thái–hành vi để 74,211 đoạn vùng mù (88.13%) mượn hồ sơ tuyến cảm biến đồng dạng.
+  >
+  > Cột ba là Sketches 33 KiB cố định: RotatingBloomFilter 2×16 KiB (k=10) chặn 100% tin trùng (FPR 0.0389%), HyperLogLog++ 1 KiB đếm đoạn hoạt động và EWMA bắt kẹt lì."
+- **Tra cứu nhanh:** Chương 4 (`4.1, 4.3`) & Chương 6 (`6.2`).
+
+---
+
+#### Slide 08: `5. Data Pipeline & Processing` — 6 Quy Tắc `R1–R6`, `Train-Only` & `Predictive ML` (`06:50 – 07:40`)
+- **Người trình bày:** **Nguyễn Thành Đạt (`25MS23306`)**
+- **Chỉ dẫn trực quan:** Chỉ sơ đồ hành trình `07:08` phía trên, thẻ `Quality Funnel R1–R6` bên trái dưới và thẻ `Pipeline Risks` bên phải dưới.
+- **Lời thoại thuyết trình:**
+  > "Sang Phần 5 trên Slide 08, sơ đồ trên theo dấu tin 07:08 Lý Thường Kiệt 4 km/h xuyên bốn chặng tới cảnh báo dưới 1 ms. Phễu R1–R6 dùng ANSI try_cast đảm bảo 0 sập job, 0 rớt ngầm: R1 bù 27 m cho 154 đoạn dài không dương; R2 lọc 427 POI còn 84,206 đoạn cơ giới; R3 tách 631 tên quận phường; R4 chuẩn hóa NFC gộp 695 về 641 đường; R5 nội suy Train-Only 3-Tier Vmax cho 28,448 cửa sổ; R6 cách ly 151 ping lỗi nhưng giữ 0 km/h xe kẹt đứng. Sau đổi UTC+7 (4,305 cửa sổ), 33,394 cửa sổ phục vụ Predictive ML.
+  >
+  > Rủi ro là 62.28% cửa sổ dùng Vmax tĩnh chưa bắt ngập nước và khung 30 phút làm mượt dao động ngắn."
+- **Tra cứu nhanh:** Chương 2 (`2.3–2.5`).
+
+---
+
+#### Slide 09: `6. Modeling` — `23D` Feature Taxonomy, `Organic 1,885` & `VAL Composite Gate` (`07:40 – 08:35`)
+- **Người trình bày:** **Nguyễn Thành Đạt (`25MS23306`)**
+- **Chỉ dẫn trực quan:** Chỉ biểu đồ tầm quan trọng 23 biến bên trái và 2 thẻ bên phải (`Exact t+30m & VAL Gate` ở trên, `Modeling Risks` ở dưới).
+- **Lời thoại thuyết trình:**
+  > "Sang Phần 6 trên Slide 09 là thiết kế dự báo đúng +30 phút không rò rỉ tương lai. Do 66.30% cặp đứt quãng từ 60 phút, nhóm ghép chính xác +30 phút được 7,885 cặp, tách 7,192 burst và 55 mẫu biên, giữ 1,885 organic TRAIN, 1,167 VAL và 1,182 TEST; phép thử Future-Shuffle xác nhận sai lệch 0.0.
+  >
+  > Biểu đồ bên trái cho thấy 14 biến cục bộ và chu kỳ giờ Việt Nam chiếm 89.50% tầm quan trọng — dẫn đầu là mean_velocity 46.35%, LOS hiện tại 17.56% và velocity_ratio 10.64% — cùng 9 biến đồ thị, cụm và lịch sử quá khứ chiếm 10.50% (PageRank 2.77%, neighbor_los 2.35%). Qua cổng khóa cứng VAL Composite Gate không nhìn trộm TEST, RF 23D thắng ở 0.8882, phủ 100% Cold-Start. Giới hạn là lớp B–E thưa và thiếu biến mưa ngập. Mời hội đồng xem trực tiếp luồng P2–P3."
+- **Tra cứu nhanh:** Chương 5 (`5.1–5.3, 5.5`).
+
+---
+
+#### Live Demo #2 — Luồng P2–P3 (`Graph`, `23D RF` & `Cold-Start`) (`08:35 – 09:20`, `0m45s`)
+- **Presenter:** **Nguyễn Thành Đạt (`25MS23306`)** · **Driver:** **Phạm Công Minh (`25MS23310`)**
+- **Thao tác Driver (từng cú click):**
+  1. `Alt+Tab` sang trình duyệt `http://localhost:8000` (vẫn đang ở **Tab 06** tại cuối Stage 3 của `#50026 Điện Biên Phủ`).
+  2. Bấm tiếp **Stage 4 → Stage 5**: hiện trực tiếp `PageRank`, `Cụm #1`, vector `23D` thật và **biểu đồ 6 cột xác suất `RF 23D` bật thẳng `LOS F = 57.9%, P(E/F) = 87.2%`**.
+  3. **Mẹo click trước + câu dẫn 3 giây:** Ngay khi Đạt đọc câu cầu nối *"Bây giờ nhóm mở rộng ra toàn mạng lưới 84,206 đoạn..."*, Driver bấm ngay sang **Tab 03 (`PageRank & Luật Đồng Kẹt`)** để hiện bảng `#21969 Nguyễn Kiệm` vs `#34019 Trần Quốc Thảo` và cặp đồng kẹt `Nguyễn Thị Minh Khai ↔ Cống Quỳnh (Lift 15.23x)`.
+  4. Bấm tiếp sang **Tab 04 (`6 Cụm K-Means & Cold-Start`)** — đoạn vùng mù **`#37345 Cầu vượt Ngã tư Gò Dưa`** đã được chọn sẵn mặc định kèm danh sách các tuyến cảm biến đồng dạng cùng cụm `#4`.
+  5. `Alt+Tab` trở lại cửa sổ Slide (Slide 10).
+- **Lời thoại thuyết trình song song (`0m45s`):**
+  > "Tiếp nối ngay trên Tab 06 của đoạn #50026, bấm Stage 4 để ghép PageRank, Cụm #1 và đủ vector 23D thật; sang Stage 5, biểu đồ sáu cột xác suất RF 23D bật thẳng lên mức LOS F 57.9%, tổng rủi ro P(E/F) đạt 87.2%. Bây giờ nhóm mở rộng ra toàn mạng lưới 84,206 đoạn trên Tab 03: nút phễu #21969 Nguyễn Kiệm chạy thoáng, tách bạch nút kẹt thật #34019 Trần Quốc Thảo, cùng cặp đồng kẹt Nguyễn Thị Minh Khai – Cống Quỳnh đạt Lift 15.23x. Ở Tab 04, đoạn vùng mù #37345 Cầu vượt Ngã tư Gò Dưa được ghép ngay vào Cụm #4 mượn tuyến đồng dạng."
+
+---
+
+#### Slide 10: `7. Batch Processing` — Thực Thi Phân Tán `Spark 3.5.7`, Đồ Thị & Phân Cụm (`09:20 – 10:20`)
+- **Người trình bày:** **Nguyễn Thành Đạt (`25MS23306`)**
+- **Chỉ dẫn trực quan:** Chỉ sơ đồ hai nhánh phía trên (`Batch ETL` & `Graph/K-Means`), thẻ kết quả góc dưới trái và thẻ `Batch Risks` góc dưới phải.
+- **Lời thoại thuyết trình:**
+  > "Trên Slide 10, Phần 7 trình bày xử lý lô phân tán kiểm chứng trên Apache Spark 3.5.7. Ở nhánh Batch ETL, BroadcastHashJoin ghim hai bảng danh mục nhỏ vào RAM, cắt Exchange từ 5 xuống 1 (-80%), giảm độ trễ Combined 12.45% (213.66 xuống 187.07 ms) và Isolated 25.76% (166.18 xuống 123.37 ms) so với mặc định SortMerge, sai khác bằng 0. Song song, 5-Tuple Monoid kèm 8-Bucket Salting khớp 100% baseline.py, hạ skew 684.95x xuống 1.0197x với đánh đổi +87.92 ms so với V1; Parquet cắt 9/10 phân vùng tháng 8/2020.
+  >
+  > Nhánh khai phá dưới: PageRank bảo toàn 84,206.0; SON 2 lượt và Spark FPGrowth tìm 32 luật organic TRAIN, 12 luật đồng kẹt (Lift 15.23x); 7D K-Means gom 3,609 đoạn thành 6 cụm (Silhouette 0.2241). Rủi ro: 14 luật trễ có 5–8 cửa sổ nên làm giả thuyết thăm dò."
+- **Tra cứu nhanh:** Chương 3 (`3.3–3.5`), Chương 4 (`4.1–4.4`) & `evidence/session9/B_benchmark.csv`.
+
+---
+
+#### Slide 11: `8. Stream Processing & MongoDB Serving` — `Kafka 4.1`, Real Watermark & `IXSCAN` (`10:20 – 11:15`)
+- **Người trình bày:** **Nguyễn Thành Đạt (`25MS23306`)**
+- **Chỉ dẫn trực quan:** Chỉ đường nhanh `Kafka → Speed Layer → MongoDB` phía trên, nhánh đối soát `Tier-2` ở giữa và 2 thẻ dưới.
+- **Lời thoại thuyết trình:**
+  > "Sang Phần 8 trên Slide 11 là luồng trực tuyến và kho MongoDB 8.0. GPS đi qua Kafka 4.1 KRaft ba phân vùng vào Speed Layer. Nhóm kiểm chứng Watermark thật trên Spark Structured Streaming mốc 12:30 ngày 1/12/2020 (xả 10 dòng hết hạn), cùng nhật ký ghi trước WAL 73.7 KB hồi phục 0 trùng lặp.
+  >
+  > Khối Sketches 33 KiB gồm RotatingBloom chặn 333/333 tin trùng (FPR 0.0389%), HyperLogLog++ 1 KiB ước lượng 9,620.2/9,995 đoạn (sai số 3.75%), và EWMA bắt điểm kẹt lì. Cuối ngày, Tier-1 khớp 100%, Tier-2 bù 500 cửa sổ trễ, hàn 609 lag và re-score 384 cửa sổ đạt 100%. Trên MongoDB 8.0, khóa `$status_version` chặn 25/25 tin v1 ghi đè v2; IXSCAN trên chỉ mục B-Tree đạt 0.360 ms, nhanh gấp 31.36x COLLSCAN. Mời hội đồng xem bơm luồng Kafka trực tiếp."
+- **Tra cứu nhanh:** Chương 6 (`6.1–6.5`).
+
+---
+
+#### Live Demo #3 — Luồng P4 Live Kafka 200 tin & Spark Audit (`11:15 – 12:00`, `0m45s`)
+- **Presenter:** **Nguyễn Thành Đạt (`25MS23306`)** · **Driver:** **Phạm Công Minh (`25MS23310`)**
+- **Thao tác Driver (từng cú click):**
+  1. `Alt+Tab` sang trình duyệt `http://localhost:8000` → quay về **Tab 06** (hoặc **Tab 02 · Luồng Kafka Live**).
+  2. Bấm nút **`⚡ Bơm 200 tin Kafka Live (Stress-Test)`** — chờ ~1–2 giây cho cả 5 thẻ KPI cùng **Stage 6 → Stage 7** sáng đèn trực tiếp với số live thực (`3 partitions P0/P1/P2`, **`RotatingBloomFilter 32.0 KiB` (`2×16 KiB, k=10`) chặn tin trùng > 0**, **Watermark bắt tin trễ >30p > 0**, `HLL++ 1.0 KiB`, `MongoDB v1`).
+  3. Trong lúc Đạt nhấn mạnh sự khác biệt giữa mẫu chạy live 200 tin với benchmark full `33,727` tin, Driver chuyển sang **Tab 05 (`Spark 3.5.7, Ablation & Đối Soát`)**, cuộn nhanh bảng `Spark 3.5.7` xác nhận `5 → 1 Exchange`, `Combined -12.4%` (`-12.45%`), `Isolated -25.76%`, `684.95x → 1.0197x`, và đối soát `Tier-2 100%`.
+  4. `Alt+Tab` trở lại cửa sổ Slide (Slide 12).
+- **Lời thoại thuyết trình song song (`0m45s`):**
+  > "Trên Tab 06, khi bấm Bơm 200 tin Kafka Live Stress-Test, cả năm thẻ KPI cùng Stage 6 và Stage 7 sáng đèn trực tiếp qua ba phân vùng P0, P1, P2: RotatingBloomFilter chặn ngay tin trùng lớn hơn 0, Watermark 30 phút tách ngay tin trễ quá hạn lớn hơn 0, HyperLogLog++ đếm đoạn hoạt động và ghi cảnh báo v1 vào MongoDB. Lưu ý rõ đây là mẫu chạy live 200 tin, khác với benchmark toàn tập 33,727 tin đạt 333/333 tin trùng và 9,620.2/9,995 đoạn. Lướt Tab 05 xác nhận khớp Spark 3.5.7: 5 xuống 1 Exchange, Combined -12.45%, Isolated -25.76%, skew 1.0197x và Tier-2 100%."
+
+---
+
+#### Slide 12: `9A. Experiments (Ablation & Confusion Matrix)` — So Sánh 7 Mô Hình & Lý Do Chọn `RF 23D` (`12:00 – 13:10`)
+- **Người trình bày:** **Nguyễn Thành Đạt (`25MS23306`)**
+- **Chỉ dẫn trực quan:** Chỉ bảng `7-Model Ablation` bên trái (đặc biệt `#4 RF 14D` vs `#5 RF 23D`), ma trận phân loại 6 mức (`Confusion Matrix 6×6`) bên phải và thẻ `VAL Gate` phía dưới trái.
+- **Lời thoại thuyết trình:**
+  > "Sang Phần 9A trên Slide 12 là bảng Ablation 7 mô hình trên 1,182 mẫu TEST. Trong đó, Persistence Baseline là mốc đối chứng tối giản không dùng AI do chính nhóm tự thiết lập — cứ đoán giữ nguyên mức kẹt hiện tại sau 30 phút. Mô hình số 5 — Random Forest 23D — đạt ROC-AUC cao nhất 0.9894, PR-AUC 0.9543, Severe F1 0.9362 (Recall 95.14%), Weighted-F1 0.9297 và 6-Class Acc 92.55%. Đường chéo ma trận phân loại 6×6 là 944, 3, 1, 3, 5, 138, phân biệt đủ 6 lớp; Macro-F1 là 0.4253 do bốn lớp B–E chỉ có 10–20 mẫu TEST.
+  >
+  > Vì sao không chọn RF 14D khi trên TEST nó nhỉnh nhẹ ở Severe F1 0.9380 và PR-AUC 0.9554? Vì nguyên tắc không nhìn TEST để chọn mô hình: tuyển chọn khóa chặt trên VAL. Trên tập VAL lệch thời gian, RF 14D thiếu ngữ cảnh đồ thị bị sập 6-Class Accuracy xuống 0.1697 (VAL Gate 0.6794), còn RF 23D giữ vững 0.8166 và thắng rõ rệt ở VAL Gate 0.8882."
+- **Tra cứu nhanh:** Chương 5 (`5.3`, Bảng `5.4`).
+
+---
+
+#### Slide 13: `9B. Experiments (Defense)` — Đối Chứng `Persistence`, Đổi Pha & `Cold-Start` (`13:10 – 14:15`)
+- **Người trình bày:** **Nguyễn Thành Đạt (`25MS23306`)**
+- **Chỉ dẫn trực quan:** Chỉ bảng 4 chế độ kiểm định bên trái, biểu đồ so sánh bên phải và thẻ kết luận góc dưới phải.
+- **Lời thoại thuyết trình:**
+  > "Ở Phần 9B trên Slide 13, vì sao Persistence Baseline đạt 94.84% trên TEST, cao hơn 92.55% của RF 23D? Vì 94.84% mẫu thực tế đứng yên sau 30 phút nên quy tắc đoán giữ nguyên có lợi thế quán tính.
+  >
+  > Khi bóc tách bốn chế độ kiểm định: trên 61 ca đổi pha, Persistence mù hoàn toàn 0/61; RF 23D đạt Detect ROC-AUC 0.8822, giảm mạnh sai số xác suất Brier (0.2811 vs 0.3279), bắt đúng 10/61 và nâng lên 14/61 (22.95%) sau hiệu chỉnh ngưỡng trên VAL — kiểm định ghép cặp McNemar cho p = 0.001953. Ở 8/993 ca đột ngột hóa kẹt (ngưỡng cứng 0/8), Onset ROC-AUC đạt 0.8438, Lift 3.26x; trên 3,605 cặp đứt quãng vượt +6.73 PR-AUC. Với 88.13% Cold-Start (phủ 100%), qua phép thử Masked-GPS Proxy che toàn bộ tín hiệu GPS tập TEST thành trống để giả lập vùng mù, độ chính xác đạt 58.63%. Em xin chuyển mic sang bạn Công Minh."
+- **Tra cứu nhanh:** Chương 5 (`5.4`, Bảng `5.5`).
+
+---
+
+### Chặng 3 — Phạm Công Minh (`25MS23310`) · Slide 14–17 + Live Demo #4 (`14:15 – 21:00`, `6m45s` · Driver: Thành Đạt)
+
+#### Slide 14: `10. Demonstration` — Trung Tâm Điều Hành `ReactJS + FastAPI TOC (:8000)` & 2 Case Studies (`14:15 – 15:10`)
+- **Người trình bày:** **Phạm Công Minh (`25MS23310`)**
+- **Chỉ dẫn trực quan:** Chỉ 2 ảnh `Tab 01` thật: `#50026 Điện Biên Phủ` bên trái và `#21064 Công Trường Quốc Tế + Mongo IXSCAN` bên phải cùng dải kiến trúc giao diện TOC `:8000` phía dưới.
+- **Lời thoại thuyết trình:**
+  > "Cảm ơn bạn Đạt. Bước sang Phần 10 trên Slide 14, toàn bộ hệ thống hội tụ vào Trung tâm Điều hành ReactJS, Leaflet và FastAPI cổng 8000, kết nối trực tiếp kho MongoDB 8.0 chứa 33,394 bản ghi. Slide hiển thị hai ảnh Tab 01 thật đối chiếu hai tầng cảnh báo trên tập TEST độc lập.
+  >
+  > Ảnh trái là cao điểm sáng 4/1/2021 khung thu thập [07:00–07:30), chốt phát lệnh 07:30 ICT với 122 đoạn và 38 cảnh báo sớm: đoạn #50026 đại lộ Điện Biên Phủ dự báo trúng thẳng pha E sang F (P(E/F) 87.2%). Ảnh phải là #21064 Công Trường Quốc Tế khung [11:30–12:00), chốt 12:00 ICT: tầng xác suất vẫn bật cảnh báo P(E/F) 68.7% kèm bảng MongoDB IXSCAN 0.360 ms (31.36x). Mời hội đồng kiểm chứng mù trực tiếp trên Tab 01."
+- **Tra cứu nhanh:** Chương 6 (`6.4`).
+
+---
+
+#### Live Demo #4 — Điều Hành Thực Địa TOC (:8000) & Kiểm Chứng Mù (`15:10 – 17:10`, `2m00s`)
+- **Presenter:** **Phạm Công Minh (`25MS23310`)** · **Driver:** **Nguyễn Thành Đạt (`25MS23306`)**
+- **Thao tác Driver (từng cú click):**
+  1. `Alt+Tab` sang trình duyệt `http://localhost:8000` → chuyển thẳng sang **Tab 01 (`Điều Hành TOC`)** (đã mở sẵn **Kịch bản 3 `#50026 Điện Biên Phủ`**, khung thu thập `[07:00–07:30)`, **chốt phát lệnh `t = 07:30 ICT`**, `122` đoạn / `38` cảnh báo sớm).
+  2. Bấm nút **`🙈 Ẩn nhãn thực tế t+30p (Chế độ kiểm chứng mù)`** — ẩn sạch đáp án trên CẢ bảng lẫn biểu đồ để Hội đồng chỉ nhìn thấy dữ liệu quá khứ và dự báo `E ➔ F (P(F) = 57.9%, P(E/F) = 87.2%)` của `RF 23D` (so với `Persistence` đoán giữ nguyên `E`).
+  3. Sau khi Minh đặt câu hỏi kiểm chứng với Hội đồng, bấm tắt chế độ ẩn để mở **`★ Thực tế: LOS F`** khớp 100%!
+  4. **Mẹo click trước + câu dẫn 3 giây:** Trong lúc Minh đọc câu cầu nối *"Không chỉ các ca đổi nhãn trực diện, điều hành viên còn cần cảnh báo xác suất sớm..."*, Driver bấm chọn **Kịch bản 2 `#21064 Công Trường Quốc Tế`** (`2021-04-22`, khung thu thập `[11:30–12:00)`, **chốt phát lệnh `t = 12:00 ICT`**).
+  5. Chỉ rõ `4` pings GPS sập `23 → 3 km/h`, nhãn `argmax` thô giữ `E` nhưng cảnh báo xác suất vượt ngưỡng **`P(E/F) = 68.7%` (> `25%`) & `P(chg) = 48.9%` (> `40%`)** trước khi thực tế sập xuống `LOS F`.
+  6. Bấm nút **`⚡ Mongo IXSCAN (31.36x)`** — xác nhận trực tiếp trên màn hình `warm median = 0.360 ms / p95 = 0.603 ms` (`0 SORT RAM`, chỉ quét `26` khóa B-Tree).
+  7. `Alt+Tab` trở lại cửa sổ Slide (Slide 15).
+- **Lời thoại thuyết trình song song (`2m00s`):**
+  > "Bây giờ chúng ta vào thẳng phòng điều hành TOC tại cổng 8000 trên Tab 01. Trước hết là thanh Đồng hồ Phòng Điều Hành: hệ thống thu thập GPS trong khung [07:00–07:30), chốt phát lệnh đúng t = 07:30 ICT và dự báo cho khung [07:30–08:00) với 122 đoạn hoạt động và 38 cảnh báo sớm.
+  >
+  > Để chứng minh trung thực hệ thống không hề nhìn đáp án tương lai, em bật Chế độ Kiểm Chứng Mù — ẩn nhãn thực tế t+30p trên cả bảng lẫn biểu đồ. Tại đoạn #50026 đại lộ Điện Biên Phủ đang mức E (11.5 km/h), Persistence đoán giữ nguyên E, còn Random Forest 23D phát lệnh chuyển thẳng E sang F với P(F) 57.9% và P(E/F) 87.2%. Bây giờ em mở lại đáp án: sao thực tế t+30p hiện đúng LOS F, khớp 100%!
+  >
+  > Không chỉ các ca đổi nhãn trực diện, điều hành viên còn cần cảnh báo xác suất sớm ở các vòng xoay biến động nhanh. Trên Kịch bản 2 — đoạn #21064 Công Trường Quốc Tế, khung [11:30–12:00), chốt phát lệnh 12:00 ICT — bốn ping GPS vừa sập mạnh từ 23 xuống 3 km/h. Dù nhãn argmax thô bảo thủ giữ mức E, tầng cảnh báo xác suất hiệu chỉnh trên VAL vẫn bật báo động tức thời với P(E/F) 68.7% vượt 25% và xác suất đổi pha 48.9% vượt 40%, cảnh báo sớm trước khi thực tế sập xuống F.
+  >
+  > Cuối cùng, bấm kiểm định Mongo IXSCAN: câu truy vấn Top điểm nóng trục chính đọc thẳng trên chỉ mục B-Tree ESR với 0 SORT RAM, đạt warm median 0.360 ms và p95 0.603 ms — nhanh gấp 31.36 lần so với quét toàn bảng."
+
+---
+
+#### Slide 15: `11. Limitations & Risks` — Tổng Hợp 5 Thành Phần Giải Pháp & 4 Rủi Ro Toàn Cục (`17:10 – 18:25`)
+- **Người trình bày:** **Phạm Công Minh (`25MS23310`)**
+- **Chỉ dẫn trực quan:** Chỉ bảng 5 thành phần bên trái (`Mục 3, 5, 6, 7, 8`) và 2 thẻ rủi ro/kiểm soát bên phải (`4 Rủi Ro Toàn Cục` ở trên, `Nguyên Tắc Kiểm Soát` ở dưới).
+- **Lời thoại thuyết trình:**
+  > "Sang Phần 11 trên Slide 15, nhóm tổng hợp minh bạch giới hạn của năm thành phần giải pháp bên trái và hai thẻ rủi ro — kiểm soát bên phải.
+  >
+  > Xét từng thành phần: ở Kiến trúc, 5 container mặc định dùng chung 11 GB RAM và tin quá trễ đợi đối soát cuối ngày, kiểm soát bằng mem_limit và 3-Phase MLOps. Ở Data Pipeline, 62.28% cửa sổ dùng Vmax tĩnh chưa bắt được ngập nước hay rào chắn, bảo vệ bởi Train-Only và Quarantine. Ở Modeling, bốn lớp B–E thưa kéo Macro-F1 về 0.4253 và thiếu biến mưa hay tai nạn, giảm nhẹ nhờ lọc burst và hiệu chỉnh ngưỡng VAL. Ở Batch, 14 luật trễ chỉ có 5–8 cửa sổ nên gắn nhãn giả thuyết thăm dò. Ở Stream, vòng xoay hai thế hệ Bloom được khóa duy nhất MongoDB và status_version bổ trợ.
+  >
+  > Bốn rủi ro tầm đô thị gồm: GPS mới phủ 11.87% thiên về ô tô, chưa đại diện hơn 80% xe máy TP.HCM; trôi dạt phân phối mùa mưa ngập; ca khởi phát đột ngột quá hiếm (8/993); và hệ thống chỉ hỗ trợ khuyến nghị cho TOC, chưa đóng vòng đèn SCATS."
+- **Tra cứu nhanh:** Chương 7 (`7.5`).
+
+---
+
+#### Slide 16: `12. Plan` — Nghiệm Thu Nhóm & Lộ Trình Phát Triển 3 Giai Đoạn (`18:25 – 19:40`)
+- **Người trình bày:** **Phạm Công Minh (`25MS23310`)**
+- **Chỉ dẫn trực quan:** Chỉ bảng nghiệm thu 3 thành viên phía trên và 2 thẻ `Lộ Trình 3 Giai Đoạn & Quality Gate` phía dưới.
+- **Lời thoại thuyết trình:**
+  > "Ở Phần 12 trên Slide 16 là nghiệm thu hoàn thành 100% và lộ trình ba giai đoạn. Nhóm phân rạch ròi sở hữu kỹ thuật với ba chặng song song Live Demo: bạn Minh Quyền phụ trách bài toán, kiểm toán dữ liệu, Quality Funnel, Vmax, Spark Batch ETL và Chặng 1 kèm Live Demo #1; bạn Thành Đạt phụ trách khảo sát, PageRank, FPGrowth, 7D K-Means, tách burst, thực nghiệm 23D và Chặng 2 kèm Live Demo #2–#3; còn em phụ trách Docker 5 dịch vụ, Kafka, Sketches 33 KiB, đối soát hai tầng, MongoDB IXSCAN, web ReactJS + FastAPI và Chặng 3 kèm Live Demo #4. Hệ thống đạt 44/44 kiểm thử tự động và 0 lỗi Ruff độ phức tạp dưới 15.
+  >
+  > Lộ trình mở rộng gồm ba giai đoạn: Giai đoạn 1 áp dụng Focal Loss và ngưỡng động nâng nhạy ca đột ngột hóa kẹt; Giai đoạn 2 nối GPS đa phương tiện, API mưa ngập và tái huấn luyện theo PSI; Giai đoạn 3 nâng cấp Kubernetes đa nút, MongoDB phân mảnh và kết nối API đèn SCATS."
+- **Tra cứu nhanh:** Chương 7 (`7.1–7.5`).
+
+---
+
+#### Slide 17: Tổng Kết 5 Trụ Cột Kiểm Định Kỹ Thuật & Mời Hội Đồng Q&A (`19:40 – 21:00`)
+- **Người trình bày:** **Phạm Công Minh (`25MS23310`)**
+- **Chỉ dẫn trực quan:** Điểm lần lượt 5 thẻ trụ cột từ trên xuống dưới trên Slide 17 và kết thúc đúng mốc `21:00` để mời Hội đồng đặt câu hỏi.
+- **Lời thoại thuyết trình:**
+  > "Khép lại trên Slide 17 là năm trụ cột kiểm định kỹ thuật đồng bộ 100% từ bằng chứng JSON chạy thật trên đĩa.
+  >
+  > Một là Kiến trúc: tách rành mạch phần đã triển khai — 5 container Docker trong 11 GB RAM, cổng ReactJS + FastAPI :8000 — với đề xuất quy mô đô thị gồm luồng tỷ tin, Kubernetes đa nút và đèn SCATS, chuẩn hóa thuật ngữ Predictive ML.
+  >
+  > Hai là Hiệu năng: Spark 3.5.7 BroadcastHashJoin cắt 80% Exchange, giảm trễ Combined 12.45% và Isolated 25.76%; 8-Bucket Salting đưa skew về 1.0197x; MongoDB IXSCAN đạt 0.360 ms (31.36x).
+  >
+  > Ba là Kiểm định mô hình: tách 7,192 burst còn 1,885 organic TRAIN, RF 23D thắng VAL Gate 0.8882, McNemar p = 0.001953, kiểm chứng PageRank số một Nguyễn Kiệm đo nút phễu cấu trúc.
+  >
+  > Bốn là Vận hành: chạy Watermark thật trên Spark Streaming, WAL 73.7 KB hồi phục 0 trùng, Sketches 33 KiB, Tier-2 100% và status_version chặn 25/25 tin cũ.
+  >
+  > Năm là Tính minh bạch: nêu rõ 88.13% Cold-Start, Macro-F1 0.4253 và 0/8 khởi phát đột ngột. Cả năm trụ cột đã được chứng minh trực tiếp qua bốn chặng Live Demo tại cổng 8000. Em xin cảm ơn và mời hội đồng đặt câu hỏi."
+- **Tra cứu nhanh:** `outputs/metrics.json`, `outputs/spark_runtime_evidence.json`, `outputs/mongo_verify.json`.
+
+---
+
+## Phần 3. Bảng Thao Tác Nhanh Cho Driver (4 Mini-Demos · `4m15s` · `ReactJS + FastAPI TOC :8000`)
+
+| Mini-Demo | Khung giờ (`Thời lượng`) | Presenter / **Driver** | Trình tự Click Chính xác trên `http://localhost:8000` | Thời gian chờ & Mẹo Câu Cầu Nối (`3s`) | Điểm Kiểm Chứng Trên Màn Hình |
 |---|---|---|---|---|---|
-| **Slide 01** | **Mở đầu (Cover)** | Trang bìa tinh gọn 4 cụm: Đơn vị & Học phần, Tên dự án (`Hero Title`), Nhóm thực hiện & Giảng viên hướng dẫn | **Minh Quyền** | `00:00 – 00:35` | Trang bìa & `1.1` |
-| **Slide 02** | **1. Problem Statement** | Bối cảnh ùn tắc lan truyền TP.HCM (`WHY`), 3 hạn chế quản lý hiện hữu & bài toán + giá trị thụ hưởng (`WHAT`) | **Minh Quyền** | `00:35 – 01:45` | Chương 1 (`1.1–1.4`) |
-| **Slide 03** | **2. Literature Review** | Khảo sát 4 hướng tiếp cận quản lý – dự báo giao thông đô thị, khoảng trống thực tiễn & lý do cần nền tảng tích hợp | **Thành Đạt** | `01:45 – 02:55` | Chương 1 (`1.5`) |
-| **Slide 04** | **3. System Architecture** | **[Solution]** Sơ đồ AWS-Style (`Zones A–F`, `5` dịch vụ Docker mặc định `11.0/16 GB`), `3-Phase MLOps` + **Arch Risks** | **Minh Quyền** | `02:55 – 04:05` | Chương 3 (`3.1, 3.2, 3.5`) |
-| **Slide 05** | **4. Data, EDA & Data Problem** | Kiểm toán 5 bảng gốc (`38.50 MB`), định vị `Proof-of-Scale` & 10 vấn đề dữ liệu (`EC-1..EC-10`, lọc `427` POIs & `7,192` burst) | **Minh Quyền** | `04:05 – 05:15` | Chương 2 (`2.1, 2.2`) |
-| **Slide 06** | **Giải thích Phương pháp (1/2)** | **[Visual Explainer]** Trực quan hóa `Train-Only 3-Tier Vmax Imputation` & `5-Tuple Monoid + Key Salting` bằng ví dụ số | **Minh Quyền** | `05:15 – 06:25` | Chương 2 (`2.4`) & Chương 3 (`3.3`) |
-| **Slide 07** | **Giải thích Phương pháp (2/2)** | **[Visual Explainer]** Trực quan hóa `Line-Graph PageRank`, `7D K-Means Cold-Start (88.13%)` & `O(1) Sketches (33.0 KiB)` | **Công Minh** | `06:25 – 07:40` | Chương 4 (`4.1, 4.3`) & Chương 6 (`6.2`) |
-| **Slide 08** | **5. Data Pipeline & Processing** | **[Solution]** `End-to-End Walkthrough`, `Ordered Quality Funnel`, `3-Tier Vmax`, `LOS A–F (89.19%)` + **Pipeline Risks** | **Minh Quyền** | `07:40 – 08:50` | Chương 2 (`2.3–2.5`) |
-| **Slide 09** | **6. Modeling** | **[Solution]** `Exact t+30m (7,885 cặp)`, lọc `7,192` burst (`1,885` organic TRAIN), `23D`, `VAL Gate (0.8882)` + **Modeling Risks** | **Thành Đạt** | `08:50 – 10:00` | Chương 5 (`5.1–5.3, 5.5`) |
-| **Slide 10** | **7. Batch Processing** | **[Solution]** `Monoid`, `Salting`, `BroadcastHashJoin (5→1 Exch, +25.76%)`, `PageRank (84,206.0)`, `SON`, `7D K-Means` + **Batch Risks** | **Thành Đạt** | `10:00 – 11:15` | Chương 3 (`3.3–3.5`) & Chương 4 (`4.1–4.4`) |
-| **Slide 11** | **8. Stream Processing** | **[Solution]** `Kafka 4.1`, `RotatingBloom + HLL++ (33.0 KiB)`, `Two-Tier Recon (500 trễ/609 lag/384 rescore)`, `IXSCAN (0.360/0.603 ms)` + **Stream Risks** | **Công Minh** | `11:15 – 12:25` | Chương 6 (`6.1–6.5`) |
-| **Slide 12** | **9A. Experiments (Ablation)** | Bảng `7-Model Ablation` (`ROC 0.9894, PR 0.9543, Sev-F1 0.9362, Macro-F1 0.4253`), `CM` & hiệu năng Spark/MongoDB | **Thành Đạt** | `12:25 – 13:30` | Chương 5 (`5.3`) |
-| **Slide 13** | **9B. Experiments (Defense)** | Đối chứng `Baseline (94.84%)` vs `RF (23D)` trên 4 chế độ (`Detect AUC 0.8822, McNemar p=0.001953, Lift 3.26x, 100% Cold-Start`) | **Thành Đạt** | `13:30 – 14:45` | Chương 5 (`5.4`) |
-| **Slide 14** | **10. Demonstration** | `ReactJS + FastAPI TOC (:8000)` 5-Tab: `Case Study 1 (#21064 E/F 68.7% & IXSCAN 31.36x)` & `Case Study 2 (#37345 Cold-Start)` | **Công Minh** | `14:45 – 15:50` | Chương 6 (`6.4`) |
-| **Slide 15** | **11. Limitations & Risks** | **Tổng hợp Limitations của 5 Thành phần (`Mục 3, 5, 6, 7, 8`) & 4 Rủi ro Toàn cục (bao gồm `Macro-F1 0.4253`, `0/8 Onset`)** | **Công Minh** | `15:50 – 16:55` | Chương 7 (`7.5`) |
-| **Slide 16** | **12. Plan** | **Nghiệm thu Hoàn thành 100% (3 thành viên) & Lộ trình Mở rộng 3 Giai đoạn (`Phase 1–3 Plan` + Quality Gate)** | **Công Minh** | `16:40 – 17:20` | Chương 7 (`7.1–7.5`) |
-| **Slide 17** | **13. Readiness & Parity** | **Tổng kết Kiểm định (`[I]` vs `[P]`, Spark `166.18→123.37 ms`, Real Watermark, `$status_version`, `100%` Parity `outputs/*.json`)** | **Công Minh** | `17:20 – 18:00` | `outputs/metrics.json`, `spark_runtime_evidence.json` |
-| **Live Demo** | **Trình diễn Web TOC (`:8000`)** | Trực quan hóa `ReactJS + FastAPI + Leaflet TOC Command Center (:8000)` 5-Tab kết nối `Kafka → MongoDB 8.0` | **Công Minh** | `18:00 – 21:00` | `toc_backend/*`, `toc_frontend/*`, `producer.py` |
+| **Live Demo #1** *(Luồng P1)* | `05:15 – 06:00` (`0m45s`) | Quyền / **Đạt** | 1. `Alt+Tab` vào **Tab 06** (đã chọn sẵn trace `#50026 Điện Biên Phủ`) → 2. Bấm **`Slide 06 · P1 Monoid/Vmax`** (chạy **Stage 1 → 2 → 3**) → 3. `Alt+Tab` về Slide 07 | Tức thì (`<0.3s`). Quyền dẫn câu chuyển mic 1 khi Driver quay về Slide 07 | `2` ping thô (`17 & 6 km/h`) → phễu `R1–R6` → `Vmax 60 km/h` → `derive_urban_los` → `5-Tuple Monoid` (`11.5 km/h`, sai số `0.0`) |
+| **Live Demo #2** *(Luồng P2–P3)* | `08:35 – 09:20` (`0m45s`) | Đạt / **Minh** | 1. `Alt+Tab` về **Tab 06** → bấm **Stage 4 → Stage 5** → 2. Click sang **Tab 03** → 3. Click sang **Tab 04** (`#37345` đã chọn mặc định) → 4. `Alt+Tab` về Slide 10 | Tab 03 load `~0.5s`: **Driver click trước** ngay khi Đạt đọc câu nối 3 giây *"mở rộng ra toàn mạng lưới 84,206 đoạn..."* | Stage 4–5: `PageRank`, `Cụm #1`, vector `23D`, biểu đồ 6 cột `RF 23D` **`LOS F = 57.9%, P(E/F) = 87.2%`**; Tab 03: `#21969` vs `#34019`, `Lift 15.23x`; Tab 04: `#37345 Cầu vượt Ngã tư Gò Dưa` |
+| **Live Demo #3** *(Luồng P4)* | `11:15 – 12:00` (`0m45s`) | Đạt / **Minh** | 1. `Alt+Tab` vào **Tab 06** (hoặc **Tab 02**) → 2. Bấm **`⚡ Bơm 200 tin Kafka Live (Stress-Test)`** → 3. Lướt nhanh sang **Tab 05** → 4. `Alt+Tab` về Slide 12 | Kafka 200 tin chạy `~1.5–2s`: trong lúc KPI nhảy, Đạt giải thích rõ mẫu live `200` tin vs benchmark full `33,727` tin | 5 thẻ KPI + **Stage 6–7** sáng đèn (`P0/P1/P2`, **Bloom > 0**, **Watermark > 0**, `HLL++`, `Mongo v1`); Tab 05: `5→1 Exchange`, `Combined -12.45%`, `Isolated -25.76%`, `1.0197x`, `Tier-2 100%` |
+| **Live Demo #4** *(TOC Thực Địa)* | `15:10 – 17:10` (`2m00s`) | Minh / **Đạt** | 1. `Alt+Tab` sang **Tab 01** (sẵn **Kịch bản 3 `#50026`**) → 2. Bấm **`🙈 Ẩn nhãn thực tế t+30p`** → 3. Bấm mở **`★ Thực tế: LOS F`** → 4. Đổi **Kịch bản 2 `#21064`** → 5. Bấm **`⚡ Mongo IXSCAN (31.36x)`** → 6. `Alt+Tab` về Slide 15 | Đổi Kịch bản 2 mất `~0.5s`: **Driver click trước** khi Minh dẫn câu cầu nối 3 giây về *"cảnh báo xác suất sớm ở vòng xoay..."* | Kịch bản 3 (`[07:00–07:30)`, chốt `07:30 ICT`, `122/38`): kiểm chứng mù ẩn sạch bảng & biểu đồ → mở `LOS F` khớp 100%; Kịch bản 2 (`[11:30–12:00)`, chốt `12:00 ICT`, `4` pings `23→3`, `68.7% / 48.9%`); `IXSCAN 0.360 ms / p95 0.603 ms` (`0 SORT RAM`) |
+
+> **Backup Plan 15s (nếu mạng cục bộ hoặc Docker lag):** Giữ nguyên đúng khung giờ từng Mini-Demo ở trên, Driver mở ngay bộ ảnh kết xuất sẵn `outputs/slide_charts/ui_tab1_overview_hotspots.png`, `ui_tab2_live_forecast_mongo.png`, `ui_tab4_kmeans_coldstart.png` kèm JSON kiểm chứng (`outputs/spark_runtime_evidence.json`, `outputs/mongo_verify.json`) để Presenter thuyết minh trơn tru không gián đoạn.
 
 ---
 
-## Phần 2. Kịch Bản Lời Thoại Chi Tiết Từng Slide (`Slide 01` – `Slide 17`)
+## Phần 4. Cẩm Nang Phản Biện & Trả Lời Hội Đồng (Mỗi Câu ~30 Giây · Chắc Số Liệu)
 
-#### Slide 01: Mở Đầu — Trang Bìa Đề Tài, Học Phần, Nhóm Thực Hiện & Giảng Viên Hướng Dẫn (`00:00 – 00:35`)
-- **Người trình bày:** **Nguyễn Tạ Minh Quyền (`25MS23280`)**
-- **Mục tiêu truyền đạt:** Giới thiệu ngắn gọn, trang trọng tên đề tài (`Hero Title`), học phần `BDA501 – Big Data Analytics`, 3 thành viên thực hiện và Giảng viên hướng dẫn.
-- **Chỉ dẫn trực quan:** Hướng về tiêu đề trung tâm `HCMC Smart Traffic Big Data Platform` và dải thông tin `Project Team` cùng `Instructor` ở cuối trang bìa.
-- **Lời thoại thuyết trình:**
-  > "Kính chào thầy **Đặng Trần Khánh** và quý thầy/cô trong hội đồng. Hôm nay nhóm chúng em gồm ba thành viên: em là **Nguyễn Tạ Minh Quyền (`25MS23280`)**, bạn **Nguyễn Thành Đạt (`25MS23306`)** và bạn **Phạm Công Minh (`25MS23310`)**, xin trình bày báo cáo đồ án cuối kỳ học phần `BDA501 – Big Data Analytics` thuộc chương trình `MSE AI` tại `FSB · FPT University`, với đề tài: **HCMC Smart Traffic Big Data Platform — Nền tảng phân tích dữ liệu lớn và dự báo ùn tắc giao thông đô thị TP.HCM**."
-- **Tra cứu nhanh Báo cáo:** Trang bìa & Chương 1, Mục `1.1`.
+### Câu 1: *(Bẫy Hội Đồng #1)* *"Trên tập TEST, `RF 14D` có `Sev-F1 = 0.9380` và `PR-AUC = 0.9554` nhỉnh hơn `RF 23D` (`0.9362 / 0.9543`). Tại sao nhóm vẫn chọn `RF 23D`?"*
+- **Người trả lời:** **Thành Đạt** (`Slide 09, 12` · `outputs/metrics.json`).
+- **Trả lời 30 giây:**
+  > "Trong thực nghiệm khoa học, tuyệt đối không được nhìn kết quả `TEST` để chọn mô hình. Nhóm khóa trước tiêu chí **`VAL Composite Gate = (VAL 6-Class Acc + VAL PR-AUC + VAL ROC-AUC) / 3`** trên tập kiểm định lệch thời gian `VAL`. Trên tập `VAL`, `RF 14D` thiếu 9 đặc trưng đồ thị và lịch sử nên **sập nặng độ chính xác 6 lớp xuống chỉ còn `0.1697` (`16.97%`)**, kéo điểm tổng hợp về **`0.6794`** (đồng thời `VAL Sev-F1 = 0.8854`). Ngược lại, **`RF 23D` giữ vững `VAL 6-Class Acc = 0.8166`, `VAL Sev-F1 = 0.8912` và thắng rõ rệt ở `VAL Gate = 0.8882`**, đồng thời trên `TEST` cũng đạt **`ROC-AUC` (`0.9894`), `6-Class Acc` (`0.9255`) và `Macro-F1` (`0.4253` vs `0.3976`) cao nhất**."
 
----
+### Câu 2: *(Bẫy Hội Đồng #2)* *"Trong tệp kiểm chứng Spark, `Spark MLlib RF` đạt `acc = 0.9416` (`ROC = 0.9903`), cao hơn mô hình triển khai `sklearn RF 23D` (`acc = 0.9255`, `ROC = 0.9894`). Vì sao không triển khai `Spark MLlib RF`?"*
+- **Người trả lời:** **Thành Đạt** (`Slide 10, 12, 17` · `spark_engine.py`, `pipeline.py`).
+- **Trả lời 30 giây:**
+  > "Hai mô hình khác nhau về mục tiêu và hàm trọng số lớp: `Spark MLlib RF` (`25` cây, `maxDepth = 6`, không cân bằng trọng số lớp, kèm `OneHotEncoder(street_type, period)`) được chạy để kiểm chứng năng lực huấn luyện phân tán, lưu/tải `PipelineModel` (`reload parity = True`) và xử lý hạng mục lạ (`handleInvalid='keep'`). Do không gắn trọng số lớp, `Spark MLlib RF` nghiêng về đoán nguyên trạng lớp chiếm đa số `A/F` giống `Persistence (94.84%)`. Trong khi đó, `sklearn RF 23D` triển khai (`120` cây, `max_depth = 10`, trọng số cân bằng $w_c \propto (N / 6n_c)^{0.65}$) chủ động đánh đổi ~`1.6%` độ chính xác quán tính để bắt trúng các ca đổi pha (`10/61 → 14/61`, `McNemar p = 0.001953`), thắng `VAL Composite Gate` và chấm điểm từng sự kiện trực tuyến dưới `1 ms` trong `live-consumer` không tốn chi phí JVM."
 
-#### Slide 02: `1. Problem Statement` — Bài Toán Điều Hành Giao Thông Chủ Động Tại Đô Thị TP.HCM (`00:35 – 01:50`)
-- **Người trình bày:** **Nguyễn Tạ Minh Quyền (`25MS23280`)**
-- **Mục tiêu truyền đạt:** Trả lời trọn vẹn hai câu hỏi nền tảng **WHY** (vấn đề thực tế của giao thông TP.HCM và vì sao phương pháp hiện tại chưa đủ) và **WHAT** (đồ án giải quyết chính xác bài toán gì và mang lại giá trị thực tiễn cho ai), chưa đi sớm vào thuật toán kỹ thuật.
-- **Chỉ dẫn trực quan:** Chỉ lần lượt từ thẻ `1. Vấn Đề Thực Tế Của Giao Thông TP.HCM` xuống thẻ `2. Vì Sao Phương Pháp Hiện Tại Chưa Đủ?` và thẻ `3. Bài Toán Đặt Ra & Giá Trị Thụ Hưởng` bên trái, đối chiếu bản đồ bối cảnh mạng lưới đường TP.HCM bên phải.
-- **Lời thoại thuyết trình:**
-  > "Mở đầu ở **Phần 1 — Problem Statement** trên Slide 02, nhóm xin làm rõ lý do thực tiễn khiến hệ thống này cần tồn tại:
-  > - **Thứ nhất — Vấn đề thực tế tại TP.HCM (`WHY`):** Mật độ phương tiện rất lớn lưu thông trên mạng lưới đường đô thị đan xen dày đặc — từ cửa ngõ sân bay Tân Sơn Nhất, trung tâm Bến Thành Quận 1, trục Lý Thường Kiệt Quận 10 đến hành lang Đông Bắc Thủ Đức — khiến chỉ một điểm nghẽn cục bộ giờ cao điểm cũng nhanh chóng lan truyền thành ùn tắc dây chuyền. Trong khi đó, công tác điều tiết hiện nay chủ yếu **phản ứng bị động sau sự cố** (khi dòng xe đã kẹt cứng mới cử lực lượng giải tỏa), gây lãng phí lớn về thời gian và chi phí vận tải đô thị.
-  > - **Thứ hai — Vì sao nguồn dữ liệu và công cụ hiện tại chưa đủ?** Camera CCTV và cảm biến cố định rất đắt đỏ, chỉ đặt được ở số ít nút giao chính; còn nguồn định vị GPS hành trình lại phân bố lệch về đại lộ, bỏ trống phần lớn mạng lưới đường nhánh màu xám trên bản đồ (*vùng mù quan trắc*) và thường xuyên bị ngắt quãng, trễ tin. Đồng thời, các bảng giám sát hiện hữu chỉ cho biết nơi **đang kẹt**, chưa cảnh báo trước 30 phút nơi **sắp kẹt cứng**, và tách rời giữa trực ban sự vụ với quy hoạch hạ tầng dài hạn.
-  > - **Thứ ba — Bài toán đặt ra & Giá trị thụ hưởng (`WHAT`):** Đồ án giải quyết bài toán xây dựng nền tảng dữ liệu lớn tích hợp để **(1)** ước lượng trạng thái giao thông toàn đô thị kể cả vùng thiếu cảm biến, **(2)** nhận diện các nút cổ chai cấu trúc, và **(3)** dự báo sớm nguy cơ kẹt cứng trước **30 phút** — tạo giá trị trực tiếp cho **Trung tâm `TOC` & Kỹ sư đèn** điều tiết chủ động, **Sở GTVT & Đội tuần tra** ưu tiên đúng điểm nghẽn, và **Người dân / Ứng dụng dẫn đường** chọn lộ trình né kẹt từ xa."
-- **Tra cứu nhanh Báo cáo:** Chương 1, Mục `1.1` – `1.4` & Hình `1.1`, `1.2`.
+### Câu 3: *(Bẫy Hội Đồng #3)* *"Trên Demonstration, tại sao `#21064 Công Trường Quốc Tế` chỉ hiện nhãn thô `raw = E` (`P(E/F) = 68.7%`) trong khi `#50026 Điện Biên Phủ` dự báo trúng thẳng `E → F` (`P(F) = 57.9%`, `P(E/F) = 87.2%`)?"*
+- **Người trả lời:** **Công Minh** (`Slide 14` · `toc_backend/data_store.py`).
+- **Trả lời 30 giây:**
+  > "Sự khác biệt đến từ bối cảnh hình học – giờ cao điểm và minh họa đúng hai tầng quyết định của hệ thống. Đoạn `#50026 Điện Biên Phủ` là trục chính cấp 2 (`Vmax 60 km/h`) lúc cao điểm sáng (khung `[07:00–07:30)`, chốt `07:30 ICT`, `11.5 km/h`, tỷ số vận tốc `0.192`), kết hợp lịch sử kẹt trục lớn và láng giềng nên xác suất `P(F) = 57.9%` vượt hẳn `P(E) = 29.3%` (`P(E/F) = 87.2%`), cho kết quả đoán thẳng `E → F`. Còn `#21064 Công Trường Quốc Tế` là vòng xoay cấp 4 buổi trưa (khung `[11:30–12:00)`, chốt `12:00 ICT`, `12.0/50 = 0.24`), nhãn `argmax` thô bảo thủ giữ mức `E` (`51.1%`), nhưng **tầng cảnh báo xác suất đã hiệu chỉnh trên `VAL`** vẫn bật báo động tức thời nhờ **`P(E/F) = 68.7%` (> `25%`) và `P(chg) = 48.9%` (> `40%`)**, chứng minh điều hành viên TOC không bị bỏ lọt cảnh báo."
 
----
+### Câu 4: *(Bẫy Hội Đồng #4)* *"Nhóm kiểm chứng nguồn dữ liệu gốc Kaggle v6 và các con số `85.21%` vs `85.19%`, `46/48` khung giờ và `89.19%` khớp BkTraffic như thế nào?"*
+- **Người trả lời:** **Minh Quyền** (`Slide 05, 06, 08` · `raw_data/*.csv`, `pipeline.py`).
+- **Trả lời 30 giây:**
+  > "Nhóm đối chiếu trực tiếp 5 tệp CSV tải từ Kaggle phiên bản 6 (`CC0 · BkTraffic HCMUT`, tổng đúng `41` cột, `38.50 MB`): bảng `train.csv` gốc có `33,441` dòng chỉ xuất hiện `46/48` khung 30 phút (khuyết 2 khung thấp điểm đêm) và thiếu `max_velocity` ở **`28,495 / 33,441 = 85.21%`**. Sau khi quy tắc `R2` lọc bỏ `427` đoạn phi cơ giới (`47` cửa sổ tương ứng), tập sạch còn `33,394` cửa sổ cơ giới với **`28,448 / 33,394 = 85.19%`** thiếu `max_velocity` gốc. Từ vận tốc trung bình và ngưỡng đường gốc, hàm **`derive_urban_los`** (bậc `5 km/h` chuẩn đô thị có dịch ngưỡng trục nhanh) tái lập khớp **`89.19%`** nhãn LOS tham chiếu của BkTraffic."
 
-#### Slide 03: `2. Literature Review` — Các Hướng Tiếp Cận Quan Trắc, Dự Báo & Điều Hành Giao Thông (`01:50 – 03:05`)
-- **Người trình bày:** **Nguyễn Thành Đạt (`25MS23306`)**
-- **Mục tiêu truyền đạt:** Khảo sát 4 hướng tiếp cận giải quyết bài toán giao thông đô thị trong thực tế và học thuật, chỉ ra khoảng trống nghiên cứu cấp miền ứng dụng (`Domain-Level Research Gap`) và lý giải tại sao bắt buộc phải có một **nền tảng tích hợp** theo đúng quy trình nghiên cứu thuận chiều.
-- **Chỉ dẫn trực quan:** Điểm qua 4 dòng trong bảng khảo sát các hệ thống & nghiên cứu giao thông phía trên, sau đó nhấn mạnh vào thẻ `Khoảng Trống Nghiên Cứu & Vì Sao Cần Nền Tảng Tích Hợp HCMC Smart Traffic` ở phía dưới.
-- **Lời thoại thuyết trình:**
-  > "Tiếp nối bài toán thực tế vừa nêu, ở **Phần 2 — Literature Review** trên Slide 03, nhóm khảo sát 4 hướng tiếp cận chính trong quản lý và dự báo giao thông đô thị hiện nay:
-  > 1. **Hệ thống quan trắc cố định và đèn thích ứng (`SCATS`, `SCOOT`, Camera CCTV):** Đo đạc chính xác tại nút giao có thiết bị, nhưng chi phí đầu tư và bảo trì quá cao nên để trống phần lớn mạng lưới đường nhánh đô thị.
-  > 2. **Giám sát từ dữ liệu hành trình (`Floating Car / Probe GPS` — `Herrera et al., 2010; Zheng, 2015`):** Mở rộng độ phủ diện rộng không cần lắp cảm biến mặt đường, nhưng dữ liệu lệch về trục lớn, ngắt quãng theo thời gian và mới dừng ở bản đồ phản ánh hiện trạng.
-  > 3. **Nghiên cứu dự báo ùn tắc ngắn hạn (`ARIMA`, `DCRNN`, `Graph WaveNet` — `Vlahogianni, 2014; Li, 2018`):** Dự báo trước 15–60 phút rất hiệu quả trên cao tốc có cảm biến dày đặc, liên tục (`PeMS`, `METR-LA`), nhưng suy giảm mạnh khi gặp dữ liệu đô thị thưa và đứt quãng dài.
-  > 4. **Các nền tảng hỗ trợ quyết định giao thông (`TOC / Urban DSS` — `Lv et al., 2015; Amini et al., 2017`):** Thường tách rời mô hình dự báo học thuật khỏi luồng dữ liệu di động thực tế có tin trễ, tin trùng và chia cắt giữa trực ban tức thời với quy hoạch dài hạn.
-  >
-  > Từ đó, thẻ bên dưới đúc kết **khoảng trống nghiên cứu cốt lõi** và lý giải **tại sao không thể triển khai rời rạc từng công nghệ đơn lẻ**: một mô hình dự báo đứng riêng không thể tự chuẩn hóa luồng GPS di động nhiễu/trễ, không suy diễn được vùng mù đường nhánh nếu thiếu phân tích cấu trúc mạng lưới đường, và không phục vụ đồng thời cả trực ban `TOC` lẫn quy hoạch `Sở GTVT`. Theo đúng logic nghiên cứu thuận chiều — **Xác định vấn đề (`Mục 1`) $\rightarrow$ Khảo sát & chỉ ra khoảng trống (`Mục 2`) $\rightarrow$ Đề xuất kiến trúc tích hợp (`Mục 3–8`) $\rightarrow$ Thực nghiệm kiểm chứng (`Mục 9–10`)** — nhóm xin chuyển sang kiến trúc hệ thống ở Phần 3."
-- **Tra cứu nhanh Báo cáo:** Chương 1, Mục `1.5`.
+### Câu 5: *(Bẫy Hội Đồng #5)* *"Tại sao nhóm đầu tư dựng `ReactJS + FastAPI (:8000)` trong cụm Docker 5 dịch vụ (`11.0 GB RAM`) thay vì dùng một công cụ Python dựng giao diện nhanh như Streamlit?"*
+- **Người trả lời:** **Công Minh** (`Slide 04, 14, 17` · `docker-compose.yml`, `toc_backend/`, `toc_frontend/`).
+- **Trả lời 30 giây:**
+  > "Công cụ dựng mẫu nhanh như Streamlit phải chạy lại toàn bộ kịch bản Python mỗi khi người dùng nhấp bản đồ hay kéo thanh thời gian, dễ giật lag khi hiển thị bản đồ `84,206` đoạn đường và khó quản lý trạng thái luồng bất đồng bộ. Với **`ReactJS + Leaflet` tách rời `FastAPI` trên cổng `:8000`**, giao diện giữ mượt trạng thái bản đồ, chạy trực quan 7 chặng Pipeline trên `Tab 06` và phục vụ đồng thời nhiều truy vấn `MongoDB 8.0` dưới `1 ms` song song với nút kích phát `Kafka Live`, đồng thời gói gọn toàn bộ dịch vụ web trong đúng **`1.0 GB RAM`** (tổng 5 container mặc định `11.0 / 16.0 GB RAM`)."
 
----
+### Câu 6: *"Tổng 5 tệp gốc chỉ `38.50 MB`, vì sao phải dùng `Spark + Kafka + 8-Bucket Salting` thay vì Pandas?"*
+- **Người trả lời:** **Minh Quyền** (`Slide 05, 06, 10` · `evidence/session9/B_benchmark.csv`).
+- **Trả lời 30 giây:**
+  > "Nếu chỉ xử lý tĩnh `38.50 MB` một lần thì Pandas đơn luồng nhanh hơn. Nhưng trong bài toán `Big Data`, tập Kaggle đóng vai trò **mẫu chuẩn `Proof-of-Scale`** kiểm chứng sai số bằng `0.0` cho quy mô thực tế toàn TP.HCM **`8–17` tỷ tin/ngày (`1.5–3.0 TB/ngày`)** — nơi `set()` lọc trùng sẽ tràn RAM, join không `Broadcast` sẽ nghẽn mạng và độ lệch tải giờ cao điểm **`684.95x`** sẽ làm treo worker. Trên Spark `3.5.7`, `BroadcastHashJoin` cắt `5 → 1` Exchange (**`Combined -12.45%`: `213.66 → 187.07 ms`** và **`Isolated -25.76%`: `166.18 → 123.37 ms`**) và `8-Bucket Salting` đưa lệch tải về **`1.0197x`** (`diff = 0`)."
 
-#### Slide 04: `3. System Architecture` — Kiến Trúc Hybrid Batch–Speed (`Zones A–F`) & `3-Phase MLOps` (`03:10 – 04:20`)
-- **Người trình bày:** **Nguyễn Tạ Minh Quyền (`25MS23280`)**
-- **Mục tiêu truyền đạt:** Trình bày sơ đồ kiến trúc tổng thể chuẩn AWS (`Zones A–F`, đồng màu theo từng Zone và từng luồng Pipeline), vòng đời `3-Phase MLOps` không xung đột ghi, và nêu rõ **Limitations & Risks của kiến trúc hệ thống**.
-- **Chỉ dẫn trực quan:** Chỉ theo các luồng mũi tên màu đi qua `Zone A` đến `Zone F` trên sơ đồ bên trái, thẻ `3-Phase MLOps Lifecycle` góc trên phải, và thẻ `Limitations & Risks (Arch)` góc dưới phải.
-- **Lời thoại thuyết trình:**
-  > "Sang **Phần 3 — System Architecture** trên Slide 04: sơ đồ bên trái trình bày kiến trúc tổng thể gồm **6 phân vùng (`Zones A–F`)**, trong đó các thành phần cùng một Zone mang màu thống nhất và các mũi tên cùng một Pipeline mang màu riêng biệt. Dữ liệu từ `Zone A` đi qua `Zone B` (`Apache Kafka KRaft` & `Quality Funnel`), sau đó tách làm hai nhánh bên trong cụm `Apache Spark`: nhánh tím phía trên là **`Zone C (Speed Layer)`** xử lý luồng trực tuyến trong `Watermark 30m`; nhánh xanh dương phía dưới là **`Zone D (Batch Layer)`** xử lý lô, đồ thị, huấn luyện ML và đối soát.
-  >
-  > Ở thẻ phía trên bên phải, cơ chế **`Zero-Conflict 3-Phase MLOps`** ngăn chặn hoàn toàn xung đột ghi vào `Zone E (Frozen Registry)`: chỉ học đúng 1 lần ở `Phase A` trên `1,885` mẫu **organic TRAIN** (đã tách `7,192` synthetic burst windows) rồi khóa `SHA-256`; `Phase B` trực tuyến chỉ đọc để phát cảnh báo `v1`; và `Phase C` cuối ngày bù `500` cửa sổ trễ, hàn gắn `609` cửa sổ lag và re-score `384` cửa sổ lên bản ghi chuẩn `v2` tại `Zone F` (`Medallion Lakehouse`, `MongoDB 8.0`, và trung tâm điều hành 5-Tab **`ReactJS + FastAPI TOC Command Center :8000`**).
-  >
-  > **Về Limitations & Risks của thành phần Kiến trúc (thẻ góc dưới phải):**
-  > - *Thứ nhất (`Single-Host Contention`):* Việc chạy chung **5 dịch vụ container mặc định** (`Kafka 1.5 GB`, `Spark 6.0 GB`, `MongoDB 2.0 GB`, `ReactJS + FastAPI TOC :8000 1.0 GB`, `live-consumer 0.5 GB` = **`11.0 / 16.0 GB RAM`**, kèm 2 profile on-demand `batch`/`stream`) trên cùng một máy chủ tiềm ẩn rủi ro tranh chấp băng thông đĩa (`Disk I/O`) khi `Spark Shuffle` đồng thời với `MongoDB` ghi lô.
-  > - *Thứ hai (`Eventual Consistency Gap`):* Cảnh báo trực tuyến `v1` phản hồi dưới 1 mili-giây, nhưng việc cập nhật biến trễ lịch sử từ các bản tin đến muộn quá 30 phút phải chờ `Phase C` cuối ngày."
-- **Tra cứu nhanh Báo cáo:** Chương 3, Mục `3.1`, `3.2` & `3.5` (Hình `3.1`, `3.2`).
+### Câu 7: *"Tại sao không dùng Deep Learning trên đồ thị (`DCRNN`, `Graph WaveNet`) thay vì `Random Forest 23D`?"*
+- **Người trả lời:** **Thành Đạt** (`Slide 03, 09`).
+- **Trả lời 30 giây:**
+  > "Các mạng GNN chuỗi thời gian như `DCRNN` hay `Graph WaveNet` đòi hỏi chuỗi quan sát liên tục trên đa số đỉnh đồ thị. Tại TP.HCM, **`88.13%` đoạn cơ giới (`74,211` đoạn) không có bất kỳ bản tin GPS nào** và **`66.30%` cặp quan sát đứt quãng $\ge 60$ phút**, làm phép tích chập thời gian trên đồ thị bị suy biến. `Random Forest 23D` kết hợp `PageRank` và `7D K-Means` xử lý hiệu quả dữ liệu bảng đứt quãng, phủ `100%` mạng lưới và chạy nhẹ không cần GPU."
 
----
+### Câu 8: *"Tại sao phải dùng `5-Tuple Monoid` khi chia `8` giỏ `Key Salting`? Đánh đổi độ trễ của `Salting` trên tập nhỏ ra sao?"*
+- **Người trả lời:** **Minh Quyền** (`Slide 06, 10` · `evidence/session9/B_benchmark.csv`).
+- **Trả lời 30 giây:**
+  > "Phép lấy trung bình không có tính kết hợp khi các phân vùng có số xe khác nhau — phép gộp `avg` lồng nhau gây sai số tới **`11.11 km/h`** trên phân vùng `[1, 2, 3]`. Đóng gói thành bộ 5 đại lượng cộng được `(n, sum_v, min_v, max_v, severe_cnt)` giúp `8-Bucket Salting` đạt **sai số `0.0`** và hạ skew từ `684.95x → 1.0197x` (`CV = 0.0059`). Trên tập mẫu nhỏ `90.8k` pings, 2 nhịp shuffle tăng độ trễ cô lập `97.92 → 185.78 ms` (**`+87.92 ms` so với V1** trên benchmark 3 nhánh: `187.07 → 274.99 ms`), một đánh đổi hoàn toàn hợp lý để tránh treo máy ở quy mô hàng tỷ tin."
 
-#### Slide 05: `4. Data, EDA & Data Problem` — Hồ Sơ 5 Bảng Gốc, `Proof-of-Scale` & 10 Vấn Đề Dữ Liệu (`04:20 – 05:30`)
-- **Người trình bày:** **Nguyễn Tạ Minh Quyền (`25MS23280`)**
-- **Mục tiêu truyền đạt:** Trình bày hồ sơ kiểm toán 5 bảng gốc (`38.50 MB`), vai trò mẫu chuẩn `Proof-of-Scale` cho quy mô toàn TP.HCM (`8–17 tỷ tin/ngày`), phân bố thực nghiệm và 10 vấn đề dữ liệu (`EC-1..EC-10`).
-- **Chỉ dẫn trực quan:** Chỉ biểu đồ tỷ lệ dị thường góc trên trái, thẻ `Hồ Sơ 5 Bảng Gốc & Proof-of-Scale` góc dưới trái, và bảng 10 `Data Problems (EC-1..EC-10)` bên phải.
-- **Lời thoại thuyết trình:**
-  > "Bước sang **Phần 4 — Data, EDA & Data Problem** trên Slide 05: qua kiểm toán 5 bảng gốc trên Kaggle (`38.50 MB`: gồm `nodes` `577,967` điểm — lọc `525,786` điểm vẽ cong `90.97%` còn `52,181` nút giao thực; `streets` `5,553` đường; `segments` `84,633` thô còn **`84,206` đoạn cơ giới** sau khi cách ly `427` non-road POIs; `segment_status` `90,938` thô còn **`90,787` bản tin hợp lệ** sau cách ly `151` pings lỗi; và `train` `33,441` thô còn **`33,394` cửa sổ cơ giới**, khớp `89.19%` BkTraffic urban LOS), bộ dữ liệu này đóng vai trò **mẫu chuẩn `Proof-of-Scale`** đối chứng sai số bằng `0.0` cho quy mô toàn TP.HCM (**`8–17` tỷ bản tin/ngày, `1.5–3.0 TB/ngày`**). Về phân bố, chỉ có **`9,995 / 84,206` đoạn (`11.87%`) có GPS**, phát hiện mới **`7,192` synthetic burst windows**, và **`94.84%` mẫu `TEST` giữ nguyên trạng thái sau 30 phút**.
-  >
-  > Đi sâu vào bảng bên phải, nhóm định lượng được **10 vấn đề dữ liệu thực tế (`EC-1` đến `EC-10`)**: nổi bật là **85.21% cửa sổ (`28,495`) & 88.34% đoạn (`74,762`) thiếu `Vmax` (`EC-1`)**, **154 đoạn $\le 0\text{ m}$ (bù trung vị `27.0m`), `427` POIs & `151` pings lỗi (`EC-2`)**, **695 → 641 tên đường Unicode NFC (`EC-3`)**, **4,305 cửa sổ (`12.89%`) lệch ngày giờ `UTC+7` (`EC-4`)**, **66.30% (`15,514/23,399`) đứt quãng $\ge 60$ phút & `7,192` burst (`EC-5`)**, **`88.13%` (`74,211` đoạn) `Cold-Start` (`EC-6`)**, **lệch tải giờ cao điểm `684.95x` (`EC-8`)**, **`333` tin trùng & `500` cửa sổ trễ (`EC-9`)** cùng khóa `$status_version` (`25/25`, `EC-10`)."
-- **Tra cứu nhanh Báo cáo:** Chương 2, Mục `2.1`, `2.2` (Hình `2.1`).
+### Câu 9: *"Làm sao chứng minh mô hình hoàn toàn không rò rỉ dữ liệu tương lai (`Zero Future Leakage`)?"*
+- **Người trả lời:** **Thành Đạt** (`Slide 06, 08, 09`).
+- **Trả lời 30 giây:**
+  > "Nhóm khóa đủ 5 chốt chặn: **(1)** bảng `3-Tier Vmax` chỉ học trên tập `TRAIN`; **(2)** bộ chuẩn hóa và tâm cụm `7D K-Means` chỉ học trên `3,609` đoạn `organic TRAIN`; **(3)** mọi biến lịch sử quá khứ (`past-only priors`) tích lũy nghiêm ngặt tại $\tau < t$; **(4)** tách sạch `7,192` cửa sổ burst khỏi `TRAIN` và cắt `55` mẫu biên `Boundary Purge`; **(5)** phép thử `Future-Shuffle Falsification` xáo trộn dữ liệu ở $\tau > t$ xác nhận ma trận đầu vào $X_t$ có sai lệch **`0.0`**."
+
+### Câu 10: *"PageRank số 1 (`#21969 Nguyễn Kiệm = 2.7799`) nhưng thực tế chạy thoáng (`LOS A`, `45.41 km/h`) — vậy PageRank có bị sai không?"*
+- **Người trả lời:** **Thành Đạt** (`Slide 07, 10, 17` · `Mini-Test B2`).
+- **Trả lời 30 giây:**
+  > "Không sai — đây chính là phát hiện kiểm chứng rất giá trị của nhóm: **`Line-Graph PageRank` đo độ nhạy nút phễu hình học** (nơi nhiều nhánh đổ dồn vào một đoạn), không phải đo mức kẹt hiện tại. Nguyễn Kiệm có mặt cắt rộng nhiều làn nên hấp thụ tốt lưu lượng (`45.41 km/h`, `LOS A`), nhưng nếu xảy ra sự cố hay rào chắn tại đây thì ảnh hưởng lan tỏa sẽ lớn nhất. Khi kết hợp `PageRank` cao với lịch sử kẹt thực tế (`severe prior`), hệ thống tách bạch chính xác các nút cổ chai kẹt thật như `#34019 Trần Quốc Thảo` (`7.25 km/h`) hay `#63450 Lý Thường Kiệt` (`8.54 km/h`)."
+
+### Câu 11: *"Tại sao cần đồng thời cả `Random Forest 23D` lẫn `EWMA Hotspot`? Khác nhau thế nào?"*
+- **Người trả lời:** **Công Minh** (`Slide 07, 11`).
+- **Trả lời 30 giây:**
+  > "`Random Forest 23D` trả lời câu hỏi **tương lai 30 phút tới** (*đoạn nào SẮP kẹt cứng?* — giúp chỉnh pha đèn phòng ngừa), còn **`EWMA Hotspot` ($\alpha = 0.15$)** đo **độ lì hiện tại** (*đoạn nào ĐANG kẹt lặp lại nhiều khung liên tiếp chưa giải tỏa?* — như `#47407 Lý Thường Kiệt = 6.6652`) để điều động lực lượng giải phóng nút nghẽn ngay tức thì. Hai tín hiệu bổ trợ nhau hoàn hảo trên bảng điều hành TOC."
+
+### Câu 12: *"Cơ chế nào giúp `MongoDB 8.0` đạt `0.360 ms / p95 0.603 ms` (`31.36x`) và chống bản tin cũ `v1` ghi đè bản chuẩn `v2`?"*
+- **Người trả lời:** **Công Minh** (`Slide 11, 14` · `outputs/mongo_verify.json`).
+- **Trả lời 30 giây:**
+  > "Nhóm áp dụng quy tắc **`ESR` (`Equality – Sort – Range`)** tạo chỉ mục phức hợp `{street_level: 1, severe_prob: -1, segment_id: 1}`. Khi TOC truy vấn `1,234` cảnh báo trục chính (`street_level` 1–2, `severe_prob >= 0.70`) sắp giảm dần, `MongoDB 8.0` đọc thẳng trên cây `B-Tree` (`IXSCAN`, `in_memory_sort = false`, chỉ quét `26` khóa cho `25` kết quả), đạt **`0.360 ms` trung vị** (**`31.36x`** so với `COLLSCAN 11.289 ms`). Đồng thời, lệnh `Bulk UpdateOne` gắn chốt điều kiện nguyên tử **`$status_version`** chặn **`25/25`** bản tin cũ `v1` đến muộn không thể ghi đè bản chuẩn `v2`."
 
 ---
 
-#### Slide 06: Giải Thích Phương Pháp (1/2) — Nội Suy 3 Tầng `Vmax` & Bộ Gộp `5-Tuple Monoid` (`05:15 – 06:25`)
-- **Người trình bày:** **Nguyễn Tạ Minh Quyền (`25MS23280`)**
-- **Mục tiêu truyền đạt:** Trực quan hóa bằng hình vẽ và con số cụ thể để người nghe hiểu rõ bản chất của 2 phương pháp nền tảng trước khi đi vào chi tiết Pipeline và Spark: **(1) Nội suy tốc độ tối đa 3 tầng (`Train-Only 3-Tier Vmax Imputation`)** và **(2) Bộ gộp 5 đại lượng cộng được (`5-Tuple Monoid`) kết hợp chia giỏ khóa (`Key Salting`)**.
-- **Chỉ dẫn trực quan:** Chỉ sơ đồ phễu bậc thang 4 tầng bên trái cho `3-Tier Vmax`, sau đó chỉ bảng đối chiếu hai hộp Đỏ (`SAI`) và Xanh (`ĐÚNG`) bên phải cho `5-Tuple Monoid + Salting`.
-- **Lời thoại thuyết trình:**
-  > "Trước khi đi vào chi tiết các thành phần xử lý, trên **Slide 06 và Slide 07**, nhóm xin trực quan hóa ngắn gọn bản chất các phương pháp cốt lõi để quý thầy/cô và người xem dễ hình dung chúng hoạt động thế nào:
-  > - **Bên trái — Nội suy tốc độ tối đa 3 tầng (`Train-Only 3-Tier Vmax`):** Khi `85.21%` cửa sổ thiếu biển tốc độ tối đa, nếu lấy trung bình toàn bộ dữ liệu sẽ làm rò rỉ thông tin tương lai. Hệ thống chỉ học trên tập quá khứ `TRAIN` rồi tra cứu theo bậc thang từ riêng đến chung: đường nào có sẵn biển hợp lệ thì giữ nguyên (`4,946` cửa sổ) $\rightarrow$ nếu thiếu thì lấy **phân vị 85% vận tốc lúc đường thoáng của chính đoạn đó** (`Tầng 1`, `7,650` cửa sổ) $\rightarrow$ nếu đoạn mới chưa đủ lịch sử thì mượn **trung vị các đường cùng cấp và loại** (`Tầng 2`, `19,601` cửa sổ) $\rightarrow$ cuối cùng mới dùng quy chuẩn đô thị `80/60/50/40 km/h` (`Tầng 3`, `1,197` cửa sổ).
-  > - **Bên phải — Vì sao phải dùng `5-Tuple Monoid` và `Key Salting`?** Giả sử trên cùng đoạn đường có 4 xe nằm ở 2 máy: Máy A có 1 xe chạy `10 km/h`, Máy B có 3 xe chạy `40 km/h` — trung bình thực tế phải là **`32.5 km/h`**. Nếu gộp ngây thơ trung bình của trung bình `(10 + 40) / 2` sẽ ra **`25.0 km/h` — bị sai lệch ngay `7.5 km/h`!** Thay vào đó, mỗi máy giữ **bộ 5 con số cộng được `(số xe, tổng vận tốc, min, max, số xe kẹt)`**: gộp lại ra tổng vận tốc `130` chia `4` xe bằng đúng **`32.5 km/h` (sai số `0.0`)**, nhờ đó hệ thống thoải mái gắn đuôi ngẫu nhiên chia giờ cao điểm ra `8` giỏ song song (`Key Salting`) để chống nghẽn mà kết quả cuối vẫn chính xác tuyệt đối."
-- **Tra cứu nhanh Báo cáo:** Chương 2 (`2.4`) & Chương 3 (`3.3`).
+### Bảng Giải Nghĩa Nhanh Thuật Ngữ Trọng Tâm (Phòng Vệ Hội Đồng)
 
----
-
-#### Slide 07: Giải Thích Phương Pháp (2/2) — `Line-Graph PageRank`, `7D K-Means` & Bộ Đếm `O(1)` (`06:25 – 07:40`)
-- **Người trình bày:** **Phạm Công Minh (`25MS23310`)**
-- **Mục tiêu truyền đạt:** Trực quan hóa bằng sơ đồ 3 cột để giải thích dễ hiểu cách hệ thống biến bản đồ thành nút cổ chai (`Line-Graph PageRank`), cách suy diễn cho `88.13%` đường không có xe gửi GPS (`7D K-Means`), và cách lọc trùng hàng tỷ bản tin mà không tràn RAM (`O(1) Sketches`).
-- **Chỉ dẫn trực quan:** Chỉ lần lượt từ cột 1 (`Line-Graph PageRank`) sang cột 2 (`7D K-Means Cold-Start`) và cột 3 (`Bloom Filter, HLL++ & EWMA`).
-- **Lời thoại thuyết trình:**
-  > "Em là **Phạm Công Minh**, xin trình bày trọn vẹn **Slide 07** về ba phương pháp cốt lõi tiếp theo của hệ thống:
-  > - **Ở cột đầu tiên — `Line-Graph PageRank`:** Bản đồ gốc có tới `90.97%` điểm chỉ dùng để vẽ độ cong con đường. Hệ thống cắt bỏ các chấm đỏ trung gian này, loại bỏ cạnh quay đầu `U-turn`, và **đảo mỗi đoạn cơ giới thành một nút (`Line-Graph`: `92,453` cạnh chuyển tiếp)**: khi nhiều nhánh đường `A, B, C` cùng đổ dồn xe vào một lối ra hẹp `D`, thuật toán **`PageRank`** sẽ chấm điểm nút cổ chai `D` cao vọt (`#1 #21969 Nguyễn Kiệm = 2.7799`, `#2 #37345 Cầu vượt Ngã tư Gò Dưa = 2.7196`) ngay cả khi chưa lắp cảm biến!
-  > - **Ở cột thứ hai — `7D K-Means Cold-Start`:** Với **`74,211` đoạn đường vùng mù (`0` GPS)** trên `84,206` đoạn cơ giới (`88.13%`), thuật toán **`7D K-Means`** đo 7 đặc trưng hình thái bản đồ để gom toàn bộ thành phố vào **`6` nhóm hành vi đường phố**: nhờ đó các đoạn vùng mù (ô vuông đen) mượn được đặc trưng của các đường có GPS tương đồng (chấm tròn) nằm chung nhóm để phủ kín `100%` đô thị.
-  > - **Ở cột thứ ba — Bộ đếm luồng `O(1) Sketches`:** Khi mở rộng lên hàng tỷ bản tin GPS mỗi ngày, nếu lưu danh sách mã bản tin vào RAM để kiểm tra trùng lặp thì bộ nhớ sẽ đầy tràn ngay lập tức. Thay vào đó, **`RotatingBloomFilter`** dùng 2 thế hệ xoay vòng (`2 × 16.0 KiB = 32.0 KiB`, `k = 10` hàm băm) như người gác cổng — chặn `100%` tin trùng với tỷ lệ báo giả chỉ `0.0389%` (`13` FPs); **`HyperLogLog++` (`1.0 KiB`)** ước lượng nhanh `9,620.2` trên `9,995` đoạn hoạt động (`sai số 3.75%`); còn **`EWMA Hotspot`** cộng dồn có phai mờ để bắt các điểm **ĐANG kẹt lì nhiều giờ** (`#1 #47407 Lý Thường Kiệt = 6.6652`), bổ trợ trực tiếp cho `Random Forest` dự báo điểm **SẮP kẹt sau 30 phút**."
-- **Tra cứu nhanh Báo cáo:** Chương 4 (`4.1, 4.3`) & Chương 6 (`6.2`).
-
----
-
-#### Slide 08: `5. Data Pipeline & Data Processing` — `Ordered Quality Funnel` & `Train-Only Imputation` (`07:40 – 08:50`)
-- **Người trình bày:** **Nguyễn Tạ Minh Quyền (`25MS23280`)**
-- **Mục tiêu truyền đạt:** Trình bày luồng biến đổi dữ liệu cụ thể đầu–cuối (`End-to-End Walkthrough`), `Ordered Quality Funnel`, `Train-Only 3-Tier Vmax Imputation` và chuẩn hóa thang đo `LOS A–F`, đồng thời chỉ rõ **Limitations & Risks của Data Pipeline**.
-- **Chỉ dẫn trực quan:** Chỉ sơ đồ phóng lớn `END-TO-END WALKTHROUGH` phía trên, thẻ `Ordered Quality Funnel & 3-Tier Vmax` bên trái dưới, và thẻ `Limitations & Risks (Data Pipeline)` bên phải dưới.
-- **Lời thoại thuyết trình:**
-  > "Khi đã nắm rõ nguyên lý, sang **Phần 5 — Data Pipeline & Data Processing** trên Slide 08: sơ đồ phía trên minh họa trọn vẹn hành trình một bản tin GPS thực tế lúc `07:08` sáng trên đường Lý Thường Kiệt (`4 km/h`) đi xuyên qua 4 chặng xử lý đến cảnh báo dưới `1 ms`. Ở thẻ bên trái dưới, **Ordered Quality Funnel 5 bước** dùng `ANSI try_cast` cách ly `580` bản ghi đoạn lỗi & `151` ping lỗi sang `Quarantine` (`0` làm sập job, `0` rớt ngầm); loại `427` non-road POIs còn `84,206` đoạn cơ giới; chuẩn hóa `Unicode NFC` (`695 → 641` tên đường, gộp `54` biến thể) và giờ `UTC+7` (`4,305` cửa sổ). Áp dụng bảng tra `Train-Only 3-Tier Vmax` (`4,946 → 7,650 → 19,601 → 1,197`), toàn bộ **33,394 cửa sổ 30 phút** được gán nhãn 6 mức **`LOS A–F`** (**`89.19%` khớp BkTraffic**).
-  >
-  > **Về Limitations & Risks của Data Pipeline (thẻ bên phải dưới):**
-  > - *Thứ nhất (`Static Vmax Approximation`):* Có `62.28%` cửa sổ (`20,798` cửa sổ) dùng `Vmax` suy diễn theo cấp/prior (`Tier 2 & 3`), chưa tự động giảm khi đoạn đường bị rào chắn thi công hay ngập nước cục bộ.
-  > - *Thứ hai (`Quarantine Spike & 30m Slot`):* Nếu thiết bị GPS đổi định dạng hàng loạt sẽ làm tăng tỷ lệ cách ly vào `Quarantine`; đồng thời khung gom 30 phút làm mượt các dao động ngắn dưới 5 phút tại ngã tư."
-- **Tra cứu nhanh Báo cáo:** Chương 2, Mục `2.3` – `2.5`.
-
----
-
-#### Slide 09: `6. Modeling` — Nhãn `Exact t+30m`, Lọc Burst, Vector 23 Biến & Tuyển Chọn `VAL Gate` (`08:50 – 10:00`)
-- **Người trình bày:** **Nguyễn Thành Đạt (`25MS23306`)**
-- **Mục tiêu truyền đạt:** Trình bày thiết kế bài toán học máy dự báo `+30m` chống rò rỉ tương lai, phát hiện lọc bỏ `7,192` chuỗi burst tổng hợp khỏi `TRAIN`, cấu trúc 23 biến đầu vào, tuyển chọn `Live VAL Gate`, và nêu rõ **Limitations & Risks của thành phần Modeling**.
-- **Chỉ dẫn trực quan:** Chỉ 2 thẻ bên trái (`Exact t+30m Pairing & Burst Filter` và `23D Features`), thẻ góc trên phải (`Live VAL Gate & Cold-Start`), và thẻ góc dưới phải (`Limitations & Risks (Modeling)`).
-- **Lời thoại thuyết trình:**
-  > "Em xin trình bày **Phần 6 — Modeling** trên Slide 09. Để mô hình học đúng bài toán dự báo trước 30 phút trên quy luật giao thông thật và tuyệt đối không nhìn trộm tương lai, nhóm áp dụng 3 nguyên tắc:
-  > 1. **Ghép cặp `Exact t+30m Join` & Tách chuỗi Burst tổng hợp:** Chỉ ghép nhãn ở đúng `t + 30 phút` thu được **7,885 cặp hợp lệ** (loại bỏ `15,514` cặp đứt quãng $\ge 60$ phút = `66.30%`), đồng thời phát hiện và tách **`7,192` cửa sổ synthetic burst** (`3,596` cặp khỏi `TRAIN`).
-  > 2. **Chia tập `Chronological 70/15/15` + `Boundary Purge`:** Cắt bỏ `55` mẫu biên (`50` TRAIN, `5` VAL) giữ lại **`1,885` mẫu organic `TRAIN`**, **`1,167` mẫu `VAL`** và **`1,182` mẫu `TEST`**; kiểm thử `Future-Shuffle` xác nhận sai lệch biến đầu vào bằng **`0.0`**.
-  > 3. **Tổ hợp `23D Features`, `VAL Composite Gate` & `Cold-Start`:** Kết hợp 14 biến cục bộ/thời gian VN (`89.50%` tầm quan trọng, dẫn đầu bởi `mean_velocity 46.35%`, `current_los_ordinal 17.56%`, `velocity_ratio 10.64%`) và 9 biến đồ thị `PageRank (2.77%)`, `neighbor_los (2.35%)`, `street_causal_prior_los (2.14%)`, `K-Means` & `Priors` (`10.50%`). Tuyển chọn qua **`Live VAL Composite Gate = (val_acc + val_pr + val_roc) / 3`**, mô hình `#5 Random Forest (23D)` **thắng ở `0.8882` (vượt `DT 23D 0.8812` & `RF 14D 0.6794`; `τ_severe = 0.25`, `τ_change = 0.40`, `τ_onset = 0.25`)**, khóa `SHA-256` tại `outputs/model.joblib` và phủ đủ **`74,211` đoạn `Cold-Start`** (`100%` trên `84,206` đoạn cơ giới).
-  >
-  > **Về Limitations & Risks của Modeling (thẻ góc dưới phải):**
-  > - *Thứ nhất (`Default Conservatism & Sparse B–E`):* Ở các ca đổi pha, ngưỡng mặc định đạt `10/61 (16.39%)` và hiệu chỉnh trên `VAL (τ = 0.40)` tăng lên **`14/61 (22.95%)`** (**`McNemar p = 0.001953`**); các lớp trung gian `B–E` rất thưa (`10–20` mẫu TEST) khiến `Macro-F1` đạt **`0.4253`** (dù `Severe F1 = 0.9362`).
-  > - *Thứ hai (`Exogenous Blindness`):* Vector 23 biến chưa có dữ liệu mưa ngập hay tai nạn giao thông trực tiếp."
-- **Tra cứu nhanh Báo cáo:** Chương 5, Mục `5.1` – `5.3` & `5.5`.
-
----
-
-#### Slide 10: `7. Batch Processing` — Luồng Xử Lý Lô Phân Tán, Khai Phá Đồ Thị & Phân Cụm (`10:00 – 11:15`)
-- **Người trình bày:** **Nguyễn Thành Đạt (`25MS23306`)**
-- **Mục tiêu truyền đạt:** Trình bày rõ luồng dữ liệu & các component xử lý lô từ `Zones A → B → D → F / E`, kết quả thực nghiệm Spark 3.5.7 (`BroadcastHashJoin +25.76%`, `Monoid diff=0.0`, `Salting`) và **Limitations & Risks của Batch Processing**.
-- **Chỉ dẫn trực quan:** Chỉ theo các mũi tên trên **Sơ đồ Luồng & Thành phần Batch Processing** phía trên, thẻ kết quả bên trái dưới và thẻ `Limitations & Risks (Batch Processing)` bên phải dưới.
-- **Lời thoại thuyết trình:**
-  > "Tiếp theo ở **Phần 7 — Batch Processing** trên Slide 10, em xin trình bày luồng xử lý lô trên **Apache Spark 3.5.7**:
-  > - **Trên nhánh Spark Batch ETL phía trên:** **`BroadcastHashJoin`** loại bỏ hoàn toàn `SortMergeJoin`, giảm tầng trộn mạng **`Exchange` từ `5` xuống `1` (`-80%`)** và rút ngắn thời gian thực thi từ **`166.18 ms` xuống `123.37 ms` (`+25.76%` speedup, `exceptAll_diff = 0`)**. Song song đó, **`5-Tuple Monoid`** khớp `100.0%` với `baseline.py` (`0` diff, `33,394` cửa sổ) và **`8-Bucket Key Salting`** kéo lệch tải slot từ **`684.95x` xuống `1.020x` (`CV = 0.0059`)** (đánh đổi hợp lý `97.92 ms → 185.78 ms` trên tập nhỏ `90.8k` pings do chi phí 2-stage shuffle); **`Parquet Pruning`** chỉ đọc **`7,268 / 33,394` dòng** cho tháng `2020-08`.
-  > - **Trên nhánh Khai phá Đồ thị & Phân cụm phía dưới:** Cắt tỉa `90.97%` điểm vẽ cong, dựng đồ thị bỏ `U-turn` (`92,453` cạnh, `314` nút cụt) tính **`Line-Graph PageRank`** bảo toàn khối lượng **`84,206.0`** (**`#1 #21969 Nguyễn Kiệm = 2.7799`**, `#2 #37345 Cầu vượt Ngã tư Gò Dưa = 2.7196`). Khối **`SON / FPGrowth & 7D K-Means`** tìm `32` luật Spark FPGrowth trên organic TRAIN, `12` luật đồng kẹt (`#1 Nguyễn Thị Minh Khai ↔ Cống Quỳnh`, `Lift = 15.23x`) và `14` luật trễ đã kiểm soát quán tính, đồng thời phân `6` cụm (`3,609` đoạn organic TRAIN, `Silhouette = 0.2241`, `DBI = 1.3284`, `CH = 806.49`) phủ đủ `74,211` đoạn `Cold-Start`.
-  >
-  > **Về Limitations & Risks của Batch Processing (thẻ góc dưới phải):** `14` luật trễ `+30m` (`Lift` tới `24.0x`) chỉ xuất hiện trong **`5–8` cửa sổ** do GPS thưa → chỉ làm giả thuyết thăm dò; còn `74,211` đoạn `Cold-Start` gán cụm dựa trên hình thái tĩnh."
-- **Tra cứu nhanh Báo cáo:** Chương 3 (`3.3–3.5`, Hình `3.3`) & Chương 4 (`4.1–4.4`, Hình `4.1`).
-
----
-
-#### Slide 11: `8. Stream Processing` — Luồng Cảnh Báo Trực Tuyến, `O(1) Sketches` & Đối Soát Trễ (`11:15 – 12:25`)
-- **Người trình bày:** **Phạm Công Minh (`25MS23310`)**
-- **Mục tiêu truyền đạt:** Trình bày luồng sự kiện Kafka, Spark real watermark, `O(1) Sketches (33.0 KiB)`, `Two-Tier Recon`, MongoDB `$status_version` + `IXSCAN` và **Limitations & Risks của Stream Processing**.
-- **Chỉ dẫn trực quan:** Chỉ theo các mũi tên trên sơ đồ phía trên và 2 thẻ bên dưới.
-- **Lời thoại thuyết trình:**
-  > "Em là **Phạm Công Minh**, xin trình bày **Phần 8 — Stream Processing** trên Slide 11:
-  > - **Trên đường nhanh `Kafka 4.1 KRaft → Speed Layer`:** **`Watermark 30m`** được kiểm chứng watermark thật trên Spark Structured Streaming (`2020-12-01T12:30:00Z`, tự động giải phóng `10` bản ghi hết hạn khỏi State Store) kèm `WAL` phục hồi `0` dupes. Khối **`O(1) Stream Sketches` (`33.0 KiB`)** gồm `RotatingBloomFilter (32.0 KiB · 2×16 KiB, k = 10)` chặn `333/333` tin trùng (`13` FPs, `empirical FPR = 0.0389%` vs `0.0792%` lý thuyết), `HyperLogLog++ (1.0 KiB)` ước lượng `9,620.2 / 9,995` đoạn (`3.75%` err), và `EWMA Hotspot` ($\alpha = 0.15$, **`#1 #47407 Lý Thường Kiệt = 6.6652`**) trước khi `Online Scorer` xuất bản ghi tạm thời `v1`.
-  > - **Đối soát hai tầng & `MongoDB 8.0`:** **`Tier 1`** khớp `100%` (`tier1_exceptAll_diff = 0`); **`Tier 2`** bù đủ **`500` cửa sổ trễ** (`226` khung giờ), hàn gắn **`609` downstream lag windows** và re-score **`384` cửa sổ** (`213` đổi xác suất, nâng độ đầy đủ `98.5% → 100.0%`). Trên `MongoDB 8.0.34` (`33,394` docs, `69` batches), **`atomic $status_version pipeline guard`** chặn **`25/25`** bản tin cũ `v1`; chỉ mục phức hợp `IXSCAN` đạt **`warm median = 0.360 ms / p95 = 0.603 ms`** (**nhanh hơn `31.36x`** so với `COLLSCAN 11.289 ms`) phục vụ trực tiếp trung tâm điều hành `ReactJS + FastAPI TOC (:8000)`.
-  >
-  > **Về Limitations & Risks:** `RotatingBloomFilter (2×16 KiB)` đã khử bão hòa bit (`0.0389%` FPR), nhưng bản tin trùng đến muộn quá 2 thế hệ sẽ dựa vào chỉ mục duy nhất `event_id` trên MongoDB; và `500` cửa sổ trễ `> 30m` phải đợi `Tier-2 Reconciliation` cuối ngày."
-- **Tra cứu nhanh Báo cáo:** Chương 6, Mục `6.1` – `6.5` & Hình `6.1`.
-
----
-
-#### Slide 12: `9A. Experiments (Ablation & Benchmarks)` — Thực Nghiệm 7 Mô Hình & Kiểm Chứng Hạ Tầng (`12:25 – 13:30`)
-- **Người trình bày:** **Nguyễn Thành Đạt (`25MS23306`)**
-- **Mục tiêu truyền đạt:** Trình bày bảng `Ablation` 7 mô hình sau khi lọc burst (`1,885` organic TRAIN), thắng thế của `RF 23D` trên `Live VAL Gate`, `Confusion Matrix` 6 lớp (kèm báo cáo trung thực `Macro-F1 = 0.4253`) và benchmark Spark/MongoDB.
-- **Chỉ dẫn trực quan:** Chỉ dòng in đậm `#5 Random Forest (23D)` bên trái, 2 thẻ bên phải.
-- **Lời thoại thuyết trình:**
-  > "Sang **Phần 9A — Experiments (Ablation & Benchmarks)** trên Slide 12: trên tập `1,182` mẫu `TEST` độc lập sau khi huấn luyện trên `1,885` mẫu `organic TRAIN`, **`#5 Random Forest (23D)`** được tuyển chọn từ **`Live VAL Composite Gate = (val_acc + val_pr + val_roc) / 3` (`0.8882` so với `DT 23D 0.8812` & `RF 14D 0.6794`)** đạt **`ROC-AUC = 0.9894`**, **`PR-AUC = 0.9543`**, **`Severe F1 = 0.9362`** (`Precision 0.9215`, `Recall 0.9514`), **`Weighted-F1 = 0.9297`** và **`6-Class Acc = 0.9255`**, với đường chéo `Confusion Matrix` **`[944, 3, 1, 3, 5, 138]`** phân biệt đủ cả 6 lớp `A–F`. Nhóm cũng báo cáo thẳng thắn **`Macro-F1 = 0.4253`** do các lớp trung gian `B, C, D, E` trong thực tế `TEST` chỉ có `10–20` mẫu.
-  >
-  > Song song ở thẻ dưới phải là các thông số đo trực tiếp từ `Spark 3.5.7` và `MongoDB 8.0`: `BroadcastHashJoin` (`5 → 1` Exchange, `166.18 → 123.37 ms`, **`+25.76%`**), `Monoid Salting` (`684.95x → 1.020x`, `97.92 → 185.78 ms`), `Sketches 33.0 KiB`, và `MongoDB IXSCAN warm median 0.360 ms / p95 0.603 ms` (**`31.36x`**)."
-- **Tra cứu nhanh Báo cáo:** Chương 5, Mục `5.3`, Bảng `5.4` & Hình `5.1`.
-
----
-
-#### Slide 13: `9B. Experiments (Defense)` — Giải Mã Nghịch Lý `Persistence Baseline` Trên 4 Chế Độ (`13:30 – 14:45`)
-- **Người trình bày:** **Nguyễn Thành Đạt (`25MS23306`)**
-- **Mục tiêu truyền đạt:** Giải mã trực diện vì sao chọn `Random Forest (23D)` (`Acc = 92.55%`) khi `Persistence Baseline` đạt `94.84%` thông qua đối chứng khách quan trên 4 chế độ giao thông thực tế và kiểm định `McNemar`.
-- **Chỉ dẫn trực quan:** Chỉ bảng 4 chế độ kiểm định bên trái đối chiếu biểu đồ bên phải và thẻ kết luận dưới phải.
-- **Lời thoại thuyết trình:**
-  > "Ở **Phần 9B — Experiments (Scientific Defense)** trên Slide 13, nhóm giải mã câu hỏi phản biện: **Vì sao `Persistence Baseline` đạt `94.84%` trên toàn tập `TEST` trong khi `Random Forest (23D)` đạt `92.55%`?** Bởi `94.84%` mẫu (`1,121 / 1,182`) không đổi nhãn sau 30 phút nên đoán nguyên trạng luôn thắng trên phần đứng yên.
-  >
-  > Nhưng khi bóc tách sang **4 chế độ kiểm định thực tế**:
-  > 1. **Ở `61` ca đổi trạng thái (`LOS(t) ≠ LOS(t+30m)`):** `Baseline` **mù `100%` (`0 / 61`)**, còn `Random Forest (23D)` đạt **`Detect ROC-AUC = 0.8822`** (`PR-AUC = 0.4009`, vượt `Decision Tree 0.8511` và mô hình 2 biến `0.7921`), bắt trúng mức mới **`14 / 61` (`22.95%` tại `τ = 0.40` trên `VAL`, tổng thể `90.19%`; mặc định `10 / 61 = 16.39%`)**, `Top-1 hướng mới = 31.15%`, giảm sai số `Brier` từ `0.3279 → 0.2811` (`-14.3%`), và vượt trội có ý nghĩa thống kê với **kiểm định `McNemar` `p = 0.001953` (`10` vs `0`)**!
-  > 2. **Ở `8 / 993` ca đang thoáng (`A–D`) đột ngột hóa kẹt cứng (`E–F`):** Dù ngưỡng cứng `0/8` do quá hiếm (`0.81%`), năng lực xếp hạng đạt **`Onset ROC-AUC = 0.8438`** và đẩy xác suất rủi ro tăng **`3.26x`** (`0.0940` vs `0.0288`).
-  > 3. **Ở `3,605` cặp GPS ngắt quãng `> 30 phút` (`49.21%` đổi nhãn) và `74,211` đoạn `Cold-Start`:** `RF 23D` vượt `Baseline` **`+6.73 điểm PR-AUC`** (`0.6405` vs `0.5732`) và nâng độ phủ mạng lưới cơ giới từ **`11.87%` (`0%` Cold-Start) lên `100.0%` (`84,206` đoạn)** (Masked-GPS Cold-Start `Acc = 58.63%`, `ROC-AUC = 0.7000`, `PR-AUC = 0.5152`)."
-- **Tra cứu nhanh Báo cáo:** Chương 5, Mục `5.4`, Bảng `5.5` & Hình `5.2`.
-
----
-
-#### Slide 14: `10. Demonstration` — Trung Tâm Điều Hành `ReactJS + FastAPI TOC Command Center (:8000)` (`14:45 – 15:50`)
-- **Người trình bày:** **Phạm Công Minh (`25MS23310`)**
-- **Mục tiêu truyền đạt:** Trình chiếu 2 case studies cận cảnh chụp trực tiếp từ `ReactJS + FastAPI TOC Command Center (:8000)` (`Case Study 1: Tab 01 #21064 + MongoDB IXSCAN 31.36x` và `Case Study 2: Tab 04 #37345 Cold-Start`) kết nối `MongoDB 8.0` (`33,394` docs).
-- **Chỉ dẫn trực quan:** Chỉ `Case Study 1` bên trái, `Case Study 2` bên phải và dải `Trung Tâm Điều Hành 5-Tab ReactJS + FastAPI TOC (:8000)` phía dưới.
-- **Lời thoại thuyết trình:**
-  > "Bước sang **Phần 10 — Demonstration** trên Slide 14: hệ thống vận hành trực tiếp qua **Trung tâm Điều hành 5-Tab `ReactJS + FastAPI + Leaflet TOC Command Center (:8000)`** kết nối kho **`MongoDB 8.0` (`33,394` documents)**:
-  > - **Bên trái (`Case Study 1` trên `Tab 01`):** Tại **đoạn `#21064` — Công Trường Quốc Tế** (`2021-04-22`, khung thu thập GPS `[11:30–12:00)`, chốt phát lệnh tại `t = 12:00 ICT` dự báo cho `[12:00–12:30)`, đang `LOS E`, `12.0 km/h`), **`Random Forest (23D)` kích hoạt cảnh báo nguy cơ kẹt cứng `P(E/F) = 68.7%` (vượt xa ngưỡng VAL `25%`) và xác suất đổi pha `48.9%` (vượt ngưỡng VAL `40%`)** trước khi thực tế chuyển sang `LOS F`, đồng thời bảng `Mongo IXSCAN` chứng minh phản hồi `warm median = 0.360 ms / p95 = 0.603 ms` (**nhanh hơn `31.36x`** so với `COLLSCAN 11.289 ms`).
-  > - **Bên phải (`Case Study 2` trên `Tab 04`):** Khi chọn **đoạn `#37345` — Cầu vượt Ngã tư Gò Dưa** (`0` GPS, `PageRank = 2.7196`, `Cụm #4` trong `74,211` đoạn `Cold-Start`; `#1` nút cổ chai toàn thành phố là `#21969 Nguyễn Kiệm PR = 2.7799`), hệ thống đối chiếu tức thì các đoạn cảm biến tương đồng nhất trong cùng cụm (`Song Hành Xa lộ Hà Nội`, `Nguyễn Kiệm`, `Dương Bá Trạc`).
-  > - **Dải bên dưới:** Cả **5 Tab hợp nhất trên `:8000`** bao phủ đủ 6 kịch bản vận hành `UC-1..UC-6` — từ bản đồ Leaflet `84,206` đoạn, phát Story Kafka thực tế, PageRank & luật đồng kẹt, 6 cụm K-Means Cold-Start đến kiểm toán Spark `3.5.7` & Đối soát — sẽ được em trình diễn trực tiếp ngay ở phần Live Demo."
-- **Tra cứu nhanh Báo cáo:** Chương 6, Mục `6.4` & Hình `6.2`, `6.3`, `6.4`.
-
----
-
-#### Slide 15: `11. Limitations & Risks` — Tổng Hợp 5 Thành Phần Giải Pháp & 4 Rủi Ro Chung (`15:50 – 16:55`)
-- **Người trình bày:** **Phạm Công Minh (`25MS23310`)**
-- **Mục tiêu truyền đạt:** Tổng hợp (`Roll-Up`) toàn bộ hạn chế của **5 thành phần (`Mục 3, 5, 6, 7, 8`)** và trình bày trung thực **4 Rủi ro Chung Toàn Hệ thống**.
-- **Chỉ dẫn trực quan:** Chỉ bảng 5 thành phần bên trái và 4 rủi ro bên phải.
-- **Lời thoại thuyết trình:**
-  > "Sang **Phần 11 — Limitations & Risks (Tổng hợp)** trên Slide 15: bảng bên trái hệ thống hóa lại giới hạn của 5 thành phần (`5 dịch vụ mặc định / 11.0 GB RAM` ở `Arch`, `62.28% Vmax Tier 2/3` ở `Data Pipeline`, `Macro-F1 = 0.4253` và đổi pha bảo thủ ở `Modeling`, `14` luật trễ `5–8` cửa sổ ở `Batch`, và cửa sổ xoay vòng 2 thế hệ của `RotatingBloom 32.0 KiB` + tin trễ `> 30m` ở `Stream`).
-  >
-  > Thẻ bên phải đúc kết **4 Rủi ro Toàn cục**: **(1)** Độ phủ GPS mới đạt **`11.87%` (`9,995 / 84,206` đoạn)** thiên về ô tô; **(2)** Tập `1,885` organic TRAIN có thể trôi dạt khi gặp mùa mưa ngập, đồng thời lớp trung gian `B–E` thưa (`10–20` mẫu `TEST`) kéo `Macro-F1` về **`0.4253`**; **(3)** Ca thoáng chuyển sang kẹt đột ngột chỉ chiếm **`0.81%` (`8/993`, Hard Recall `0/8`, `Onset ROC = 0.8438`, Lift `3.26x`)**; và **(4)** Cụm Docker đơn `11.0/16 GB RAM` cùng `ReactJS + FastAPI TOC (:8000)` hỗ trợ khuyến nghị cho điều hành viên, chưa đóng vòng đèn `SCATS`."
-- **Tra cứu nhanh Báo cáo:** Chương 7, Mục `7.5`.
-
----
-
-#### Slide 16: `12. Plan` — Nghiệm Thu Kế Hoạch Thực Hiện Nhóm & Lộ Trình Phát Triển 3 Giai Đoạn (`16:40 – 17:20`)
-- **Người trình bày:** **Phạm Công Minh (`25MS23310`)**
-- **Mục tiêu truyền đạt:** Trình bày nghiệm thu 100% của 3 thành viên và lộ trình `Phase 1–3 Plan` khắc phục từng hạn chế ở Phần 11.
-- **Chỉ dẫn trực quan:** Chỉ bảng nghiệm thu phía trên và 2 thẻ `Phase 1–3 Plan & Quality Gate` phía dưới.
-- **Lời thoại thuyết trình:**
-  > "Tiếp theo ở **Phần 12 — Plan** trên Slide 16: cả 3 thành viên — bạn **Minh Quyền** (`Quality Funnel`, `Monoid diff=0.0`, `Key Salting 684.95x→1.020x`, `BroadcastHashJoin +25.76%`), bạn **Thành Đạt** (`PageRank 84,206.0`, `7D K-Means Sil=0.2241`, tách `7,192` burst → `1,885` organic TRAIN, `RF 23D ROC=0.9894, PR=0.9543, Sev-F1=0.9362, McNemar p=0.001953`), và em **Công Minh** (`Docker 5 dịch vụ mặc định 11.0/16 GB`, `Spark Real Watermark`, `RotatingBloom 32.0 KiB + HLL++ 1.0 KiB`, `Recon 500/609/384`, `MongoDB IXSCAN 0.360/0.603 ms · 31.36x`, `ReactJS + FastAPI TOC 5-Tab :8000`) — đều đã hoàn thành 100%, vượt qua kiểm thử `pytest`, thực thi `Spark 3.5.7 runtime` và đạt `0` lỗi `Ruff C901 < 15`. Lộ trình tiếp theo đi qua **Phase 1** (Focal Loss + ngưỡng động theo cấp đường, đã xong RotatingBloomFilter), **Phase 2** (GPS đa nguồn + API Mưa ngập + PSI retrain), và **Phase 3** (Kubernetes Multi-Node + Sharded MongoDB + kết nối đèn `SCATS`)."
-- **Tra cứu nhanh Báo cáo:** Chương 7, Mục `7.1` – `7.5`.
-
----
-
-#### Slide 17: `13. Technical Readiness & Production Verification Summary` (`17:20 – 18:00`)
-- **Người trình bày:** **Phạm Công Minh (`25MS23310`)**
-- **Mục tiêu truyền đạt:** Tổng kết đối chiếu `[I]` vs `[P]`, thông số runtime Spark 3.5.7 & MongoDB 8.0 đồng bộ 100% từ các file JSON trên đĩa (`2026-11-18T22:06Z`), và chuyển mượt sang **Live Demo `ReactJS + FastAPI TOC (:8000)`**.
-- **Chỉ dẫn trực quan:** Chỉ 5 thẻ từ trên xuống dưới trên Slide 17.
-- **Lời thoại thuyết trình:**
-  > "Khép lại bộ slide trên **Slide 17 — Technical Readiness & Production Verification**, toàn bộ con số đều đồng bộ 100% từ nguồn sự thật `outputs/metrics.json`, `spark_runtime_evidence.json` và `mongo_verify.json` (`2026-11-18T22:06Z`):
-  > 1. **Architecture Truth (`[I]` vs `[P]`):** Đã vận hành đủ **5 container Docker mặc định (`11.0/16 GB RAM`)** cùng cổng hợp nhất **`ReactJS + FastAPI + Leaflet TOC Command Center 5-Tab (:8000)`**, 2 profile on-demand `batch`/`stream` và gói mẫu `data/demo_sample/`.
-  > 2. **Spark 3.5.7 Runtime:** `BroadcastHashJoin` giảm `Exchange` **`5 → 1` (`-80%`)**, rút thời gian **`166.18 ms → 123.37 ms` (`+25.76%`, `exceptAll_diff = 0`)**; `8-Bucket Salted Monoid` kéo lệch slot `684.95x → 1.020x` (tradeoff `97.92 → 185.78 ms`, `IQR 2.13 → 3.68 ms`) và cắt `9/10` phân vùng Parquet.
-  > 3. **ML Validation:** Lọc `7,192` burst → `1,885` organic TRAIN, `RF 23D` thắng `VAL Gate` (`0.8882` vs `DT 23D 0.8812`), `McNemar p = 0.001953`, Spark MLlib organic TRAIN (`FPGrowth = 32`, `KMeans = 3,609`, `RF = 1,885` `acc = 0.9416`, `roc = 0.9903`), và kiểm chứng `#21969 Nguyễn Kiệm` có `PageRank #1 = 2.7799` dù lưu thông thoáng.
-  > 4. **Spark Real Watermark & MongoDB 8.0:** Structured Streaming watermark thật **`2020-12-01T12:30:00Z`** (evict `10` rows), `RotatingBloom 32.0 KiB` (`0.0389%` FPR), `HLL++ 1.0 KiB`, `MongoDB $status_version` chặn `25/25` `v1` và `IXSCAN warm 0.360 / p95 0.603 ms` (**`31.36x`**).
-  > 5. **Honest Limitations:** Báo cáo minh bạch `88.13%` (`74,211`) `Cold-Start`, `Macro-F1 = 0.4253` (`B–E` thưa) và `0/8` ca khởi phát đột ngột (`Onset ROC = 0.8438`, Lift `3.26x`). Sau đây em xin trình diễn trực tiếp trên **`http://localhost:8000` (`ReactJS + FastAPI TOC Command Center`)**!"
-- **Tra cứu nhanh Báo cáo:** `outputs/metrics.json`, `outputs/spark_runtime_evidence.json`, `outputs/mongo_verify.json`.
-
----
-
-## Phần 3. Kịch Bản Thao Tác `Live Demo` 3 Phút (`ReactJS + FastAPI TOC Command Center :8000`)
-
-> **Chuẩn bị sẵn trước giờ lên bục (1 lệnh duy nhất khởi động đủ 5 container mặc định `kafka`, `mongo`, `spark`, `toc-web`, `live-consumer` = `11.0 GB RAM`, kèm profile `batch`/`stream` khi cần chạy độc lập):**
-> ```powershell
-> docker compose up -d --build
-> ```
-> Mở sẵn **Cổng Điều Hành TOC 5-Tab (`ReactJS (toc_frontend/) + FastAPI (toc_backend/) + Leaflet`)** tại `http://localhost:8000`.
-
-1. **Phút 1 (`00:00 – 01:05`) — Kể chuyện Dự báo Theo Trục Thời Gian Động trên `Tab 01 · Điều Hành & Dự Báo +30p (:8000)`:**
-   - Chỉ lên thanh **Đồng hồ Phòng Điều Hành TOC** trên đầu trang: giải thích rõ quy ước **`Thu thập GPS [11:30 – 12:00) ➔ Chốt phát lệnh t = 12:00 ICT ➔ Dự báo trước +30p cho [12:00 – 12:30)`**.
-   - Chọn Kịch bản 2 **`Công Trường Quốc Tế (#21064)`** (`2021-04-22`, khung thu thập `[11:30–12:00)`, chốt phát lệnh tại `t = 12:00 ICT` dự báo cho `[12:00–12:30)`):
-     - **Trên Bản đồ Leaflet động (`84,206` đoạn cơ giới):** Bản đồ tự động bay tới đúng nút giao Công Trường Quốc Tế, tô sáng đoạn `#21064` và bật **`25 Điểm nóng EWMA (UC-1)`** để đối chiếu `#47407 Lý Thường Kiệt (6.6652)`.
-     - **Trên Bảng Dự báo & Chuỗi Thời Gian bên dưới:** Tại khung `[11:30–12:00)` đóng/chốt lệnh lúc `t = 12:00 ICT` (`LOS E`, `12.0 km/h`), **`Random Forest 23D` kích hoạt cảnh báo nguy cơ kẹt cứng `P(E/F) = 68.7%` (vượt ngưỡng VAL `25%`) và xác suất đổi pha `48.9%` (vượt ngưỡng VAL `40%`)** trước khi khung `[12:00–12:30)` thực tế chuyển sang `LOS F`; chuyển sub-tab **`Mongo IXSCAN (31.36x)`** để xem phản hồi `0.360 ms` median / `0.603 ms` p95 trực tiếp từ `MongoDB 8.0`.
-2. **Phút 2 (`01:05 – 02:10`) — Phát luồng qua `Kafka` & đối chứng `33 KiB Sketches` trên `Tab 02 (:8000)`:**
-   - Nhấn **`Phát Story qua Kafka`** trên TOC Command Center `:8000`: dữ liệu đi thật từ `producer.py --mode story` qua `Kafka 4.1 (3 Partitions)` → `live-consumer (33.0 KiB Sketches + RF 23D)` → `MongoDB 8.0`.
-   - Chuyển sang **`Tab 02 · Live Kafka & Sketches 33 KiB`** để chứng minh `RotatingBloomFilter (32.0 KiB · 2×16 KiB)` chặn `100%` tin trùng (`333/333`, `13` FPs, `0.0389%` FPR), `Watermark 30m` giữ tin trễ cho `Tier-2`, `1.0 KiB HLL++` (`9,620.2 / 9,995`, sai số `3.75%`), và `$status_version` bảo vệ bản ghi trong `MongoDB 8.0`.
-3. **Phút 3 (`02:10 – 03:00`) — Lướt nhanh `Tab 03`, `Tab 04` & `Tab 05` (Đủ 6 Use Cases `UC-1..UC-6`):**
-   - **`Tab 03 · PageRank & Luật Đồng Kẹt (UC-3, UC-4)`:** Chỉ bảng `Line-Graph PageRank` (`#1 #21969 Nguyễn Kiệm PR = 2.7799` nhưng chạy thoáng vs nút cổ chai kẹt thực tế) và cặp đồng kẹt `SON / FPGrowth` (`Nguyễn Thị Minh Khai ↔ Cống Quỳnh`, `Lift = 15.23x`).
-   - **`Tab 04 · 6 Cụm K-Means & Cold-Start (UC-5)`:** Chọn trực tiếp 1 đoạn `Cold-Start (0 GPS)` trong **`74,211` đoạn (`88.13%`)**, ví dụ **`#37345 Cầu vượt Ngã tư Gò Dưa (PR = 2.7196, Cụm #4)`** hoặc **`#61781 Phú Định (PR = 2.2141, Cụm #4)`**, để xem các đoạn tương đồng có GPS trong cùng cụm `7D K-Means` (`Song Hành Xa lộ Hà Nội`, `Nguyễn Kiệm`, `Dương Bá Trạc`).
-   - **`Tab 05 · Spark 3.5.7, Ablation & Đối Soát (UC-6)`:** Chỉ bảng `Spark 3.5.7` (**`5 → 1 Exchange`, `166.18 → 123.37 ms (+25.76%)`**, `684.95x → 1.020x` skew), `7-Model Ablation` & đối soát 2 tầng (`500 trễ, 609 lag, 384 rescore / 213 đổi prob`, **`98.5% → 100.0%`**).
-
----
-
-## Phần 4. Cẩm Nang Phản Biện & Trả Lời Câu Hỏi Hội Đồng (`10 Câu Hỏi Trọng Tâm`)
-
-### Câu 1: *"Tổng dung lượng 5 bảng gốc chỉ khoảng 38.5 MB (bảng vận tốc GPS nặng 3.58 MB), dùng Pandas chạy vài chục mili-giây là xong, tại sao nhóm phải dựng cụm Spark + Kafka + chia 8 giỏ khóa?"*
-- **Người trả lời chính:** Minh Quyền (`Slide 05, 06, 10` & `Chương 1 Mục 1.1`, `Chương 3 Mục 3.3`).
-- **Ý chính trả lời:**
-  1. Nhóm hoàn toàn đồng ý nếu chỉ tính một lần trên tệp tĩnh `3.58 MB` thì `Pandas` đơn luồng là nhanh nhất. Tuy nhiên, trong môn `BDA501 — Big Data Analytics`, bộ dữ liệu công khai của Kaggle đóng vai trò **mẫu chuẩn kiểm chứng quy mô (`Proof-of-Scale`)**.
-  2. Thực tế toàn TP.HCM với hơn `1` triệu xe buýt, taxi, xe công nghệ và xe tải phát GPS mỗi `5–10` giây sẽ sinh ra **`8–17` tỷ bản tin/ngày (`~1.5–3.0 TB/ngày`)**. Ở quy mô đó, lưu danh sách mã sự kiện lọc trùng trong RAM sẽ gây tràn bộ nhớ, ghép bảng không dùng `BroadcastHashJoin` sẽ nghẽn mạng, và lệch tải giờ cao điểm **`684.95` lần** sẽ làm treo máy xử lý phân vùng nóng.
-  3. Trên **`Spark 3.5.7`**, phép **`5-Tuple Monoid + 8-Bucket Salting`** đạt sai số `0.0` so với `baseline.py` và kéo lệch slot về `1.020x` (`CV = 0.0059`). Đánh đổi hợp lý là ở mẫu nhỏ `90.8k` pings, 2-stage shuffle tốn thêm độ trễ trung vị **`97.92 → 185.78 ms`** (trong khi **`BroadcastHashJoin`** rút **`5 → 1` Exchange**, **`166.18 → 123.37 ms`, `+25.76%` speedup**).
-
-### Câu 2: *"Tại sao trên toàn tập TEST (1,182 mẫu), Persistence Baseline đạt 94.84%, RF 23D đạt Acc = 92.55% và Macro-F1 chỉ 0.4253? Nhóm giải thích việc lọc burst thế nào?"*
-- **Người trả lời chính:** Thành Đạt (`Slide 09, 12, 13` & `Chương 5 Mục 5.3–5.4`, `Bảng 5.4, 5.5`).
-- **Ý chính trả lời:**
-  1. **Trung thực về `Macro-F1 = 0.4253` & Tách chuỗi Burst (`7,192` windows):** Trước đây nếu giữ `5,481` cặp TRAIN (bao gồm chuỗi burst tổng hợp), `RF` đạt `Acc = 0.9399, Sev-F1 = 0.9344` nhưng bị phụ thuộc vào mật độ burst nhân tạo. Nhóm **tách toàn bộ `7,192` burst windows khỏi TRAIN** còn **`1,885` organic TRAIN** → `RF 23D` thắng `Live VAL Gate` (`0.8882` vs `DT 23D 0.8812` & `RF 14D 0.6794`) và đạt TEST **`ROC-AUC = 0.9894, PR-AUC = 0.9543, Severe F1 = 0.9362, Weighted-F1 = 0.9297, Acc = 0.9255`**. Chỉ số **`Macro-F1 = 0.4253`** là hệ quả tự nhiên do tập `TEST` có các lớp trung gian `B, C, D, E` quá thưa (chỉ `10, 15, 13, 20` mẫu so với `959` lớp `A` và `165` lớp `F`).
-  2. **So sánh trực diện ở `5.16%` thời điểm đổi trạng thái (`61` ca):** `Baseline` **đoán sai `100%` (`0/61`)**, trong khi `RF 23D` đạt **`Detect ROC-AUC = 0.8822`** (`PR-AUC = 0.4009`), đoán trúng mức mới **`14/61` (`22.95%` tại `τ = 0.40` trên `VAL`, tổng thể `90.19%`; `10/61 = 16.39%` mặc định)**, `Top-1 hướng mới = 31.15%`, giảm sai số Brier `0.3279 → 0.2811` (`-14.3%`), và **vượt trội có ý nghĩa thống kê với kiểm định `McNemar p = 0.001953` (`10 vs 0`)**!
-  3. **Về `8 / 993` ca đang thoáng (`A–D`) đột ngột hóa kẹt (`E–F`):** Dù `Hard Recall = 0/8` do quá hiếm (`0.81%`), năng lực xếp hạng đạt **`Onset ROC-AUC = 0.8438`** với xác suất rủi ro **cao gấp `3.26x`** (`0.0940` vs `0.0288`), và **`RF 23D`** phủ được **`100%` `84,206` đoạn cơ giới** (bao gồm `88.13%` vùng mù `Cold-Start`, Masked-GPS `Acc = 58.63%`, `ROC-AUC = 0.7000`, `PR-AUC = 0.5152`).
-
-### Câu 3: *"Vì sao trong phần Literature Review, nhóm không chọn các mô hình Deep Learning trên đồ thị như DCRNN hay Graph WaveNet mà lại chọn Random Forest 23D?"*
-- **Người trả lời chính:** Thành Đạt (`Slide 03, 07, 09` & `Chương 1 Mục 1.5`).
-- **Ý chính trả lời:**
-  Các mô hình `Deep Spatio-Temporal GNN` (`DCRNN`, `ST-GCN`, `Graph WaveNet`) đòi hỏi ma trận chuỗi thời gian liên tục đều đặn trên phần lớn các đỉnh đồ thị. Trong bộ dữ liệu thực tế tại TP.HCM, **88.13% đoạn cơ giới (`74,211` đoạn) không có bất kỳ bản tin GPS nào** và **66.30% cặp quan sát liên tiếp bị đứt quãng $\ge 60$ phút**, khiến phép tích chập thời gian trên đồ thị bị suy biến. Ngược lại, `Random Forest (23D)` kết hợp các đặc trưng đồ thị tĩnh (`Line-Graph PageRank`, `7D K-Means`) xử lý rất hiệu quả dữ liệu bảng đứt quãng trong ngân sách `11.0 GB RAM` mà không cần GPU chuyên dụng.
-
-### Câu 4: *"Ở Phần 7 tính `PageRank` và phân cụm `K-Means`, rồi sang Phần 8 lại tính `EWMA Hotspot` — các phần này liên kết thế nào với mô hình `Random Forest` ở Phần 6?"*
-- **Người trả lời chính:** Thành Đạt & Công Minh (`Slide 07, 09, 10, 11` & `Chương 4`, `Chương 6 Mục 6.2`).
-- **Ý chính trả lời:**
-  1. **`Line-Graph PageRank` và `7D K-Means` (Phần 7 → Phần 6):** Vừa hiển thị cho Sở GTVT quản lý `74,211` đoạn đường thiếu GPS (`Cold-Start`), vừa đóng góp trực tiếp **`10.50%` độ quan trọng** qua nhóm 9 biến không gian (`pagerank_score 2.77%`, `neighbor_los_ordinal 2.35%`, `street_causal_prior_los 2.14%`, `street_causal_prior_sev 0.80%`, `cluster_id`) vào vector `23D` của `Random Forest` (đưa `RF 23D` thắng `VAL Gate`: `0.8882 vs DT 23D 0.8812 & RF 14D 0.6794`).
-  2. **`Random Forest` (Phần 6) vs. `EWMA Hotspot` (Phần 8):** `Random Forest` dự báo **tương lai 30 phút tới** (*"đường nào SẮP kẹt?"* để chỉnh đèn xanh phòng ngừa), còn `EWMA Hotspot` ($\alpha = 0.15$) đo **độ lì hiện tại** (*"đường nào ĐANG kẹt cứng lặp đi lặp lại suốt nhiều giờ chưa thông?"* như `#47407 Lý Thường Kiệt = 6.6652`).
-
-### Câu 5: *"Các luật kẹt nối tiếp sau 30 phút có `Lift = 24.0x` nhưng chỉ xuất hiện trong `5` cửa sổ (`2.5` tiếng trong 10 tháng). Liệu có phải trùng hợp ngẫu nhiên không?"*
-- **Người trả lời chính:** Thành Đạt (`Slide 10, 15` & `Chương 4 Mục 4.2, 4.4`).
-- **Ý chính trả lời:**
-  Nhóm hoàn toàn đồng tình và đã gắn cờ kiểm soát quán tính (`persistence_controlled = True`) cùng liệt kê đây là **Limitation & Risk trực tiếp của Batch Processing** ngay trên Slide `10` và Slide `15`. Do GPS gốc chỉ phủ `11.87%` đoạn cơ giới và gửi ngắt quãng, xác suất hai tuyến đường cùng có xe gửi tin ở hai khung 30 phút liên tiếp rất thấp khiến `14` luật trễ chỉ đạt `5–8` cửa sổ. Với cỡ mẫu nhỏ như vậy, hệ thống chỉ xem luật trễ là **giả thuyết tham khảo (`Exploratory Hypothesis`)** chứ không dùng làm quy luật cứng.
-
-### Câu 6: *"Tại sao khi gom khung trên Spark lại phải cộng gộp bộ 5 đại lượng (`5-Tuple Monoid`), và đánh đổi độ trễ của Salting thế nào?"*
-- **Người trả lời chính:** Minh Quyền (`Slide 06, 10` & `Chương 3 Mục 3.3`).
-- **Ý chính trả lời:**
-  Phép tính trung bình cộng không có tính kết hợp khi các phân vùng chứa số lượng bản tin khác nhau (`avg` lồng nhau gây sai số **`11.111111 km/h`** trên phân vùng `[1, 2, 3]`). Cộng gộp bộ 5 đại lượng `(n, sum_v, min_v, max_v, severe_cnt)` đảm bảo `8-Bucket Key Salting` đạt **sai số `0.0`** (`diff = 0`) so với `baseline.py`. Trên `Spark 3.5.7`, `Salting` cắt lệch tải slot từ `684.95x → 1.020x` (`CV = 0.0059`), đánh đổi thêm độ trễ trung vị `97.92 → 185.78 ms` (`IQR 2.13 → 3.68 ms`) trên tập nhỏ `90.8k` pings do chi phí Shuffle 2 giai đoạn — hoàn toàn đáng giá khi mở rộng sang tỷ bản tin bị lệch phân vùng nóng.
-
-### Câu 7: *"Vì sao báo cáo ghi 84,633 đoạn thô / 84,206 đoạn cơ giới và 33,441 dòng train.csv / 33,394 cửa sổ?"*
-- **Người trả lời chính:** Minh Quyền (`Slide 05, 08` & `Chương 2 Mục 2.3`).
-- **Ý chính trả lời:**
-  Số liệu kế toán khớp chính xác 100%: từ `84,633` đoạn OSM thô, `Ordered Quality Funnel (R2)` lọc bỏ **`427` đoạn phi cơ giới** (lối đi bộ/cầu thang) còn đúng **`84,206` đoạn cơ giới**; tương ứng trên `90,938` bản tin gốc tách bỏ **`151` pings lỗi/phi cơ giới** còn **`90,787` bản tin hợp lệ**, gom thành **`33,394` cửa sổ cơ giới** (giảm đúng `47` cửa sổ phi cơ giới so với `33,441` dòng `train.csv` thô) và khớp **`89.19%`** nhãn LOS chuẩn BkTraffic.
-
-### Câu 8: *"Làm sao chứng minh mô hình dự báo hoàn toàn không bị rò rỉ dữ liệu tương lai (`Zero Future Leakage`)?"*
-- **Người trả lời chính:** Thành Đạt (`Slide 06, 08, 09` & `Chương 2 Mục 2.4`, `Chương 5 Mục 5.1–5.2`).
-- **Ý chính trả lời:**
-  Nhóm khóa chặt cả 5 chốt chặn: **(1)** Bảng `3-Tier Vmax` chỉ học trên `TRAIN` (`4,946 / 7,650 / 19,601 / 1,197`); **(2)** Bộ chuẩn hóa và tâm cụm `7D K-Means` chỉ học trên **`3,609` đoạn `organic TRAIN`**; **(3)** Tách sạch **`7,192` burst windows** khỏi `TRAIN` còn `1,885` mẫu; **(4)** Cắt `55` mẫu biên (`Boundary Purge`); và **(5)** Kiểm thử `Future-Shuffle Falsification` đảo ngẫu nhiên tương lai $> t$ cho sai lệch **`0.0`**.
-
-### Câu 9: *"Những rủi ro lớn nhất khi đưa hệ thống Stream Processing (`32.0 KiB RotatingBloomFilter` & `Watermark 30m`) chạy thực tế nhiều ngày liền là gì và kế hoạch khắc phục ra sao?"*
-- **Người trả lời chính:** Công Minh (`Slide 07, 11, 15, 16` & `Chương 6 Mục 6.5`, `Chương 7 Mục 7.5`).
-- **Ý chính trả lời:**
-  1. **Cửa sổ xoay vòng của `RotatingBloomFilter (2 × 16.0 KiB, k = 10)`:** Cơ chế xoay vòng 2 thế hệ (dung lượng `8,000` tin/thế hệ) đã triệt tiêu rủi ro bão hòa bit và hạ tỷ lệ báo giả xuống **`0.0389%`** (`13` FPs, tốt hơn ngưỡng lý thuyết `0.0792%`, chặn `333/333` tin trùng). Các bản tin trùng đến quá muộn sau hơn 2 thế hệ sẽ được chỉ mục duy nhất `event_id` trên `MongoDB 8.0` chặn ghi lặp.
-  2. **Rủi ro bản tin trễ quá `Watermark 30m`:** Đã kiểm chứng watermark thật `2020-12-01T12:30:00Z` trên Spark Streaming, kết hợp `Two-Tier Recon` bù đủ **`500` cửa sổ trễ / `609` lag / `384` rescore (`213` đổi xác suất)** và khóa **`atomic $status_version` pipeline guard** trên `MongoDB 8.0` chặn `25/25` bản tin cũ `v1`.
-
-### Câu 10: *"Làm thế nào `MongoDB 8.0` đạt được độ trễ truy vấn `0.360 ms / p95 0.603 ms` (`31.36x` so với COLLSCAN) mà không cần sắp xếp trên RAM?"*
-- **Người trả lời chính:** Công Minh (`Slide 11, 14` & `Chương 6 Mục 6.4`).
-- **Ý chính trả lời:**
-  Nhóm thiết kế chỉ mục phức hợp **`Compound Index {street_level: 1, severe_prob: -1, segment_id: 1}`** tuân thủ quy tắc **`ESR` (`Equality – Sort – Range`)**. Khi TOC Command Center truy vấn `1,234` cửa sổ trục chính (`street_level` 1–2) có `severe_prob >= 0.70` sắp xếp giảm dần theo `severe_prob`, `MongoDB 8.0.34` đọc thẳng trên cây `B-Tree` (`winning_stages: [LIMIT, PROJECTION_SIMPLE, FETCH, SORT_MERGE, IXSCAN, IXSCAN]`, `in_memory_sort = false`), đạt **`warm median = 0.360 ms`**, **`warm p95 = 0.603 ms`** (**nhanh hơn `31.36x`** so với `COLLSCAN 11.289 ms`).
+| Thuật ngữ / Ký hiệu | Giải nghĩa ngắn gọn (chuẩn xác khi trả lời Hội đồng) |
+|---|---|
+| **`Persistence Baseline`** | Mốc đối chứng tối giản **không dùng AI** do chính nhóm tự thiết lập — chỉ đoán giữ nguyên mức kẹt hiện tại sau 30 phút ($\hat{y}_{t+30\text{m}} = \text{LOS}_t$). Mạnh ở pha ổn định (`94.84%`) nhưng mù `0/61` ở ca đổi pha và `0%` độ phủ vùng mù `Cold-Start`. |
+| **`Masked-GPS Proxy`** | Phép thử định lượng độ chính xác cho vùng mù: nhóm **cố tình che toàn bộ tín hiệu GPS hiện tại của tập `TEST` thành trống** để giả lập đoạn không cảm biến (chỉ còn GIS tĩnh, `PageRank`, cụm `7D K-Means` và lịch sử tuyến quá khứ), đo lại đạt `58.63%` 6-class Acc (`ROC-AUC 0.7000`, `Brier 0.1123`). |
+| **`Burst tổng hợp / Organic TRAIN`** | Sáng `03/08/2020` (UTC `2020-08-02 23:30` & `2020-08-03 00:00`) riêng một sáng đổ dồn `36,096` pings (`39.7%` dữ liệu cả 10 tháng), tạo ra **`7,192` cửa sổ burst tổng hợp**. Tách sạch khối này (cùng `55` mẫu biên `Boundary Purge`) giúp tập **`Organic TRAIN` (`1,885` mẫu)** phản ánh đúng nhịp giao thông thực. |
+| **`street_causal_prior_*`** | Biến **tiên nghiệm quá khứ** tích lũy mở rộng nghiêm ngặt tại $\tau < t$ (và đóng băng sau mốc cắt `TRAIN`) theo chuẩn *time-causal* trong xử lý chuỗi thời gian — **không phải suy luận nhân quả can thiệp** (*do-calculus / counterfactual*). |
+| **`v1` vs `v2` (`$status_version`)** | **`v1` (`STREAM_PROVISIONAL`)**: cảnh báo phát tức thời trên Speed Layer (có thể còn thiếu tin trễ quá Watermark 30 phút). **`v2` (`BATCH_RECONCILED` / `BATCH_VERIFIED`)**: bản chuẩn sau đối soát cuối ngày `Tier-2`. Khóa nguyên tử `$status_version` trong MongoDB chặn `25/25` tin `v1` đến muộn ghi đè ngược `v2`. |
+| **`[I]` vs `[P]`** | **`[I]` (Implemented)**: phần đã chạy thật và đo kiểm chứng có bằng chứng JSON/pytest trong cụm `5` container Docker (`11.0 GB RAM`, `Spark 3.5.7`, `Kafka 4.1`, `MongoDB 8.0`, `ReactJS + FastAPI :8000`). **`[P]` (Proposed)**: kiến trúc đề xuất mở rộng quy mô toàn TP.HCM (`8–17` tỷ tin/ngày, Kubernetes đa nút, MongoDB phân mảnh, kết nối đèn SCATS). |
+| **3 nghĩa của `"Baseline"`** | Nhóm phân tách rạch ròi 3 mốc đối chứng khác nhau để không gây nhầm lẫn: **(1) `Persistence Baseline`** = quy tắc đối chứng ML đoán giữ nguyên `LOS(t)`; **(2) Cấu hình Spark mặc định `SortMerge`** = mốc đo hiệu năng Catalyst trước khi bật `BroadcastHashJoin`; **(3) Mã tham chiếu đơn máy `baseline.py`** = bộ kiểm toán `5-Tuple Monoid` đơn luồng đối chiếu sai số `0.0` cho Spark `8-Bucket Salting`. |

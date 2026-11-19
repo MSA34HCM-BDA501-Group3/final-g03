@@ -33,8 +33,12 @@ def _load_method_stats() -> dict[str, str]:
     t1 = vt["TIER_1_SEGMENT_TRAIN_P85"]
     t2 = vt["TIER_2_LEVEL_ROADTYPE_MEDIAN"]
     t3 = vt["TIER_3_HIERARCHICAL_LEVEL_PRIOR"]
+    miss_clean = total_w - t0
     return {
         "miss_pct": f"{qf['missing_max_velocity_train_pct']:.2f}%",
+        "miss_clean_cnt": f"{miss_clean:,}",
+        "total_w": f"{total_w:,}",
+        "miss_clean_pct": f"{miss_clean / total_w * 100:.2f}%",
         "t0": f"{t0 / total_w * 100:.1f}% · {t0:,}",
         "t1": f"{t1 / total_w * 100:.1f}% · {t1:,}",
         "t2": f"{t2 / total_w * 100:.1f}% · {t2:,}",
@@ -139,7 +143,7 @@ def _draw_imputation_panel(ax: plt.Axes) -> None:
         8.65,
         5.10,
         "1. Nội Suy Tốc Độ Tối Đa 3 Tầng (Train-Only 3-Tier Vmax)",
-        f"Giải EC-1 ({ms['miss_pct']} thiếu Vmax)",
+        f"Giải EC-1 ({ms['miss_clean_pct']} cơ giới)",
         "#0284C7",
     )
     # Train-only lock banner
@@ -147,8 +151,9 @@ def _draw_imputation_panel(ax: plt.Axes) -> None:
     ax.text(
         4.50,
         4.32,
-        "KHÓA CHỐNG RÒ RỈ (TRAIN-ONLY): Chỉ học bảng tra cứu từ dữ liệu quá khứ (TRAIN), áp cố định cho VAL & TEST",
-        fontsize=8.5,
+        f"TRAIN-ONLY: 28,495/33,441 ({ms['miss_pct']} gốc) · {ms['miss_clean_cnt']}/{ms['total_w']} "
+        f"({ms['miss_clean_pct']} cơ giới) thiếu Vmax → Khóa bảng trên TRAIN",
+        fontsize=7.9,
         fontweight="bold",
         color="#0F172A",
         ha="center",
@@ -202,8 +207,8 @@ def _draw_imputation_panel(ax: plt.Axes) -> None:
     ax.text(
         4.50,
         0.58,
-        "KẾT QUẢ: 100% cửa sổ có Vmax → Tính tỷ lệ r = vận tốc thực / Vmax → Chuẩn hóa 6 mức LOS A–F",
-        fontsize=8.6,
+        "KẾT QUẢ: 100% cửa sổ có Vmax (tính r = v/Vmax) + derive_urban_los (89.19% khớp BkTraffic) → 6 mức LOS A–F",
+        fontsize=8.1,
         fontweight="bold",
         color="#38BDF8",
         ha="center",
@@ -552,8 +557,8 @@ def _draw_sketches_col(ax: plt.Axes) -> None:
     ax.text(
         12.48,
         4.28,
-        "RotatingBloom (32.0 KiB · 2×16 KiB) — Lọc tin trùng:",
-        fontsize=8.2,
+        "RotatingBloom (32 KiB · 2×131,072 bit, k = 10) — Lọc trùng:",
+        fontsize=8.0,
         fontweight="bold",
         color="#0F172A",
         va="center",
@@ -561,16 +566,16 @@ def _draw_sketches_col(ax: plt.Axes) -> None:
     )
     bits = [0, 1, 0, 0, 1, 0, 1, 0, 0, 1]
     for b_idx, b_val in enumerate(bits):
-        bx = 12.50 + b_idx * 0.33
+        bx = 12.46 + b_idx * 0.315
         fc = "#7C3AED" if b_val == 1 else "white"
         tc = "white" if b_val == 1 else "#475569"
-        _rbox(ax, bx, 3.60, 0.28, 0.42, fc, "#6D28D9", lw=1.0, radius=0.04, zorder=3)
-        ax.text(bx + 0.14, 3.81, str(b_val), fontsize=8.2, fontweight="bold", color=tc, ha="center", va="center")
+        _rbox(ax, bx, 3.60, 0.27, 0.42, fc, "#6D28D9", lw=1.0, radius=0.04, zorder=3)
+        ax.text(bx + 0.135, 3.81, str(b_val), fontsize=8.0, fontweight="bold", color=tc, ha="center", va="center")
     ax.text(
-        15.92,
+        15.72,
         3.81,
-        "Cả k=10 ô = 1\n→ CHẶN TIN TRÙNG!\n(Cố định 32 KiB)",
-        fontsize=7.6,
+        "Minh họa 4/10 ô băm = 1\n(Thực tế k=10/2×131k bit)\n→ CHẶN TIN TRÙNG!",
+        fontsize=7.2,
         fontweight="bold",
         color="#5B21B6",
         ha="left",

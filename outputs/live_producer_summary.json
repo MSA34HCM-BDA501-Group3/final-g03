@@ -1,27 +1,40 @@
 {
-  "component": "[C1] Story-Driven Rush-Hour Replay Producer -> [C4] Kafka 4.1.0 KRaft",
-  "replay_mode": "story_chronological_corridor",
+  "component": "[C1] GPS Probe Fleet & Replay Producer -> [C4] Kafka 4.1.0 KRaft",
+  "replay_mode": "window_aggregated_30m",
+  "denominator_note": "G02 Contract: Window-level replay operates on 33,394 aggregated 30m windows (333 duplicates, 1,168 late in-WM, 500 late out-of-WM).",
+  "seed": 42,
+  "topic": "hcmc-traffic-events",
+  "num_partitions": 3,
+  "partition_key": "segment_id",
+  "partition_distribution": {
+    "0": 11050,
+    "1": 11189,
+    "2": 11488
+  },
+  "total_events_emitted": 33727,
+  "valid_unique_events": 33394,
+  "injected_duplicate_events": 333,
+  "injected_late_in_watermark_events": 1168,
+  "injected_late_out_of_watermark_events": 500,
+  "affected_late_windows": 226,
+  "affected_late_segment_windows": 500,
   "data_source_mode": "full_project_data",
-  "scenario": "noon_transition",
-  "ict_date": "2021-01-05",
-  "spotlight_segment_id": 21262,
-  "frames_count": 10,
-  "total_story_messages": 132,
   "kafka_broker_delivery": {
     "status": "verified",
     "broker_connected": true,
-    "mode": "story_chronological_frames",
-    "frames_streamed": 10,
-    "messages_sent": 132,
+    "bootstrap_servers": "kafka:29092",
+    "topic": "hcmc-traffic-events",
+    "num_partitions": 3,
+    "messages_sent": 200,
     "partition_messages_sent": {
-      "0": 54,
-      "1": 37,
-      "2": 41
+      "0": 82,
+      "1": 50,
+      "2": 68
     },
     "partition_end_offsets": {
-      "2": 3945,
-      "1": 4065,
-      "0": 4122
+      "2": 4317,
+      "1": 4344,
+      "0": 4576
     }
   }
 }

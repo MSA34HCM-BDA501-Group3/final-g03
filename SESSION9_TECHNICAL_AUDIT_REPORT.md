@@ -37,16 +37,16 @@
 ## Live Measured 3-Way Results (`evidence/session9/B_benchmark.csv` & `B_live_spark_benchmark.json`)
 | Run | Configuration | Input / Partitions | Median Runtime (IQR) | Exchange Stages | Peak-to-Median Skew | Parity (`exceptAll`) |
 |---|---|---|---:|---:|---:|---:|
-| **Baseline** | `SortMergeJoin` + Unsalted GroupBy | `90,787` pings / `8` parts | `205.36 ms` (`IQR 17.53`) | `5` | `684.95x` | `0` rows diff |
-| **Variant 1** | `BroadcastHashJoin` + Unsalted Monoid | `90,787` pings / `8` parts | `164.10 ms` (`-20.09%`, `IQR 31.02`) | `1` (`-80%`) | `684.95x` | `0` rows diff |
-| **Variant 2** | `BroadcastHashJoin` + `8-Bucket Salted Monoid` | `90,787` -> `59,714` salted -> `33,394` windows | `212.79 ms` (`+48.69 ms` vs V1, `IQR 35.53`) | `2` | `1.0197x` (`CV=0.0059`) | `0` rows diff |
+| **Baseline** | `SortMergeJoin` + Unsalted GroupBy | `90,787` pings / `8` parts | `213.66 ms` (`IQR 41.31`) | `5` | `684.95x` | `0` rows diff |
+| **Variant 1** | `BroadcastHashJoin` + Unsalted Monoid | `90,787` pings / `8` parts | `187.07 ms` (`-12.45%`, `IQR 98.99`) | `1` (`-80%`) | `684.95x` | `0` rows diff |
+| **Variant 2** | `BroadcastHashJoin` + `8-Bucket Salted Monoid` | `90,787` -> `59,714` salted -> `33,394` windows | `274.99 ms` (`+87.92 ms` vs V1, `IQR 76.68`) | `2` | `1.0197x` (`CV=0.0059`) | `0` rows diff |
 
 - **Wave 2 Isolated `outputs/spark_runtime_evidence.json` Baseline Check:** Catalyst Join `SortMergeJoin 166.18 ms -> BroadcastHashJoin 123.37 ms` (`25.76%` speedup, `5 -> 1` Exchange, `exceptAll=0`); Isolated Monoid unsalted `97.92 ms` vs 8-bucket salted `185.78 ms` (`exceptAll=0`).
 
 ## Required Three-Part Interpretation
 1. **What changed, and why did the result move in that direction?**
-   - Switching from `SortMergeJoin` to `BroadcastHashJoin` pinned `segments` (`84,206` rows) and `streets` (`5,553` rows) in executor memory, removing `4` network/sort `Exchange` stages (`5 -> 1`) and reducing median runtime by **`20.09%` (`205.36 ms -> 164.10 ms`)**.
-   - Adding `2-Stage 8-Bucket Key Salting` split hot arterial keys across `8` `xxhash64` salt buckets (`59,714` Stage-1 partial groups -> `33,394` windows). On the `38.50 MB` sample, the extra partial-reduce shuffle adds `+48.69 ms` overhead vs V1 while collapsing peak-slot skew from **`684.95x` down to `1.0197x`** with `0.0` numerical error.
+   - Switching from `SortMergeJoin` to `BroadcastHashJoin` pinned `segments` (`84,206` rows) and `streets` (`5,553` rows) in executor memory, removing `4` network/sort `Exchange` stages (`5 -> 1`) and reducing median runtime by **`12.45%` (`213.66 ms -> 187.07 ms`)**.
+   - Adding `2-Stage 8-Bucket Key Salting` split hot arterial keys across `8` `xxhash64` salt buckets (`59,714` Stage-1 partial groups -> `33,394` windows). On the `38.50 MB` sample, the extra partial-reduce shuffle adds `+87.92 ms` overhead vs V1 while collapsing peak-slot skew from **`684.95x` down to `1.0197x`** with `0.0` numerical error.
 2. **At what point would your chosen configuration stop scaling well?**
    - `BroadcastHashJoin` fails with executor/driver `OutOfMemoryError` if broadcast tables exceed `spark.sql.autoBroadcastJoinThreshold` (`> 100–256 MB`). Fixed `8-bucket` salting caps concurrency at `8` cores per hot key, requiring adaptive `32–64` buckets or AQE `optimizeSkewedJoin` at `10^7+` pings/slot.
 3. **What limitation prevents this experiment from proving production-scale performance?**
@@ -131,7 +131,7 @@
 - **Primary Read-Back Query:** Top-K arterial early-warning lookup for `TOC` operators:
   `db.traffic_scores.find({"street_level": {"$in": [1, 2]}, "severe_prob": {"$gte": 0.70}}).sort([("severe_prob", -1), ("segment_id", 1)]).limit(25)`
 - **Key & Index Design:** Unique key `event_id` + ESR Compound Index `level_prob_segment_idx` `{"street_level": 1, "severe_prob": -1, "segment_id": 1}`.
-- **Measured Read/Write Proof (`groupexe-knowledgetest-mongo-1` & `outputs/mongo_verify.json`):** `33,394` docs upserted across `4` partitions (`69` bulk batches), idempotent replay = `33,394`, atomic `$status_version` pipeline guard rejected `25/25` stale v1 retries. `explain('executionStats')` confirms `IXSCAN` (`in_memory_sort=False`, `nReturned=25`, `totalKeysExamined=26`, `totalDocsExamined=25`): live interleaved (5 warmup + 25 runs) `IXSCAN median = 0.940 ms` (`p95 = 1.360 ms`) vs `COLLSCAN = 11.390 ms` (`12.12x`); saved `mongo_verify.json` `warm_median = 0.360 ms`, `warm_p95 = 0.603 ms` vs `COLLSCAN = 11.289 ms` (**`31.36x` speedup**).
+- **Measured Read/Write Proof (`groupexe-knowledgetest-mongo-1` & `outputs/mongo_verify.json`):** `33,394` docs upserted across `4` partitions (`69` bulk batches), idempotent replay = `33,394`, atomic `$status_version` pipeline guard rejected `25/25` stale v1 retries. `explain('executionStats')` confirms `IXSCAN` (`in_memory_sort=False`, `nReturned=25`, `totalKeysExamined=26`, `totalDocsExamined=25`): live interleaved (5 warmup + 25 runs) `IXSCAN median = 0.940 ms` (`p95 = 1.220 ms`) vs `COLLSCAN = 8.200 ms` (`8.72x`); saved `mongo_verify.json` `warm_median = 0.360 ms`, `warm_p95 = 0.603 ms` vs `COLLSCAN = 11.289 ms` (**`31.36x` speedup**).
 
 ## 5.2 Streaming, Spark Structured Streaming & Live Kafka Monitor
 - **Historical Replay Nature:** Historical HCMC GPS telemetry (`90,938` pings / `33,394` 30m windows, `seed=42`) replayed through **`Apache Kafka 4.1.0 KRaft`** (`hcmc-traffic-events`, 3 partitions).
@@ -154,7 +154,7 @@
 | **Fault Tolerance & Checkpoints** | `[I]` Dual-Sink WAL (`73,714 B` + Spark WAL) + MongoDB `33,394` docs with atomic `$status_version` guard + SHA-256 Lock (`model=a2f411846508`, `static_store=75328ac2d5e3`, `vmax_lookup=ee7f692daad8`). |
 | **Observability** | `[I]` JSON audit logs (`metrics.json`, `spark_runtime_evidence.json`, `mongo_verify.json`, `query_progress.json`, `live_kafka_telemetry.json`) surfaced in the unified **ReactJS + FastAPI TOC Command Center (`http://localhost:8000`)**. |
 | **Security & Least Privilege** | `[I]` `.gitignore` blocks `.env`/`*.pem`/`*.key`; read-only SHA-256 verification blocks online model tampering. |
-| **Cost / Performance Trade-Off** | Trading `+48.69 ms` 2-stage salting overhead and `33.0 KiB` sketches (`3.75%` HLL++ error, `0.0389%` Bloom FPR) to eliminate skew (`684.95x` -> `1.0197x`). |
+| **Cost / Performance Trade-Off** | Trading `+87.92 ms` 2-stage salting overhead and `33.0 KiB` sketches (`3.75%` HLL++ error, `0.0389%` Bloom FPR) to eliminate skew (`684.95x` -> `1.0197x`). |
 
 ## 6.2 Reproducibility Smoke Test (7/7 Verified `[x]`)
 - `[x]` **Software versions recorded:** Python `3.13`, PySpark `3.5.7`, Kafka `4.1.0`, MongoDB `8.0.34`, scikit-learn (`Dockerfile`, `Dockerfile.spark35`, `requirements.txt`).
@@ -251,14 +251,14 @@
 | Evidence Scope | Provenance Classification | Artifact Source | Key Verified Numbers |
 |---|---|---|---|
 | **Full Batch, 7-Model Ablation & Spark MLlib Verification** | **Canonical Leak-Free Run** | `outputs/metrics.json`, `outputs/spark_runtime_evidence.json`, `outputs/model_registry_manifest.json` | `90,938` -> `90,787` pings -> `33,394` windows; Catalyst Join `166.18 -> 123.37 ms` (`25.76%`); RF 23D TEST `ROC-AUC=0.9894`, `PR-AUC=0.9543`, `Acc=0.9255`; Spark MLlib `FPGrowth=32`, `KMeans=3,609`, `RF=1,885` (`test_acc=0.9416`, `roc_auc=0.9903`); SHA-256 `model=a2f411846508`, `static_store=75328ac2d5e3`, `vmax_lookup=ee7f692daad8`. |
-| **Live 3-Way Spark 3.5.7 Controlled Benchmark** | **Fresh Live Docker Execution (`2026-11-18`)** | `evidence/session9/B_live_spark_benchmark.json` (`groupexe-knowledgetest-spark-1`) | `2w + 5r` interleaved: `Baseline 205.36 ms` (`5 Exch`) -> `V1 164.10 ms` (`1 Exch`, `-20.09%`) -> `V2 212.79 ms` (`2 Exch`, `exceptAll=0`). |
-| **MongoDB 8.0 Operational Serving Store (`33,394` docs)** | **Canonical + Live `2026-11-18` Interleaved Benchmark** | `outputs/mongo_verify.json` + `groupexe-knowledgetest-mongo-1` | `33,394` docs (`1,234` arterial severe alerts), `25/25` stale v1 rejected; live IXSCAN median `0.940 ms` vs COLLSCAN `11.390 ms` (`12.12x`); saved median `0.360 ms` / p95 `0.603 ms` vs `11.289 ms` (`31.36x`). |
+| **Live 3-Way Spark 3.5.7 Controlled Benchmark** | **Fresh Live Docker Execution (`2026-11-18`)** | `evidence/session9/B_live_spark_benchmark.json` (`groupexe-knowledgetest-spark-1`) | `2w + 5r` interleaved: `Baseline 213.66 ms` (`5 Exch`) -> `V1 187.07 ms` (`1 Exch`, `-12.45%`) -> `V2 274.99 ms` (`2 Exch`, `exceptAll=0`). |
+| **MongoDB 8.0 Operational Serving Store (`33,394` docs)** | **Canonical + Live `2026-11-18` Interleaved Benchmark** | `outputs/mongo_verify.json` + `groupexe-knowledgetest-mongo-1` | `33,394` docs (`1,234` arterial severe alerts), `25/25` stale v1 rejected; live IXSCAN median `0.940 ms` vs COLLSCAN `8.200 ms` (`8.72x`); saved median `0.360 ms` / p95 `0.603 ms` vs `11.289 ms` (`31.36x`). |
 | **Card B (`B1, B2, B3`) & Live Kafka Monitor** | **Fresh Re-Execution (`2026-11-18`)** | `evidence/session9/H_B*.csv`, `outputs/live_kafka_telemetry.json` | `#21969 Nguyễn Kiệm` `PR=2.7799` (`45.41 km/h LOS A`); Cold-Start `74,211/84,206` (`88.13%`); `6,000` Kafka msgs consumed. |
 | **Automated Test & Lint Gate (`pytest` + `Spark` + `Ruff`)** | **Fresh Re-Execution (`2026-11-18`)** | `tests/test_platform_v3.py` (`39/39`) + `tests/test_quyen_spark.py` (`5/5`) | **`44/44` tests**, `0` Ruff errors (`max-complexity <= 14`). |
 
 ## 3. Five Required Lines on the Readiness Summary Slide (PPTX)
 1. **Architecture truth:** Separated `[I] Implemented` (5 Docker services = `11.0 GB RAM`, unified ReactJS + FastAPI TOC `http://localhost:8000`) from `[P] Proposed`, and standardized 'Predictive ML (Past-Only Priors tau < t)' & '7D Behavioral & Morphological Road Archetypes'.
-2. **Performance:** Spark 3.5.7 (`groupexe-knowledgetest-spark-1`) BHJ cuts Exchange `5 -> 1` (`205.36 -> 164.10 ms`, `-20.09%`); 8-Bucket Salting collapses slot skew `684.95x -> 1.0197x` (`exceptAll=0`).
+2. **Performance:** Spark 3.5.7 (`groupexe-knowledgetest-spark-1`) BHJ cuts Exchange `5 -> 1` (`213.66 -> 187.07 ms`, `-12.45%`); 8-Bucket Salting collapses slot skew `684.95x -> 1.0197x` (`exceptAll=0`).
 3. **Validation:** `0` Silent Drops across `90,938` pings; `Future-Shuffle diff = 0.0`; RF 23D TEST `ROC-AUC=0.9894`, `PR-AUC=0.9543`, Transition Detect `ROC-AUC=0.8822` (`McNemar p=0.001953`).
 4. **Operations:** MongoDB 8.0 IXSCAN (`0.940 ms` live / `0.360 ms` saved median, `0.603 ms` p95), `30m Watermark` (`2020-12-01T12:30:00.000Z`), `33.0 KiB` Sketches (RotatingBloom `0.0389%` FPR / `13` FPs, HLL++ `3.75%` err), WAL (`73,714 B`), Tier-2 heals `609` lag windows (`98.5% -> 100.0%`).
 5. **Limitation:** `88.13%` (`74,211` segments) Cold-Start 0 GPS & rare sudden onsets (`8` TEST cases, VAL `tau=0.25` catches `0/8`).

@@ -10,7 +10,7 @@
 | **Fault Tolerance & Checkpoints** | `[I]` Dual-Sink WAL (`73,714 B` + Spark WAL) + MongoDB `33,394` docs with atomic `$status_version` guard + SHA-256 Lock (`model=a2f411846508`, `static_store=75328ac2d5e3`, `vmax_lookup=ee7f692daad8`). |
 | **Observability** | `[I]` JSON audit logs (`metrics.json`, `spark_runtime_evidence.json`, `mongo_verify.json`, `query_progress.json`, `live_kafka_telemetry.json`) surfaced in the unified **ReactJS + FastAPI TOC Command Center (`http://localhost:8000`)**. |
 | **Security & Least Privilege** | `[I]` `.gitignore` blocks `.env`/`*.pem`/`*.key`; read-only SHA-256 verification blocks online model tampering. |
-| **Cost / Performance Trade-Off** | Trading `+48.69 ms` 2-stage salting overhead and `33.0 KiB` sketches (`3.75%` HLL++ error, `0.0389%` Bloom FPR) to eliminate skew (`684.95x` -> `1.0197x`). |
+| **Cost / Performance Trade-Off** | Trading `+87.92 ms` 2-stage salting overhead and `33.0 KiB` sketches (`3.75%` HLL++ error, `0.0389%` Bloom FPR) to eliminate skew (`684.95x` -> `1.0197x`). |
 
 ## 6.2 Reproducibility Smoke Test (7/7 Verified `[x]`)
 - `[x]` **Software versions recorded:** Python `3.13`, PySpark `3.5.7`, Kafka `4.1.0`, MongoDB `8.0.34`, scikit-learn (`Dockerfile`, `Dockerfile.spark35`, `requirements.txt`).

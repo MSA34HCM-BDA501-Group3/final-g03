@@ -1729,24 +1729,24 @@ def test_pre_experiment_presentation_script_completeness_and_sync() -> None:
         forbidden_post_run_tokens,
     )
     expected_speakers = {
-        1: ("Nguyễn Thành Đạt (`25MS23306`)", "Thành Đạt"),
-        2: ("Nguyễn Thành Đạt (`25MS23306`)", "Thành Đạt"),
-        3: ("Nguyễn Thành Đạt (`25MS23306`)", "Thành Đạt"),
-        4: ("Nguyễn Thành Đạt (`25MS23306`)", "Thành Đạt"),
-        5: ("Nguyễn Tạ Minh Quyền (`25MS23280`)", "Minh Quyền"),
-        6: ("Nguyễn Tạ Minh Quyền (`25MS23280`)", "Minh Quyền"),
-        7: ("Phạm Công Minh (`25MS23310`)", "Công Minh"),
-        8: ("Phạm Công Minh (`25MS23310`)", "Công Minh"),
-        9: ("Phạm Công Minh (`25MS23310`)", "Công Minh"),
-        10: ("Nguyễn Thành Đạt (`25MS23306`)", "Thành Đạt"),
-        11: ("Nguyễn Thành Đạt (`25MS23306`)", "Thành Đạt"),
-        12: ("Nguyễn Tạ Minh Quyền (`25MS23280`)", "Minh Quyền"),
-        13: ("Nguyễn Tạ Minh Quyền (`25MS23280`)", "Minh Quyền"),
+        1: "Nguyễn Tạ Minh Quyền (`25MS23280`)",
+        2: "Nguyễn Tạ Minh Quyền (`25MS23280`)",
+        3: "Nguyễn Tạ Minh Quyền (`25MS23280`)",
+        4: "Nguyễn Tạ Minh Quyền (`25MS23280`)",
+        5: "Nguyễn Tạ Minh Quyền (`25MS23280`)",
+        6: "Nguyễn Thành Đạt (`25MS23306`)",
+        7: "Nguyễn Thành Đạt (`25MS23306`)",
+        8: "Nguyễn Thành Đạt (`25MS23306`)",
+        9: "Nguyễn Thành Đạt (`25MS23306`)",
+        10: "Phạm Công Minh (`25MS23310`)",
+        11: "Phạm Công Minh (`25MS23310`)",
+        12: "Phạm Công Minh (`25MS23310`)",
+        13: "Phạm Công Minh (`25MS23310`)",
     }
-    for idx, (speaker, short_name) in expected_speakers.items():
+    for idx, speaker in expected_speakers.items():
         block = pre_script_txt.split(f"#### Slide {idx:02d}:", 1)[1].split("\n---", 1)[0]
         assert f"- **Người trình bày:** **{speaker}**" in block, f"Wrong speaker on Pre-Exp Slide {idx:02d}"
-        assert f"- **Lời thoại thuyết trình ({short_name}):**" in block, f"Missing monologue header on Slide {idx:02d}"
+        assert "- **Lời thoại thuyết trình:**" in block, f"Missing monologue header on Slide {idx:02d}"
 
 
 def test_spark_container_verification_uses_compose_network_and_mongo_service() -> None:

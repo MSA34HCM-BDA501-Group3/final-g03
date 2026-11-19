@@ -47,15 +47,15 @@ def _draw_pre_imputation_panel(ax: plt.Axes) -> None:
         8.65,
         5.10,
         "1. Thiết Kế Nội Suy Tốc Độ 3 Tầng (Train-Only 3-Tier Vmax)",
-        "Giải EC-1 (85.21% thiếu Vmax)",
+        "Giải EC-1 (85.19% cơ giới)",
         "#0284C7",
     )
     _rbox(ax, 0.42, 4.10, 8.17, 0.44, "#E0F2FE", "#0284C7", lw=1.2, radius=0.09, zorder=2)
     ax.text(
         4.50,
         4.32,
-        "NGUYÊN TẮC CHỐNG RÒ RỈ (TRAIN-ONLY): Chỉ học bảng tra cứu từ quá khứ (TRAIN), áp cố định cho VAL & TEST",
-        fontsize=8.3,
+        "TRAIN-ONLY: 28,495/33,441 (85.21% gốc) · 28,448/33,394 (85.19% cơ giới) thiếu Vmax → Khóa trên TRAIN",
+        fontsize=7.9,
         fontweight="bold",
         color="#0F172A",
         ha="center",
@@ -445,8 +445,8 @@ def _draw_pre_sketches_col(ax: plt.Axes) -> None:
     ax.text(
         12.48,
         4.28,
-        "RotatingBloom (32.0 KiB · 2×16 KiB, k = 10) — Lọc tin trùng:",
-        fontsize=8.1,
+        "RotatingBloom (32 KiB · 2×131,072 bit, k = 10) — Lọc trùng:",
+        fontsize=8.0,
         fontweight="bold",
         color="#0F172A",
         va="center",
@@ -454,16 +454,16 @@ def _draw_pre_sketches_col(ax: plt.Axes) -> None:
     )
     bits = [0, 1, 0, 0, 1, 0, 1, 0, 0, 1]
     for b_idx, b_val in enumerate(bits):
-        bx = 12.50 + b_idx * 0.33
+        bx = 12.46 + b_idx * 0.315
         fc = "#7C3AED" if b_val == 1 else "white"
         tc = "white" if b_val == 1 else "#475569"
-        _rbox(ax, bx, 3.60, 0.28, 0.42, fc, "#6D28D9", lw=1.0, radius=0.04, zorder=3)
-        ax.text(bx + 0.14, 3.81, str(b_val), fontsize=8.2, fontweight="bold", color=tc, ha="center", va="center")
+        _rbox(ax, bx, 3.60, 0.27, 0.42, fc, "#6D28D9", lw=1.0, radius=0.04, zorder=3)
+        ax.text(bx + 0.135, 3.81, str(b_val), fontsize=8.0, fontweight="bold", color=tc, ha="center", va="center")
     ax.text(
-        15.92,
+        15.72,
         3.81,
-        "Cả k=10 ô = 1\n→ CHẶN TIN TRÙNG!\n(Cố định 32 KiB)",
-        fontsize=7.6,
+        "Minh họa 4/10 ô băm = 1\n(Thực tế k=10/2×131k bit)\n→ CHẶN TIN TRÙNG!",
+        fontsize=7.2,
         fontweight="bold",
         color="#5B21B6",
         ha="left",
@@ -584,7 +584,7 @@ def render_pre_exp_pipeline_walkthrough(out_path: Path) -> Path:
             "#F8FAFC",
             [
                 "• Lúc 07:08 sáng, xe qua đoạn\n  Lý Thường Kiệt #47407 gửi:\n  velocity = 4 km/h.",
-                "• Edge Case EC-1: Cột max_velocity\n  bị khuyết 85.21% trên bảng gốc.",
+                "• EC-1: 28,495/33,441 (85.21% gốc)\n  · 28,448/33,394 (85.19% cơ giới)\n  thiếu max_velocity.",
                 "• Edge Case EC-6: 88.13% đoạn\n  cơ giới bị Cold-Start (0 GPS).",
             ],
         ),
@@ -595,9 +595,9 @@ def render_pre_exp_pipeline_walkthrough(out_path: Path) -> Path:
             "#0284C7",
             "#F0F9FF",
             [
-                "• ANSI try_cast + NFC + UTC+7;\n  loại 427 POI; 3-Tier Vmax\n  khóa trên tập TRAIN.",
+                "• 6 quy tắc R1–R6 (try_cast + NFC\n  + UTC+7); 3-Tier Vmax khóa\n  chỉ trên tập TRAIN.",
                 "• 5-Tuple Monoid Combiner gộp\n  khung 30 phút (07:00–07:30).",
-                "• Chuẩn hóa tỷ lệ r = v / Vmax\n  sang 6 mức trạng thái LOS A–F.",
+                "• Tính r = v / Vmax & derive_urban_los\n  gán 6 mức trạng thái LOS A–F.",
             ],
         ),
         (
@@ -614,8 +614,8 @@ def render_pre_exp_pipeline_walkthrough(out_path: Path) -> Path:
         ),
         (
             11.32,
-            "P3 · CAUSAL ML (+30M)",
-            "Dự báo Nhân quả t+30m",
+            "P3 · PREDICTIVE ML (+30M)",
+            "Dự báo +30p (Zero-Leakage)",
             "#15803D",
             "#ECFDF5",
             [
@@ -726,7 +726,7 @@ def _draw_pre_batch_boxes(ax: plt.Axes) -> None:
         2.75,
         1.88,
         "ZONE B · QUALITY GATE",
-        "Quality Funnel",
+        "Quality Funnel (6 Quy Tắc R1–R6)",
         [
             "• Ép kiểu an toàn ANSI try_cast",
             "• Chuẩn hóa dấu NFC & giờ UTC+7",

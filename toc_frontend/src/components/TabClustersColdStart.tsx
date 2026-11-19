@@ -6,14 +6,34 @@ import {
   PeerSegmentItem,
 } from '../types';
 
-export const TabClustersColdStart: React.FC = () => {
+interface Props {
+  selectedSegmentId?: number | null;
+  onSelectSegmentId?: (segId: number) => void;
+  jumpSourceNote?: string | null;
+  onClearJumpSource?: () => void;
+}
+
+export const TabClustersColdStart: React.FC<Props> = ({
+  selectedSegmentId = null,
+  onSelectSegmentId,
+  jumpSourceNote = null,
+  onClearJumpSource,
+}) => {
   const [data, setData] = useState<ClustersColdStartResponse | null>(null);
-  const [selectedColdId, setSelectedColdId] = useState<number | null>(null);
+  const [localColdId, setLocalColdId] = useState<number | null>(selectedSegmentId);
   const [error, setError] = useState<string | null>(null);
+
+  const activeColdId = selectedSegmentId ?? localColdId;
+
+  const handleSelectColdId = (segId: number) => {
+    setLocalColdId(segId);
+    onSelectSegmentId?.(segId);
+    onClearJumpSource?.();
+  };
 
   useEffect(() => {
     let cancelled = false;
-    const q = selectedColdId ? `?segment_id=${selectedColdId}&limit=8` : '?limit=8';
+    const q = activeColdId ? `?segment_id=${activeColdId}&limit=8` : '?limit=8';
     fetch(`/api/clusters-coldstart${q}`)
       .then((r) => {
         if (!r.ok) throw new Error(`Lỗi máy chủ (${r.status}) khi tải dữ liệu phân cụm & Cold-Start.`);
@@ -33,7 +53,7 @@ export const TabClustersColdStart: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedColdId]);
+  }, [activeColdId]);
 
   if (error) {
     return (
@@ -45,6 +65,21 @@ export const TabClustersColdStart: React.FC = () => {
   if (!data) return <div className="card">Đang tải cụm hành vi K-Means &amp; kho Cold-Start toàn mạng lưới...</div>;
 
   const sel = data.selected_segment;
+  const baseCandidates = data.cold_start_candidates || [];
+  const hasSelectedInList = sel ? baseCandidates.some((c) => c.segment_id === sel.segment_id) : true;
+  const candidateOptions: ColdStartCandidate[] =
+    sel && !hasSelectedInList
+      ? [
+          {
+            segment_id: sel.segment_id,
+            street_name: sel.street_name,
+            street_level: sel.street_level,
+            cluster_id: sel.cluster_id,
+            pagerank_score: sel.pagerank_score,
+          },
+          ...baseCandidates,
+        ]
+      : baseCandidates;
   const totalSegments = Math.max(1, Number(data.total_network_segments) || 0);
   const obsPct = ((Number(data.observed_segments_count) / totalSegments) * 100).toFixed(2);
   const coldPct = ((Number(data.cold_start_segments_count) / totalSegments) * 100).toFixed(2);
@@ -78,7 +113,7 @@ export const TabClustersColdStart: React.FC = () => {
           <div className="kpi-val" style={{ color: '#2563eb' }}>
             k = {clusterCount} Archetypes
           </div>
-          <div className="kpi-sub">Không dùng tọa độ lat/lon (Phi liền kề địa lý — Card B2)</div>
+          <div className="kpi-sub">Không dùng tọa độ lat/lon (Phi liền kề địa lý — 7D hình thái học)</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-label">Chất lượng Phân cụm TRAIN</div>
@@ -134,11 +169,48 @@ export const TabClustersColdStart: React.FC = () => {
             <div>
               <h2 className="card-title">2. Suy Diễn Dự Báo &amp; Tra Cứu Đường Tương Đồng Cho Vùng Cold-Start (UC-5)</h2>
               <p className="card-subtitle">
-                Trả lời câu hỏi bảo vệ 60s Card B: Hệ thống biết gì ở đoạn đường có 0 bản tin GPS?
+                Cơ chế suy luận Cold-Start: Hệ thống biết gì ở đoạn đường có 0 bản tin GPS?
               </p>
             </div>
             <span className="badge badge-amber">[{sel?.badge}]</span>
           </div>
+
+          {jumpSourceNote && (
+            <div
+              style={{
+                background: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                color: '#1d4ed8',
+                borderRadius: 8,
+                padding: '6px 10px',
+                fontSize: '11.5px',
+                fontWeight: 600,
+                marginBottom: 8,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <span>↗ Đã chuyển từ Màn 3 PageRank sang tra cứu Cold-Start: {jumpSourceNote}</span>
+              {onClearJumpSource && (
+                <button
+                  type="button"
+                  onClick={onClearJumpSource}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#1d4ed8',
+                    cursor: 'pointer',
+                    fontWeight: 700,
+                    fontSize: '12px',
+                  }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          )}
 
           <div style={{ marginBottom: 10 }}>
             <label style={{ fontSize: '11.5px', fontWeight: 700, display: 'block', marginBottom: 4 }}>
@@ -147,9 +219,9 @@ export const TabClustersColdStart: React.FC = () => {
             <select
               style={{ width: '100%', padding: '7px 10px', borderRadius: 8, border: '1px solid #cbd5e1' }}
               value={sel?.segment_id || ''}
-              onChange={(e) => setSelectedColdId(Number(e.target.value))}
+              onChange={(e) => handleSelectColdId(Number(e.target.value))}
             >
-              {(data.cold_start_candidates || []).map((c: ColdStartCandidate) => (
+              {candidateOptions.map((c: ColdStartCandidate) => (
                 <option key={c.segment_id} value={c.segment_id}>
                   Đoạn #{c.segment_id} · {c.street_name} (Cấp {c.street_level} · PageRank {c.pagerank_score} · Cụm #
                   {c.cluster_id})

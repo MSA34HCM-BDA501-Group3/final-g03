@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
+import joblib
 import matplotlib
 
 matplotlib.use("Agg")
@@ -14,7 +16,8 @@ import numpy as np
 import pandas as pd
 from matplotlib.collections import LineCollection
 from matplotlib.lines import Line2D
-from matplotlib.patches import FancyBboxPatch, Polygon
+from matplotlib.patches import FancyBboxPatch, Polygon, Rectangle
+from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, roc_auc_score
 
 plt.rcParams["font.sans-serif"] = ["Segoe UI", "DejaVu Sans", "Liberation Sans", "Arial"]
 plt.rcParams["axes.unicode_minus"] = False
@@ -580,56 +583,64 @@ def render_transition_analysis_chart(out_path: Path) -> Path:
     return out_path
 
 
-def _render_single_equation(tex_lines: list[str], out_path: Path, fig_h: float = 0.78) -> Path:
+def _render_single_equation(tex_lines: list[str], out_path: Path, fig_h: float = 0.78, fontsize: float = 10.6) -> Path:
+    bg_hex = "#F8FAFC"
     with plt.rc_context({"mathtext.fontset": "stix"}):
-        fig = plt.figure(figsize=(7.15, fig_h), dpi=300, facecolor="#F8FAFC")
+        fig = plt.figure(figsize=(7.35, fig_h), dpi=300, facecolor=bg_hex)
         ax = fig.add_axes([0, 0, 1, 1])
+        ax.set_facecolor(bg_hex)
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)
         ax.axis("off")
-        ax.add_patch(plt.Rectangle((0.005, 0.04), 0.99, 0.92, facecolor="#F8FAFC", edgecolor="#CBD5E1", lw=0.9))
-        ax.add_patch(plt.Rectangle((0.005, 0.04), 0.009, 0.92, facecolor="#0D9488", edgecolor="none"))
         n = len(tex_lines)
+        top_y = 0.80 if n >= 3 else (0.72 if n == 2 else 0.50)
+        bot_y = 0.20 if n >= 3 else (0.28 if n == 2 else 0.50)
         for idx, line in enumerate(tex_lines):
-            y_pos = 0.50 if n == 1 else (0.70 - idx * (0.44 / max(n - 1, 1)))
-            ax.text(0.505, y_pos, line, ha="center", va="center", fontsize=11.0, color="#0F172A")
+            y_pos = 0.50 if n == 1 else (top_y - idx * ((top_y - bot_y) / max(n - 1, 1)))
+            ax.text(0.50, y_pos, line, ha="center", va="center", fontsize=fontsize, color="#0F172A")
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(out_path, dpi=300, facecolor="white")
+        fig.savefig(out_path, dpi=300, bbox_inches="tight", pad_inches=0.05, facecolor=bg_hex)
         plt.close(fig)
     return out_path
 
 
 def render_pdf_equations() -> dict[str, Path]:
-    eqs = {
+    eqs: dict[str, tuple[list[str], float, float]] = {
         "eq_vmax_los": (
             [
                 r"$N_{\mathrm{in}} = N_{\mathrm{dedup}} + N_{\mathrm{valid}} + N_{\mathrm{quarantine}}"
                 r"\qquad r_{s,w} = \frac{\bar{v}_{s,w}}{\hat{v}_{\max}(s)},\;\; "
                 r"\hat{v}_{\max}(s) \in \left\{v_{\max}^{\mathrm{raw}},\; P_{85}^{\mathrm{train}}(s),\; "
                 r"\mathrm{Med}_{\mathrm{train}}(\ell, \tau),\; v_{\mathrm{prior}}(\ell)\right\}$",
-                r"$\mathrm{LOS}(r_{s,w}):\; A\,(\geq 0.80)\;\cdot\; B\,[0.65,0.80)\;\cdot\; C\,[0.50,0.65)"
+                r"$\mathrm{LOS}_{\mathrm{ratio}}(r_{s,w}):\; A\,(\geq 0.80)\;\cdot\; B\,[0.65,0.80)\;\cdot\; C\,[0.50,0.65)"
                 r"\;\cdot\; D\,[0.35,0.50)\;\cdot\; E\,[0.20,0.35)\;\cdot\; F\,(<0.20)$",
+                r"$\mathrm{LOS}_{\mathrm{urban}}(\bar{v}_{s,w}):\; A\,(\geq 35)\;\cdot\; B\,[30,35)\;\cdot\; C\,[25,30)"
+                r"\;\cdot\; D\,[20,25)\;\cdot\; E\,[15,20)\;\cdot\; F\,(<15\;\mathrm{km/h})\;\; "
+                r"[89.19\%\;\mathrm{BkTraffic}]$",
             ],
-            1.02,
+            1.28,
+            10.0,
         ),
         "eq_monoid": (
             [
-                r"$\eta(v) = \left(1,\; v,\; v,\; v,\; \mathbb{I}(v / \hat{v}_{\max}(s) < 0.35)\right),"
-                r"\qquad \mathbf{e} = (0,\; 0.0,\; +\infty,\; 0.0,\; 0)$",
+                r"$\eta(v) = \left(1,\; v,\; v,\; v,\; \mathbb{I}(v < 15.0\;\mathrm{km/h})\right),"
+                r"\qquad \mathbf{e} = (0,\; 0.0,\; +\infty,\; -\infty,\; 0)$",
                 r"$\mathbf{m}_1 \oplus \mathbf{m}_2 = \left(\mathrm{cnt}_1 + \mathrm{cnt}_2,\;"
                 r"\sum v_1 + \sum v_2,\; \min(v_{\min,1}, v_{\min,2}),\;"
                 r"\max(v_{\max,1}, v_{\max,2}),\; \mathrm{sev}_1 + \mathrm{sev}_2\right)$",
             ],
-            0.96,
+            0.94,
+            10.6,
         ),
         "eq_pagerank": (
             [
-                r"$r_s^{(k+1)} = \frac{1 - \beta}{N} + \beta \left("
+                r"$r_s^{(k+1)} = (1 - \beta) + \beta \left("
                 r"\sum_{u \in \mathrm{In}(s)} \frac{r_u^{(k)}}{d_{\mathrm{out}}(u)} + "
                 r"\frac{1}{N} \sum_{d \in \mathcal{D}} r_d^{(k)} \right),"
-                r"\qquad \sum_{s=1}^{84,206} r_s^{(25)} = 84,206.0 \quad (\beta = 0.85)$",
+                r"\qquad \sum_{s=1}^{84,206} r_s^{(30)} = 84,206.0 \quad (\beta = 0.85)$",
             ],
-            0.78,
+            0.76,
+            10.4,
         ),
         "eq_prior": (
             [
@@ -638,7 +649,8 @@ def render_pdf_equations() -> dict[str, Path]:
                 r"{\mathrm{count}_s(\tau < t) + m_{\mathrm{seg}}}"
                 r"\qquad (m_{\mathrm{seg}} = 5,\; m_{\mathrm{street}} = 10,\; \forall \tau < t)$",
             ],
-            0.78,
+            0.76,
+            10.6,
         ),
         "eq_sketches": (
             [
@@ -648,12 +660,13 @@ def render_pdf_equations() -> dict[str, Path]:
                 r"$C_s(t) = (1 - \alpha)\,C_s(t - 1) + \mathbb{I}\left(\mathrm{LOS}_{s,t} \in \{E, F\}\right)"
                 r"\qquad (\alpha = 0.15,\; \mathrm{prune}\; C_s(t) < \varepsilon = 10^{-4})$",
             ],
-            0.98,
+            0.94,
+            10.4,
         ),
     }
     out_map: dict[str, Path] = {}
-    for name, (lines, height) in eqs.items():
-        out_map[name] = _render_single_equation(lines, CHART_DIR / f"{name}.png", fig_h=height)
+    for name, (lines, height, fsize) in eqs.items():
+        out_map[name] = _render_single_equation(lines, CHART_DIR / f"{name}.png", fig_h=height, fontsize=fsize)
     return out_map
 
 
@@ -749,26 +762,309 @@ def render_ablation_t30m_chart(out_path: Path) -> Path:
     return out_path
 
 
-def main() -> None:
-    import sys
+_GRAPH_KMEANS_FEATS = frozenset({"pagerank_score", "in_degree", "out_degree", "cluster_id"})
+_PAST_PRIOR_FEATS = frozenset(
+    {
+        "neighbor_los_ordinal",
+        "segment_train_prior_los",
+        "segment_train_severe_prior",
+        "street_causal_prior_los",
+        "street_causal_prior_sev",
+    }
+)
+_FEATURE_DISPLAY_LABELS: dict[str, str] = {
+    "mean_velocity": "mean_velocity (Vận tốc TB cửa sổ)",
+    "current_los_ordinal": "current_los_ordinal (Mức LOS tại t)",
+    "velocity_ratio": "velocity_ratio (Tỷ lệ v / Vmax)",
+    "period_sin": "period_sin (Chu kỳ giờ ICT · sin)",
+    "pagerank_score": "pagerank_score (Độ tụ Line-Graph)",
+    "neighbor_los_ordinal": "neighbor_los_ordinal (LOS liền kề ≤ t)",
+    "street_causal_prior_los": "street_causal_prior_los (Tiên nghiệm τ<t)",
+    "period_cos": "period_cos (Chu kỳ giờ ICT · cos)",
+    "max_velocity": "max_velocity (Vmax nội suy 3 tầng)",
+    "gap_minutes": "gap_minutes (Khoảng cách từ lag1)",
+    "obs_count": "obs_count (Số ping GPS cửa sổ)",
+    "lag1_los_ordinal": "lag1_los_ordinal (LOS cửa sổ t−30p)",
+}
 
-    script_dir = str(Path(__file__).resolve().parent)
-    if script_dir not in sys.path:
-        sys.path.insert(0, script_dir)
-    from build_slides import render_eda_chart, render_spark_chart, render_streaming_serving_chart
 
+def _compute_test_confusion_bundle() -> dict[str, object]:
+    bundle = joblib.load(OUTPUTS_DIR / "model.joblib")
+    feats = list(bundle["full_features"])
+    rf = bundle["rf_multiclass"]
+    imp = bundle["ml_imputer_full"]
+    tau = float(bundle.get("selected_val_threshold", 0.25))
+
+    df = pd.read_csv(DATA_DIR / "dataset.csv")
+    df["current_los_ordinal"] = df["los_ordinal"]
+    test_sup = df[(df["split_set"] == "TEST") & df["target_next_los_ordinal"].notna()].copy()
+    x_te = imp.transform(test_sup[feats])
+    y_true = test_sup["target_next_los_ordinal"].astype(int).to_numpy()
+    y_pred = rf.predict(x_te)
+    probs = rf.predict_proba(x_te)
+    p_sev = probs[:, 4] + probs[:, 5]
+
+    cm = confusion_matrix(y_true, y_pred, labels=[0, 1, 2, 3, 4, 5])
+    return {
+        "cm": cm,
+        "n": int(len(y_true)),
+        "acc": float(accuracy_score(y_true, y_pred)),
+        "sev_f1": float(f1_score((y_true >= 4).astype(int), (p_sev >= tau).astype(int))),
+        "roc_auc": float(roc_auc_score((y_true >= 4).astype(int), p_sev)),
+        "tau": tau,
+    }
+
+
+def render_confusion_matrix_chart(out_path: Path) -> Path:
+    """Render 6x6 LOS A..F Confusion Matrix of deployed RF 23D on TEST (n=1,182)."""
+    res = _compute_test_confusion_bundle()
+    cm: np.ndarray = res["cm"]  # type: ignore[assignment]
+    row_totals = cm.sum(axis=1)
+    row_pct = cm / np.maximum(row_totals[:, None], 1) * 100.0
+
+    fig, ax = plt.subplots(figsize=(7.6, 6.3), dpi=240, facecolor="white")
+    im = ax.imshow(row_pct, cmap="Blues", vmin=0.0, vmax=100.0, aspect="auto")
+
+    los_codes = ["A", "B", "C", "D", "E", "F"]
+    y_labels = [f"LOS {c}\n(n={int(t)})" for c, t in zip(los_codes, row_totals)]
+    x_labels = [f"LOS {c}" for c in los_codes]
+    ax.set_xticks(np.arange(6), x_labels, fontsize=9.0, fontweight="bold", color="#0F172A")
+    ax.set_yticks(np.arange(6), y_labels, fontsize=8.6, fontweight="bold", color="#0F172A")
+    ax.set_xlabel("Nhãn Dự Báo RF 23D (t + 30 phút)", fontsize=9.4, fontweight="bold", color="#0F172A", labelpad=8)
+    ax.set_ylabel("Nhãn Thực Tế Tập TEST (t + 30 phút)", fontsize=9.4, fontweight="bold", color="#0F172A", labelpad=8)
+
+    for i in range(6):
+        for j in range(6):
+            cnt = int(cm[i, j])
+            pct = float(row_pct[i, j])
+            is_diag = i == j
+            txt = f"{cnt}\n({pct:.1f}%)" if cnt > 0 else "0"
+            col = "white" if pct >= 52.0 else ("#0F172A" if cnt > 0 else "#94A3B8")
+            ax.text(
+                j,
+                i,
+                txt,
+                ha="center",
+                va="center",
+                fontsize=8.3 if cnt > 0 else 7.8,
+                fontweight="bold" if (is_diag or cnt >= 10) else "normal",
+                color=col,
+            )
+
+    # Highlight 2x2 Severe Congestion Block (LOS E-F)
+    ax.add_patch(
+        Rectangle(
+            (3.5, 3.5),
+            2.0,
+            2.0,
+            fill=False,
+            edgecolor="#DC2626",
+            linewidth=2.4,
+            linestyle="--",
+            zorder=6,
+        )
+    )
+    sev_block_hits = int(cm[4:, 4:].sum())
+    sev_block_tot = int(cm[4:, :].sum())
+    sev_block_pct = sev_block_hits / max(sev_block_tot, 1) * 100.0
+    ax.text(
+        4.5,
+        3.38,
+        f"Khối LOS E–F: {sev_block_hits}/{sev_block_tot} ({sev_block_pct:.1f}%)",
+        ha="center",
+        va="bottom",
+        fontsize=7.7,
+        fontweight="bold",
+        color="#B91C1C",
+        bbox={"boxstyle": "round,pad=0.22", "facecolor": "#FEF2F2", "edgecolor": "#DC2626", "lw": 1.0},
+        zorder=7,
+    )
+
+    cbar = fig.colorbar(im, ax=ax, fraction=0.044, pad=0.03)
+    cbar.set_label("Tỷ lệ nhận diện theo hàng — Row Recall (%)", fontsize=8.4, fontweight="bold", color="#334155")
+    cbar.ax.tick_params(labelsize=8.0)
+
+    ax.set_xticks(np.arange(-0.5, 6, 1), minor=True)
+    ax.set_yticks(np.arange(-0.5, 6, 1), minor=True)
+    ax.grid(which="minor", color="#E2E8F0", linestyle="-", linewidth=0.9)
+    ax.tick_params(which="minor", bottom=False, left=False)
+
+    ax.set_title(
+        "Ma Trận Nhầm Lẫn 6 Mức LOS (A–F) — Deployed RF 23D Trên Tập TEST\n"
+        f"RF 23D TEST (n={res['n']:,}): Acc {res['acc'] * 100:.2f}% · "
+        f"Sev-F1 {res['sev_f1'] * 100:.2f}% (τ={res['tau']:.2f}) · ROC-AUC {res['roc_auc']:.4f}",
+        fontsize=9.8,
+        fontweight="bold",
+        color="#0F172A",
+        pad=11,
+    )
+    plt.tight_layout(pad=0.9)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, dpi=240, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    return out_path
+
+
+def _classify_feature_group(feat_name: str, local_set: set[str]) -> str:
+    if feat_name in local_set:
+        return "local"
+    if feat_name in _GRAPH_KMEANS_FEATS:
+        return "graph_km"
+    return "priors"
+
+
+def render_feature_23d_chart(out_path: Path) -> Path:
+    """Render Top-12 Feature Importances + 3-Group Shares for deployed 23D Random Forest."""
+    bundle = joblib.load(OUTPUTS_DIR / "model.joblib")
+    feats = list(bundle["full_features"])
+    local_set = set(bundle["local_features"])
+    importances = np.asarray(bundle["rf_multiclass"].feature_importances_, dtype=float)
+
+    group_meta = {
+        "local": ("#0284C7", "14 Local Telemetry / Time"),
+        "priors": ("#7C3AED", "5 Leak-Free Past Priors & Neighbor (τ < t)"),
+        "graph_km": ("#0D9488", "4 Graph & 7D K-Means"),
+    }
+    group_shares = {"local": 0.0, "priors": 0.0, "graph_km": 0.0}
+    rows: list[tuple[str, float, str]] = []
+    for fname, imp_val in zip(feats, importances):
+        grp = _classify_feature_group(fname, local_set)
+        group_shares[grp] += float(imp_val) * 100.0
+        rows.append((fname, float(imp_val) * 100.0, grp))
+    rows.sort(key=lambda item: item[1], reverse=True)
+    top12 = rows[:12]
+
+    fig = plt.figure(figsize=(8.6, 6.25), dpi=240, facecolor="white", layout="constrained")
+    gs = fig.add_gridspec(2, 1, height_ratios=[4.35, 1.25], hspace=0.18)
+    ax_top = fig.add_subplot(gs[0])
+    ax_bot = fig.add_subplot(gs[1])
+
+    y_pos = np.arange(len(top12))[::-1]
+    vals = [r[1] for r in top12]
+    cols = [group_meta[r[2]][0] for r in top12]
+    labels = [_FEATURE_DISPLAY_LABELS.get(r[0], r[0]) for r in top12]
+
+    bars = ax_top.barh(y_pos, vals, color=cols, height=0.68, edgecolor="white", linewidth=0.6)
+    ax_top.set_yticks(y_pos, labels, fontsize=8.2, fontweight="bold", color="#0F172A")
+    ax_top.set_xlim(0, max(vals) * 1.18)
+    ax_top.set_xlabel("Độ Quan Trọng Đặc Trưng — Gini Importance (%)", fontsize=8.8, fontweight="bold", color="#0F172A")
+    ax_top.grid(axis="x", linestyle="--", alpha=0.38)
+    ax_top.spines["top"].set_visible(False)
+    ax_top.spines["right"].set_visible(False)
+
+    for bar, val in zip(bars, vals):
+        ax_top.text(
+            val + 0.6,
+            bar.get_y() + bar.get_height() / 2,
+            f"{val:.2f}%",
+            va="center",
+            ha="left",
+            fontsize=8.0,
+            fontweight="bold",
+            color="#0F172A",
+        )
+
+    legend_handles = [
+        Rectangle((0, 0), 1, 1, facecolor=group_meta[k][0], label=f"{group_meta[k][1]} ({group_shares[k]:.2f}%)")
+        for k in ("local", "priors", "graph_km")
+    ]
+    ax_top.legend(handles=legend_handles, loc="lower right", fontsize=7.9, framealpha=0.96, edgecolor="#CBD5E1")
+    top12_sum = sum(vals)
+    ax_top.set_title(
+        f"Độ Quan Trọng 23 Đặc Trưng (RF 23D) — Top 12 Chiếm {top12_sum:.2f}% Tổng Sức Mạnh Dự Báo",
+        fontsize=10.1,
+        fontweight="bold",
+        color="#0F172A",
+        pad=8,
+    )
+
+    # Bottom 100%-stacked horizontal bar of 3 groups
+    left = 0.0
+    for grp_key, short_lbl in (
+        ("local", "14 Local Telemetry/Time"),
+        ("priors", "5 Past Priors"),
+        ("graph_km", "4 Graph/KM"),
+    ):
+        share = group_shares[grp_key]
+        color = group_meta[grp_key][0]
+        ax_bot.barh([0], [share], left=[left], color=color, height=0.52, edgecolor="white", linewidth=1.2)
+        if share >= 12.0:
+            ax_bot.text(
+                left + share / 2,
+                0,
+                f"{short_lbl}: {share:.2f}%",
+                ha="center",
+                va="center",
+                fontsize=8.3,
+                fontweight="bold",
+                color="white",
+            )
+        else:
+            ax_bot.text(
+                left + share / 2,
+                0.35,
+                f"{share:.2f}%",
+                ha="center",
+                va="bottom",
+                fontsize=7.6,
+                fontweight="bold",
+                color=color,
+            )
+        left += share
+    ax_bot.set_xlim(0, 100)
+    ax_bot.set_ylim(-0.48, 0.72)
+    ax_bot.set_yticks([])
+    ax_bot.set_xlabel(
+        f"Tỷ trọng 3 nhóm (Tổng 23 biến = 100%): Local {group_shares['local']:.2f}%  ·  "
+        f"Past Priors & Neighbor {group_shares['priors']:.2f}%  ·  Graph & 7D K-Means {group_shares['graph_km']:.2f}% "
+        "(9 biến Đồ thị/Cụm/Priors = 10.50%, quyết định dự báo vùng mù Cold-Start)",
+        fontsize=7.6,
+        fontweight="bold",
+        color="#334155",
+    )
+    ax_bot.set_title("Phân Bổ Tỷ Trọng Theo 3 Nhóm Đặc Trưng Đầu Vào (23D)", fontsize=8.9, fontweight="bold", pad=4)
+    for spine in ("top", "right", "left"):
+        ax_bot.spines[spine].set_visible(False)
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, dpi=240, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    return out_path
+
+
+def main(skip_slide_helpers: bool = False) -> None:
     geom = _load_segment_geometries()
     m0 = render_hcmc_problem_context_map(geom, CHART_DIR / "map_hcmc_problem_context.png")
     m1 = render_hcmc_hotspots_map(geom, CHART_DIR / "map_hcmc_hotspots_coldstart.png")
     m2 = render_hcmc_clusters_map(geom, CHART_DIR / "map_hcmc_clusters_7d.png")
     c_tr = render_transition_analysis_chart(CHART_DIR / "chart_transition_analysis.png")
     c_ab = render_ablation_t30m_chart(CHART_DIR / "chart_ablation_t30m.png")
-    render_eda_chart(CHART_DIR / "chart_eda_anomalies.png")
-    render_spark_chart(CHART_DIR / "chart_spark_skew_catalyst.png")
-    render_streaming_serving_chart(CHART_DIR / "chart_streaming_serving.png")
+    c_cm = render_confusion_matrix_chart(CHART_DIR / "chart_confusion_matrix_test.png")
+    c_fi = render_feature_23d_chart(CHART_DIR / "chart_feature_23d_importance.png")
+    if not skip_slide_helpers:
+        import sys
+
+        script_dir = str(Path(__file__).resolve().parent)
+        if script_dir not in sys.path:
+            sys.path.insert(0, script_dir)
+        from build_slides import render_eda_chart, render_spark_chart, render_streaming_serving_chart
+
+        render_eda_chart(CHART_DIR / "chart_eda_anomalies.png")
+        render_spark_chart(CHART_DIR / "chart_spark_skew_catalyst.png")
+        render_streaming_serving_chart(CHART_DIR / "chart_streaming_serving.png")
     eqs = render_pdf_equations()
-    print(f"Rendered maps ({m0.name}, {m1.name}, {m2.name}), {c_tr.name}, {c_ab.name}, and {len(eqs)} equations.")
+    print(
+        f"Rendered maps ({m0.name}, {m1.name}, {m2.name}), {c_tr.name}, {c_ab.name}, "
+        f"{c_cm.name}, {c_fi.name}, and {len(eqs)} equations."
+    )
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Render shared cartographic, ML, and equation visual assets.")
+    parser.add_argument(
+        "--skip-slide-helpers",
+        action="store_true",
+        help="Skip importing chart helpers from build_slides.py.",
+    )
+    args = parser.parse_args()
+    main(skip_slide_helpers=args.skip_slide_helpers)

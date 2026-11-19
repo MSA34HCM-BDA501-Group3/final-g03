@@ -52,6 +52,7 @@ export interface MapSegmentItem {
   current_los: string;
   rf_pred_los: string;
   rf_cal_los: string;
+  effective_forecast_los?: string;
   actual_next_los: string | null;
   severe_prob: number;
   change_prob: number;
@@ -203,6 +204,7 @@ export interface LiveScoreRow {
   change_prob: number;
   ewma_hotspot_score: number;
   lifecycle_status?: string;
+  coords?: [number, number, number, number] | null;
 }
 
 export interface StreamStatusResponse {
@@ -334,6 +336,8 @@ export interface PageRankTopItem {
   is_cold_start?: boolean;
   obs_windows?: number;
   mean_velocity?: number;
+  latest_ict_date?: string | null;
+  latest_vn_hour?: number | null;
 }
 
 export interface CardB2Row {
@@ -638,4 +642,53 @@ export interface InfrastructureAuditResponse {
   wal_progress: WalProgressInfo;
   mongo_verify: MongoVerifyInfo;
   frozen_manifest: FrozenManifestInfo;
+}
+
+export interface PipelineTraceOption {
+  id: string;
+  segment_id: number;
+  title: string;
+  badge: string;
+  slide_focus: string;
+  ict_date?: string | null;
+  vn_hour?: number | null;
+  is_cold_start?: boolean;
+}
+
+export interface PipelineProbItem {
+  los: string;
+  prob: number;
+}
+
+export interface PipelineKeyValueItem {
+  label: string;
+  value: string;
+}
+
+export interface PipelineStageItem {
+  stage_id: number;
+  zone: string;
+  slide_ref: string;
+  title: string;
+  subtitle: string;
+  accent_color: string;
+  status_badge: string;
+  input_summary: PipelineKeyValueItem[];
+  transform_steps: string[];
+  output_summary: PipelineKeyValueItem[];
+  key_metrics: PipelineKeyValueItem[];
+  details?: Record<string, unknown>;
+}
+
+export interface PipelineTraceResponse {
+  curated_traces: PipelineTraceOption[];
+  active_trace_id: string;
+  segment_id: number;
+  street_name: string;
+  ict_date: string | null;
+  vn_hour: number | null;
+  window_headline: string;
+  is_cold_start: boolean;
+  summary_verdict: string;
+  stages: PipelineStageItem[];
 }

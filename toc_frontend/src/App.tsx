@@ -13,8 +13,15 @@ import { TabLiveKafka } from './components/TabLiveKafka';
 import { TabGraphRules } from './components/TabGraphRules';
 import { TabClustersColdStart } from './components/TabClustersColdStart';
 import { TabInfraAudit } from './components/TabInfraAudit';
+import { TabPipelineFlow } from './components/TabPipelineFlow';
 
-type ActiveTab = 'command' | 'kafka' | 'graph' | 'clusters' | 'audit';
+type ActiveTab = 'command' | 'kafka' | 'graph' | 'clusters' | 'audit' | 'pipeline';
+
+const DEFAULT_SCENARIO_ID = 'morning_rush_dien_bien_phu';
+const DEFAULT_ICT_DATE = '2021-01-04';
+const DEFAULT_VN_HOUR = 7.0;
+const DEFAULT_SEGMENT_ID = 50026;
+const STREAM_STATUS_URL = '/api/stream/status?limit=45';
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -27,23 +34,35 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('command');
   const [scenarios, setScenarios] = useState<ScenarioItem[]>([]);
-  const [activeScenarioId, setActiveScenarioId] = useState<string>('noon_transition');
-  const [currentDate, setCurrentDate] = useState<string>('2021-01-05');
-  const [currentHour, setCurrentHour] = useState<number>(12.0);
-  const [selectedSegmentId, setSelectedSegmentId] = useState<number>(21262);
+  const [activeScenarioId, setActiveScenarioId] = useState<string>(DEFAULT_SCENARIO_ID);
+  const [currentDate, setCurrentDate] = useState<string>(DEFAULT_ICT_DATE);
+  const [currentHour, setCurrentHour] = useState<number>(DEFAULT_VN_HOUR);
+  const [selectedSegmentId, setSelectedSegmentId] = useState<number>(DEFAULT_SEGMENT_ID);
+  const [selectedColdSegmentId, setSelectedColdSegmentId] = useState<number | null>(null);
+  const [coldJumpSourceNote, setColdJumpSourceNote] = useState<string | null>(null);
   const [alertFilter, setAlertFilter] = useState<string>('early_warning');
 
+  const [kafkaStoryScenario, setKafkaStoryScenario] = useState<string>(DEFAULT_SCENARIO_ID);
   const [frameData, setFrameData] = useState<CityFrameResponse | null>(null);
   const [timelineData, setTimelineData] = useState<SegmentTimelineResponse | null>(null);
   const [hotspots, setHotspots] = useState<HotspotItem[]>([]);
   const [streamStatus, setStreamStatus] = useState<StreamStatusResponse | null>(null);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [liveRefreshTick, setLiveRefreshTick] = useState<number>(0);
-  const lastStoryFrameRef = useRef<string>('');
-  const lastLiveScoredRef = useRef<number>(0);
 
-  // Initial load: scenarios, overview hotspots, stream status
+  const stopTimerRef = useRef<number | null>(null);
+  const streamStartedAtRef = useRef<number>(0);
+
+  const clearStopTimer = useCallback(() => {
+    if (stopTimerRef.current !== null) {
+      window.clearTimeout(stopTimerRef.current);
+      stopTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => clearStopTimer(), [clearStopTimer]);
+
+  // Initial load: scenarios (prefer morning_rush_dien_bien_phu), overview hotspots, stream status
   useEffect(() => {
     let cancelled = false;
     fetchJson<{ scenarios?: ScenarioItem[] }>('/api/scenarios')
@@ -52,11 +71,12 @@ export const App: React.FC = () => {
         const list: ScenarioItem[] = d.scenarios || [];
         setScenarios(list);
         if (list.length > 0) {
-          const s0 = list[0];
-          setActiveScenarioId(s0.id);
-          setCurrentDate(s0.ict_date);
-          setCurrentHour(s0.default_vn_hour);
-          setSelectedSegmentId(s0.spotlight_segment_id);
+          const preferred = list.find((s) => s.id === DEFAULT_SCENARIO_ID) || list[0];
+          setActiveScenarioId(preferred.id);
+          setCurrentDate(preferred.ict_date);
+          setCurrentHour(preferred.default_vn_hour);
+          setSelectedSegmentId(preferred.spotlight_segment_id);
+          setKafkaStoryScenario(preferred.id);
         }
       })
       .catch((err: unknown) => {
@@ -75,7 +95,7 @@ export const App: React.FC = () => {
         }
       });
 
-    fetchJson<StreamStatusResponse>('/api/stream/status')
+    fetchJson<StreamStatusResponse>(STREAM_STATUS_URL)
       .then((st) => {
         if (!cancelled) setStreamStatus(st);
       })
@@ -90,10 +110,10 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  // Load City Frame whenever (currentDate, currentHour, alertFilter, liveRefreshTick) changes
+  // Load pure TEST/VAL Holdout City Frame for Tab 01 (strictly decoupled from Kafka live overlay)
   useEffect(() => {
     let cancelled = false;
-    const q = `/api/frame?ict_date=${encodeURIComponent(currentDate)}&vn_hour=${currentHour}&alert_filter=${encodeURIComponent(alertFilter)}`;
+    const q = `/api/frame?ict_date=${encodeURIComponent(currentDate)}&vn_hour=${currentHour}&alert_filter=${encodeURIComponent(alertFilter)}&include_live_overlay=false`;
     fetchJson<CityFrameResponse>(q)
       .then((d) => {
         if (!cancelled) {
@@ -109,9 +129,9 @@ export const App: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [currentDate, currentHour, alertFilter, liveRefreshTick]);
+  }, [currentDate, currentHour, alertFilter]);
 
-  // Load Segment Timeline whenever (selectedSegmentId, currentDate, currentHour) changes
+  // Load Segment Timeline for Tab 01 whenever (selectedSegmentId, currentDate, currentHour) changes
   useEffect(() => {
     let cancelled = false;
     const q = `/api/segment/${selectedSegmentId}/timeline?ict_date=${encodeURIComponent(currentDate)}&vn_hour=${currentHour}`;
@@ -132,40 +152,45 @@ export const App: React.FC = () => {
     };
   }, [selectedSegmentId, currentDate, currentHour]);
 
-  // Poll Kafka Stream status when streaming or on Kafka tab
+  // Poll Kafka Stream status purely for Tab 02 / Tab 06 & TopClockBar status pill (NEVER touches Tab 01)
   useEffect(() => {
-    if (!isStreaming && activeTab !== 'kafka') return;
-    const timer = window.setInterval(() => {
-      fetchJson<StreamStatusResponse>('/api/stream/status')
+    if (!isStreaming && activeTab !== 'kafka' && activeTab !== 'pipeline') return;
+    let cancelled = false;
+
+    const pollOnce = () => {
+      fetchJson<StreamStatusResponse>(STREAM_STATUS_URL)
         .then((st) => {
+          if (cancelled) return;
           setStreamStatus(st);
-          const scoredNow = Number(st?.telemetry?.sink2_scored_v1 ?? 0);
-          if (scoredNow !== lastLiveScoredRef.current) {
-            lastLiveScoredRef.current = scoredNow;
-            if (isStreaming) {
-              setLiveRefreshTick((t) => t + 1);
-            }
-          }
           const cur = st?.telemetry?.story_cursor;
-          if (cur && isStreaming) {
-            const key = `${cur.scenario}-${cur.frame_idx}-${cur.vn_hour}`;
-            if (key !== lastStoryFrameRef.current) {
-              lastStoryFrameRef.current = key;
-              if (cur.scenario) setActiveScenarioId(cur.scenario);
-              setCurrentDate(cur.ict_date);
-              setCurrentHour(cur.vn_hour);
-              if (cur.spotlight_segment_id) setSelectedSegmentId(cur.spotlight_segment_id);
-              if (cur.frame_idx >= cur.total_frames) {
-                window.setTimeout(() => setIsStreaming(false), 1800);
-              }
-            }
+          const elapsedMs = Date.now() - streamStartedAtRef.current;
+          if (
+            isStreaming &&
+            cur &&
+            cur.total_frames > 0 &&
+            cur.frame_idx >= cur.total_frames &&
+            elapsedMs > 2200 &&
+            stopTimerRef.current === null
+          ) {
+            stopTimerRef.current = window.setTimeout(() => {
+              stopTimerRef.current = null;
+              setIsStreaming(false);
+            }, 1800);
           }
         })
         .catch((err: unknown) => {
-          setApiError(err instanceof Error ? err.message : 'Mất kết nối tạm thời khi cập nhật luồng Kafka.');
+          if (!cancelled) {
+            setApiError(err instanceof Error ? err.message : 'Mất kết nối tạm thời khi cập nhật luồng Kafka.');
+          }
         });
-    }, 1300);
-    return () => window.clearInterval(timer);
+    };
+
+    pollOnce();
+    const timer = window.setInterval(pollOnce, 1300);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, [isStreaming, activeTab]);
 
   const handleSelectScenario = useCallback(
@@ -182,7 +207,8 @@ export const App: React.FC = () => {
   );
 
   const handleStartStoryKafka = useCallback(() => {
-    lastStoryFrameRef.current = '';
+    clearStopTimer();
+    streamStartedAtRef.current = Date.now();
     setApiError(null);
     setIsStreaming(true);
     fetchJson('/api/stream/start', {
@@ -190,17 +216,18 @@ export const App: React.FC = () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         mode: 'story',
-        scenario: activeScenarioId,
+        scenario: kafkaStoryScenario,
         reset_first: true,
       }),
     }).catch((err: unknown) => {
       setIsStreaming(false);
       setApiError(err instanceof Error ? err.message : 'Không thể khởi chạy Story Kafka.');
     });
-  }, [activeScenarioId]);
+  }, [clearStopTimer, kafkaStoryScenario]);
 
   const handleStartStressKafka = useCallback(() => {
-    lastStoryFrameRef.current = '';
+    clearStopTimer();
+    streamStartedAtRef.current = Date.now();
     setApiError(null);
     setIsStreaming(true);
     fetchJson('/api/stream/start', {
@@ -215,35 +242,50 @@ export const App: React.FC = () => {
       setIsStreaming(false);
       setApiError(err instanceof Error ? err.message : 'Không thể khởi chạy Stress-Test Kafka.');
     });
-    window.setTimeout(() => setIsStreaming(false), 14000);
-  }, []);
+    stopTimerRef.current = window.setTimeout(() => {
+      stopTimerRef.current = null;
+      setIsStreaming(false);
+    }, 14000);
+  }, [clearStopTimer]);
 
   const handleResetKafka = useCallback(() => {
+    clearStopTimer();
     setIsStreaming(false);
-    lastStoryFrameRef.current = '';
-    lastLiveScoredRef.current = 0;
     setApiError(null);
     fetchJson('/api/stream/reset', { method: 'POST' })
-      .then(() => fetchJson<StreamStatusResponse>('/api/stream/status'))
+      .then(() => fetchJson<StreamStatusResponse>(STREAM_STATUS_URL))
       .then((st) => {
         setStreamStatus(st);
-        setLiveRefreshTick((t) => t + 1);
       })
       .catch((err: unknown) => {
         setApiError(err instanceof Error ? err.message : 'Không thể reset trạng thái Kafka.');
       });
+  }, [clearStopTimer]);
+
+  const handleJumpToColdStart = useCallback((segId: number, streetName: string) => {
+    setSelectedColdSegmentId(segId);
+    setColdJumpSourceNote(`Đoạn #${segId} · ${streetName}`);
+    setActiveTab('clusters');
   }, []);
 
-  const handleJumpToSegment = useCallback((segId: number, ictDate?: string, vnHour?: number) => {
-    if (ictDate) setCurrentDate(ictDate);
-    if (vnHour != null && !Number.isNaN(vnHour)) setCurrentHour(vnHour);
-    setSelectedSegmentId(segId);
-    setActiveTab('command');
-  }, []);
+  const handleJumpToSegment = useCallback(
+    (segId: number, ictDate?: string, vnHour?: number) => {
+      if (ictDate) {
+        setCurrentDate(ictDate);
+        const matched = scenarios.find((s) => s.ict_date === ictDate);
+        if (matched) setActiveScenarioId(matched.id);
+      }
+      if (vnHour != null && !Number.isNaN(vnHour)) setCurrentHour(vnHour);
+      setSelectedSegmentId(segId);
+      setActiveTab('command');
+    },
+    [scenarios]
+  );
 
   return (
     <div className="toc-shell">
       <TopClockBar
+        showScenarioClock={activeTab === 'command'}
         scenarios={scenarios}
         activeScenarioId={activeScenarioId}
         onSelectScenario={handleSelectScenario}
@@ -252,9 +294,7 @@ export const App: React.FC = () => {
         semantics={frameData?.window_semantics || null}
         streamStatus={streamStatus}
         isStreaming={isStreaming}
-        onStartStoryKafka={handleStartStoryKafka}
-        onStartStressKafka={handleStartStressKafka}
-        onResetKafka={handleResetKafka}
+        onOpenKafkaTab={() => setActiveTab('kafka')}
       />
 
       <nav className="nav-tabs">
@@ -262,31 +302,37 @@ export const App: React.FC = () => {
           className={`nav-tab ${activeTab === 'command' ? 'active' : ''}`}
           onClick={() => setActiveTab('command')}
         >
-          🚦 01 · Điều Hành &amp; Dự Báo +30p (UC-1, UC-2)
+          🚦 01 · Điều Hành &amp; Dự Báo +30p
         </button>
         <button
           className={`nav-tab ${activeTab === 'kafka' ? 'active' : ''}`}
           onClick={() => setActiveTab('kafka')}
         >
-          📡 02 · Live Kafka &amp; Sketches 33 KiB (P4)
+          📡 02 · Live Kafka &amp; Sketches 33 KiB
         </button>
         <button
           className={`nav-tab ${activeTab === 'graph' ? 'active' : ''}`}
           onClick={() => setActiveTab('graph')}
         >
-          🕸️ 03 · PageRank &amp; Luật Đồng Kẹt (UC-3, UC-4)
+          🕸️ 03 · PageRank &amp; Luật Đồng Kẹt
         </button>
         <button
           className={`nav-tab ${activeTab === 'clusters' ? 'active' : ''}`}
           onClick={() => setActiveTab('clusters')}
         >
-          🧭 04 · 6 Cụm K-Means &amp; Cold-Start (UC-5)
+          🧭 04 · 6 Cụm K-Means &amp; Cold-Start
         </button>
         <button
           className={`nav-tab ${activeTab === 'audit' ? 'active' : ''}`}
           onClick={() => setActiveTab('audit')}
         >
-          🛡️ 05 · Spark 3.5.7, Ablation &amp; Đối Soát (UC-6)
+          🛡️ 05 · Spark 3.5.7 &amp; Ablation
+        </button>
+        <button
+          className={`nav-tab ${activeTab === 'pipeline' ? 'active' : ''}`}
+          onClick={() => setActiveTab('pipeline')}
+        >
+          ⚡ 06 · Luồng Thực Thi Pipeline (Live)
         </button>
       </nav>
 
@@ -326,15 +372,38 @@ export const App: React.FC = () => {
         {activeTab === 'kafka' && (
           <TabLiveKafka
             streamStatus={streamStatus}
+            scenarios={scenarios}
+            kafkaStoryScenario={kafkaStoryScenario}
+            onSelectKafkaStoryScenario={setKafkaStoryScenario}
+            isStreaming={isStreaming}
             onStartStoryKafka={handleStartStoryKafka}
             onStartStressKafka={handleStartStressKafka}
             onResetKafka={handleResetKafka}
+          />
+        )}
+        {activeTab === 'graph' && (
+          <TabGraphRules
+            onSelectSegmentOnMap={(sid, ictDate, vnHour) => handleJumpToSegment(sid, ictDate, vnHour)}
+            onSelectColdStartSegment={handleJumpToColdStart}
+          />
+        )}
+        {activeTab === 'clusters' && (
+          <TabClustersColdStart
+            selectedSegmentId={selectedColdSegmentId}
+            onSelectSegmentId={setSelectedColdSegmentId}
+            jumpSourceNote={coldJumpSourceNote}
+            onClearJumpSource={() => setColdJumpSourceNote(null)}
+          />
+        )}
+        {activeTab === 'audit' && <TabInfraAudit />}
+        {activeTab === 'pipeline' && (
+          <TabPipelineFlow
+            streamStatus={streamStatus}
+            isStreaming={isStreaming}
+            onStartStressKafka={handleStartStressKafka}
             onJumpToSegment={handleJumpToSegment}
           />
         )}
-        {activeTab === 'graph' && <TabGraphRules onSelectSegmentOnMap={(sid) => handleJumpToSegment(sid)} />}
-        {activeTab === 'clusters' && <TabClustersColdStart />}
-        {activeTab === 'audit' && <TabInfraAudit />}
       </main>
     </div>
   );
